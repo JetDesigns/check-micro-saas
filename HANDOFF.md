@@ -44,7 +44,18 @@ warning). `.env.local` ter-ignore; `.env.local.example` sengaja di-un-ignore
 lewat `!.env.local.example` karena itu satu-satunya catatan env var yang
 dibutuhkan aplikasi.
 
-**Belum ada git remote.** Kode hanya ada di mesin ini — belum ada backup.
+**Sudah ter-push ke GitHub** (Aug 16, 2026) — remote `origin` =
+`https://github.com/seiyasekha-bot/check-micro-saas.git` (private). `main`
+di server ada di `0417a78`, sama persis dengan HEAD lokal; diverifikasi lewat
+`git ls-remote`, bukan lewat remote-tracking ref (ref lokal bisa bohong kalau
+belum pernah fetch). 60 file ter-push, satu-satunya file env di dalamnya
+`.env.local.example`. Kredensial GitHub HTTPS tersimpan di osxkeychain
+(akun `seiyasekha-bot`), jadi push berikutnya tidak perlu login ulang.
+
+Catatan: keempat commit ber-author `MacBook Pro
+<macbookpro@MacBooks-MacBook-Pro.local>` karena git identity tidak pernah
+di-set. Di GitHub commit itu tidak terhubung ke akun mana pun. Kosmetik,
+sengaja tidak di-rewrite.
 
 ---
 
@@ -223,24 +234,12 @@ statusnya jelas "belum compile".
 
 ## SISA PEKERJAAN — kerjakan berurutan
 
-### 1. Push ke GitHub  ⟵ MULAI DARI SINI
+### 1. ~~Push ke GitHub~~ — SELESAI (Aug 16, 2026)
 
-Commit sudah siap; yang kurang cuma remote. User sedang membuat repo
-**private** kosong bernama `check-microsaas` lewat github.com/new (tanpa
-README / .gitignore / license — kalau dicentang, GitHub bikin commit sendiri
-dan push kita ditolak).
+Lihat "Kondisi saat ini" di atas. Repo private `seiyasekha-bot/check-micro-saas`,
+`main` = `0417a78` di server, `.env.local` tidak ikut.
 
-Begitu user memberi URL-nya:
-
-```bash
-git remote add origin https://github.com/<user>/check-microsaas.git
-git push -u origin main
-```
-
-Verifikasi: `git log --oneline origin/main` menampilkan kedua commit, dan
-`.env.local` **tidak** ada di GitHub. `gh` CLI belum terpasang di mesin ini.
-
-### 2. Uji jalur uang dengan Stripe CLI  — user menjalankan sendiri
+### 2. Uji jalur uang dengan Stripe CLI  ⟵ MULAI DARI SINI — user menjalankan sendiri
 
 **Ini yang paling berisiko.** Rantai `checkout.session.completed → webhook →
 add_credits → saldo bertambah` **belum pernah dijalankan sekali pun**, di
