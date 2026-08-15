@@ -233,8 +233,18 @@ function FilePreview({
 }) {
   const [url, setUrl] = useState<string | null>(null)
 
+  // Create AND revoke in the same effect so the URL's lifetime matches the
+  // effect's. Deriving it in render (useMemo) instead looks tidier and silences
+  // the lint rule below, but breaks under StrictMode: the dev remount runs the
+  // cleanup, revoking the URL, while the memo does not re-run — leaving the
+  // <img> pointed at a dead blob. Tried it, the thumbnail went blank.
+  //
+  // The setState here is genuinely synchronous, so the rule is right that it
+  // costs a render; that is the correct price for a resource that must be
+  // torn down and rebuilt with the effect.
   useEffect(() => {
     const u = URL.createObjectURL(file)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrl(u)
     return () => URL.revokeObjectURL(u)
   }, [file])

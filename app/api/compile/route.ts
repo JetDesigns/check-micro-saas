@@ -27,7 +27,7 @@ import type {
   Tone,
 } from '@/types/database'
 import { INTAKE_FIELDS } from '@/lib/intake-fields'
-import { validateNarrative, type NarrativeKey } from '@/lib/narrative'
+import { validateNarrative } from '@/lib/narrative'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
