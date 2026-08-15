@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "check-dev",
+      "runtimeExecutable": "zsh",
+      "runtimeArgs": ["-ic", "npm run dev"],
+      "port": 3000
+    }
+  ]
+}
