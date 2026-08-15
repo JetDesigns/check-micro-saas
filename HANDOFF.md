@@ -7,11 +7,16 @@ Lanjut Check di ~/dev/check-microsaas.
 
 Wajib baca dulu (dua file):
 1. AGENTS.md (root project) — architecture, locked decisions, gotchas
-2. HANDOFF.md (root project) — status, urutan kerja, detail eksekusi
+2. HANDOFF.md (root project) — di dalamnya, baca "BELUM terverifikasi"
+   SEBELUM "Status shipped", supaya tidak salah mengira sesuatu sudah
+   aman padahal belum pernah diuji
 
 Aplikasinya SUDAH SELESAI dan sudah ter-commit. Yang tersisa adalah
 mengirimkannya ke produksi. Mulai dari bagian "SISA PEKERJAAN" di
 HANDOFF.md, kerjakan berurutan.
+
+Paling berisiko: jalur pembayaran (webhook → add_credits → saldo
+bertambah) BELUM PERNAH dijalankan sekali pun, di environment mana pun.
 
 Approval per-langkah: setelah satu langkah selesai + terverifikasi,
 berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
@@ -40,6 +45,66 @@ lewat `!.env.local.example` karena itu satu-satunya catatan env var yang
 dibutuhkan aplikasi.
 
 **Belum ada git remote.** Kode hanya ada di mesin ini — belum ada backup.
+
+---
+
+## BELUM terverifikasi — jangan diklaim aman
+
+Bagian ini yang paling penting dibaca lebih dulu. Semua yang tercantum di
+"Status shipped" di bawah memang sudah diuji; empat hal berikut **belum**, dan
+gampang keliru dianggap beres:
+
+1. **Jalur uang belum pernah jalan sekali pun.** Rantai
+   `checkout.session.completed → webhook → add_credits → saldo bertambah`
+   tidak pernah dieksekusi di environment mana pun — semua uji pembelian
+   sengaja berhenti di halaman Stripe. Ini risiko terbesar yang tersisa.
+2. **Badge saldo saat login belum pernah dilihat** setelah logikanya diubah
+   jadi `balance > 0` (sebelumnya `!== null`). Sesi browser keburu hilang
+   sebelum sempat dilihat ter-render.
+3. **Belum ada deploy sama sekali** — tidak ada Vercel, tidak ada domain.
+4. **Compile belum dijalankan ulang** setelah label `business_impact` diganti
+   jadi "What was it costing them?". Koherensinya diperiksa dengan membaca
+   kode, bukan menjalankan compile. Ingat: label ikut masuk ke prompt.
+
+---
+
+## Rechecks — cara-cara yang pernah menipu
+
+Sebelum menganggap sesuatu beres, ingat lima ini. Semuanya sempat menghasilkan
+kesimpulan salah di sesi sebelumnya:
+
+- **Bug stacking, bukan posisi.** `getBoundingClientRect` bisa benar sementara
+  elemennya tetap tertimpa. Pakai `document.elementFromPoint` untuk membuktikan
+  apa yang benar-benar ada di atas.
+- **`box-shadow` dari nilai arbitrary Tailwind** punya beberapa nilai default
+  transparan di depan. Jangan memotong string computed-nya — memotong di 60
+  karakter sempat memunculkan kesimpulan "bayangan tidak ter-render" yang
+  keliru.
+- **`git show HEAD:file` yang gagal + redirect** menghasilkan file kosong, dan
+  eslint atas file kosong melaporkan "0 problems". Selalu cek exit code, jangan
+  percaya output kosong.
+- **StrictMode di dev** menjalankan mount → unmount → remount. Resource yang
+  dibuat di render (`useMemo`) tapi dibersihkan di effect akan mati setelah
+  remount — lihat komentar di `AttachmentStep`.
+- **Label intake ikut masuk ke prompt** (`buildPrompt` merender `[key] label`).
+  Mengganti label = mengganti arti field bagi model.
+
+---
+
+## Peta file — orientasi cepat
+
+| Jalur | Isi |
+|---|---|
+| `app/api/compile/route.ts` | Prompt lengkap: `TONE_BRIEFS`, `PROJECT_TYPE_BRIEFS`, delapan gerakan copywriter, daftar kata terlarang, `CALLOUT_ALLOWLIST`. Paling berpengaruh ke kualitas output |
+| `lib/narrative.ts` | Validator shape, dipakai bersama `/api/compile` dan `/api/edit` — satu kontrak, bukan dua salinan |
+| `lib/intake-fields.ts` | 8 field intake. **Label di sini ikut masuk ke prompt** |
+| `types/database.ts` | `NarrativeSection`, `NarrativeCallout` (union 3 kind), `CaseStudyMeta`, `FREE_SECTION = 'vision'` |
+| `app/c/[id]/CaseStudyView.tsx` | Halaman case study: hero, meta grid, sticky ToC, renderer callout, gambar inline, edit in-place |
+| `app/c/[id]/page.tsx` | Batas paywall sisi baca — hanya `vision` yang menyeberang saat belum bayar |
+| `components/landing/TopBar.tsx` | Kontrol Buy credit + deteksi sesi (none / anon / email) |
+| `components/auth/AuthGateModal.tsx` | Email + Google; `linkIdentity` vs `signInWithOAuth`; di-portal ke `document.body` |
+| `components/intake/IntakeFlow.tsx` | Semua redirect landing: recovery magic-link, resume checkout, kembali dari Stripe |
+| `supabase/migrations/0001–0009` | Semuanya sudah applied di project live |
 
 ---
 
@@ -215,7 +280,33 @@ satunya. Entah dibuatkan tujuannya atau dihapus sebelum launch.
 **`Real examples` yang paling merugikan** — produk ini belum punya bukti publik
 sama sekali. Ini bersinggungan dengan Fase H (halaman `/contoh`) di bawah.
 
-### 5. Sisa fase produk (opsional untuk launch)
+### 5. Bersihkan data lama
+
+Dari 21 baris `case_studies` di project live:
+
+| Bentuk | Jumlah | Akibat |
+|---|---|---|
+| Shape baru (`vision`…) | 3 | render normal |
+| **Shape lama** | **16** | render 8 heading + body kosong |
+| — di antaranya berstatus `paid` | **5** | **bisa dibuka siapa pun lewat link, tampil kosong** |
+
+Lima baris `paid` itu yang paling mengganggu: statusnya membuat halaman bisa
+diakses publik, tapi isinya kosong karena `compiled_narrative`-nya masih pakai
+kunci lama (`situation`, `cost`, …) yang tidak dikenal renderer.
+
+Semuanya baris uji dari masa pengembangan. Putuskan: hapus, atau biarkan karena
+link-nya toh tidak pernah disebar. **Jangan di-recompile** — buang-buang credit
+dan panggilan API untuk data uji.
+
+Query untuk melihatnya:
+
+```sql
+select id, status, title from public.case_studies
+where compiled_narrative is not null
+  and not (compiled_narrative ? 'vision');
+```
+
+### 6. Sisa fase produk (opsional untuk launch)
 
 - **Fase F** — Review agent (tabel `review_messages` sudah ada, UI/route belum)
 - **Fase H** — Halaman contoh publik, byline, pernyataan privasi
