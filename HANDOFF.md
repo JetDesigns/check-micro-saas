@@ -1,4 +1,4 @@
-# Check — Handoff (Aug 13, 2026)
+# Check — Handoff (Aug 15, 2026)
 
 ## Buka chat baru — copy-paste ini di message pertama
 
@@ -7,22 +7,39 @@ Lanjut Check di ~/dev/check-microsaas.
 
 Wajib baca dulu (dua file):
 1. AGENTS.md (root project) — architecture, locked decisions, gotchas
-2. HANDOFF.md (root project) — status shipped, sisa fase, detail eksekusi
+2. HANDOFF.md (root project) — status, urutan kerja, detail eksekusi
 
-Setelah baca dua file itu, mulai dari <isi salah satu di bawah>:
-  - "Fase F — review agent"
-  - "Fase G — verifikasi menyeluruh"
-  - "Fase H — fixtures + credibility + polish"
-  - "Deploy"
+Aplikasinya SUDAH SELESAI dan sudah ter-commit. Yang tersisa adalah
+mengirimkannya ke produksi. Mulai dari bagian "SISA PEKERJAAN" di
+HANDOFF.md, kerjakan berurutan.
 
-Feedback memory: approval per-fase. Setelah fase selesai + verified, stop
-+ laporkan + tunggu approval sebelum lanjut fase berikutnya. Jangan
-menumpuk beberapa fase sekaligus.
+Approval per-langkah: setelah satu langkah selesai + terverifikasi,
+berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
 
-Kredensial + gotcha env sudah di AGENTS.md. Supabase project ref:
-barsrclvvnuwjaqwecay. MCP Supabase available. Preview server via
-mcp__Claude_Browser__preview_start {name: "check-dev"}.
+Supabase project ref: barsrclvvnuwjaqwecay. MCP Supabase tersedia.
+Preview server: mcp__Claude_Browser__preview_start {name: "check-dev"}.
+Node butuh PATH export — lihat AGENTS.md § Environment gotchas.
 ```
+
+---
+
+## Kondisi saat ini (Aug 15, 2026)
+
+**Aplikasinya lengkap.** Intake → compile → halaman case study → kredit →
+pembayaran → auth, semuanya terbangun dan terverifikasi jalan di lokal.
+
+**Sudah masuk version control.** Sebelumnya seluruh aplikasi masih untracked —
+hanya ada commit scaffold `create-next-app`. Sekarang:
+
+- `8cf8b14` Add the Check application (48 file, 7225 baris)
+- `bb33d78` Clear the lint backlog
+
+`tsc --noEmit`, `eslint`, dan `next build` semuanya **bersih** (nol error, nol
+warning). `.env.local` ter-ignore; `.env.local.example` sengaja di-un-ignore
+lewat `!.env.local.example` karena itu satu-satunya catatan env var yang
+dibutuhkan aplikasi.
+
+**Belum ada git remote.** Kode hanya ada di mesin ini — belum ada backup.
 
 ---
 
@@ -139,12 +156,69 @@ statusnya jelas "belum compile".
 
 ---
 
-## Yang belum
+## SISA PEKERJAAN — kerjakan berurutan
 
-- **Fase F** — Review agent
-- **Fase G** — Verifikasi menyeluruh end-to-end
-- **Fase H** — Fixtures + credibility + polish
-- **Deploy**
+### 1. Push ke GitHub  ⟵ MULAI DARI SINI
+
+Commit sudah siap; yang kurang cuma remote. User sedang membuat repo
+**private** kosong bernama `check-microsaas` lewat github.com/new (tanpa
+README / .gitignore / license — kalau dicentang, GitHub bikin commit sendiri
+dan push kita ditolak).
+
+Begitu user memberi URL-nya:
+
+```bash
+git remote add origin https://github.com/<user>/check-microsaas.git
+git push -u origin main
+```
+
+Verifikasi: `git log --oneline origin/main` menampilkan kedua commit, dan
+`.env.local` **tidak** ada di GitHub. `gh` CLI belum terpasang di mesin ini.
+
+### 2. Uji jalur uang dengan Stripe CLI  — user menjalankan sendiri
+
+**Ini yang paling berisiko.** Rantai `checkout.session.completed → webhook →
+add_credits → saldo bertambah` **belum pernah dijalankan sekali pun**, di
+environment mana pun. Semua uji pembelian selama ini sengaja berhenti di
+halaman Stripe.
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+`whsec_…` yang tercetak harus cocok dengan `STRIPE_WEBHOOK_SECRET` di
+`.env.local`. Beli dengan kartu tes `4242 4242 4242 4242`, lalu buktikan lewat
+MCP SQL:
+
+- `users.credit_balance` bertambah **tepat 5**
+- `payments` punya **tepat satu** baris untuk session id itu
+- kirim ulang webhook yang sama → saldo **tidak** bertambah lagi (idempoten
+  dijaga `add_credits` via `stripe_payment_id`)
+
+### 3. Konfigurasi deploy
+
+| Item | Detail |
+|---|---|
+| Vercel | Hubungkan repo dari langkah 1 |
+| Env vars | 8 buah, termasuk `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` |
+| Supabase → Redirect URLs | Tambah `https://<domain>/auth/callback` |
+| Stripe | Masih **Sandbox**. Perlu product/price live, endpoint webhook produksi, dan `STRIPE_WEBHOOK_SECRET` baru |
+| Google OAuth consent screen | Kalau masih *Testing*, hanya test user yang bisa login → harus Publish |
+| Anthropic | Set spend limit; ~$0.08/compile setelah `max_tokens` jadi 16000 |
+
+### 4. Putuskan tiga item nav yang mati
+
+Di landing: `Features` dan `Real examples` menunjuk `#features` / `#examples`
+yang tidak ada; `Watch demo` disabled. Pengunjung pertama pasti mengklik salah
+satunya. Entah dibuatkan tujuannya atau dihapus sebelum launch.
+
+**`Real examples` yang paling merugikan** — produk ini belum punya bukti publik
+sama sekali. Ini bersinggungan dengan Fase H (halaman `/contoh`) di bawah.
+
+### 5. Sisa fase produk (opsional untuk launch)
+
+- **Fase F** — Review agent (tabel `review_messages` sudah ada, UI/route belum)
+- **Fase H** — Halaman contoh publik, byline, pernyataan privasi
 
 ---
 
@@ -335,9 +409,9 @@ copy polish. Preparing for real customers.
 ## Reference files (di project root)
 
 - `AGENTS.md` — architecture, locked decisions, gotchas (SATU-satunya source of truth arsitektur).
-- `supabase/migrations/0001-0008.sql` — semua applied di project live.
-- `.env.local.example` — env var names (values di `.env.local`, gitignored).
-- `HANDOFF.md` — file ini (status + sisa fase).
+- `supabase/migrations/0001-0009.sql` — semua applied di project live.
+- `.env.local.example` — env var names (values di `.env.local`, gitignored). Sengaja di-un-ignore lewat `!.env.local.example`.
+- `HANDOFF.md` — file ini (status + sisa pekerjaan).
 
 ## Session log
 
@@ -368,4 +442,30 @@ Session Aug 14, 2026 — CSD-exact rewrite:
   "Copy link case study".
 - `npx tsc --noEmit` clean, `npx next build` hijau.
 
-Migrations applied on `barsrclvvnuwjaqwecay`: 0001, 0002, 0003, 0004, 0005, 0006, 0007.
+Session Aug 14-15, 2026 — landing redesign + produksi:
+
+- **Landing didesain ulang**: top bar (logo + Features/Real examples + kontrol
+  Buy credit), hero di-anchor ke bawah, latar putih, wizard dalam frame
+  ber-tint. Semua radius tombol `rounded-full` → `rounded-xl` (12px), tone chip
+  → `rounded-lg`.
+- **Kontrol Buy credit**: pill putih dengan tombol gradient bersarang. Badge
+  saldo hanya muncul saat login **dan** saldo > 0 — "0 credits" di sebelah
+  tombol Buy itu mengatakan hal yang sama dua kali. `CreditBadge` dihapus
+  (jadi yatim setelah segmennya di-inline).
+- **Sticky diperbaiki**: kolom kiri sempat 105vh untuk memperbesar gap, dan itu
+  mematikan sticky — CSS berhenti memaku elemen yang lebih tinggi dari
+  viewport. Dikembalikan ke `calc(100vh-4rem)`. Gap dan sticky berebut ruang
+  yang sama; tidak bisa keduanya.
+- **Bug modal ketimpa wizard**: `position: sticky` membentuk stacking context,
+  jadi modal `z-50` di dalam kolom kiri tertimpa kolom kanan. Diperbaiki
+  dengan portal ke `document.body`.
+- **Bug sesi**: pengambilan saldo yang gagal ikut menurunkan sesi jadi
+  "belum login", membuat user yang sudah login diarahkan ke modal login
+  alih-alih Stripe. Fetch saldo dipisah ke `try` sendiri.
+- **Label intake** disederhanakan (What did you work on? / What was wrong
+  before? / What did you change? / What was it costing them?), legend tone →
+  "Tone". Field key tidak berubah.
+- **Version control**: seluruh aplikasi di-commit untuk pertama kalinya
+  (sebelumnya untracked). Lint dibereskan sampai nol error/warning.
+
+Migrations applied on `barsrclvvnuwjaqwecay`: 0001–0009.
