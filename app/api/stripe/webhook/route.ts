@@ -3,10 +3,11 @@
 // Stripe → us, signed callback. On `checkout.session.completed` we credit
 // the buyer's account:
 //   1. Verify signature (STRIPE_WEBHOOK_SECRET) — refuses a fake `paid` event.
-//   2. Insert a `payments` row (idempotent on stripe_payment_id).
-//   3. Call add_credits(user_id, credit_amount, session.id) via service role
-//      — the RPC is itself idempotent on stripe_payment_id so a webhook
-//      retry cannot double-credit.
+//   2. Call add_credits(user_id, credit_amount, session.id) via service role
+//      — the RPC is idempotent on stripe_payment_id, so it is both the thing
+//      that grants the credits and the gate that stops a retry granting them
+//      twice. Nothing else may gate this; see the comment at the call site.
+//   3. Record a `payments` row (upsert on the unique stripe_payment_id).
 //   4. Attach the email Stripe collected to the anon user so they can sign
 //      back in later via magic link.
 //
@@ -79,37 +80,20 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient()
 
-  // Idempotency on the payments table. add_credits() also guards its own
-  // idempotency on stripe_payment_id via the ledger — keeping both means the
-  // payments row stays 1:1 with a Stripe session even under retries.
-  const { data: existing } = await admin
-    .from('payments')
-    .select('id')
-    .eq('stripe_payment_id', session.id)
-    .maybeSingle()
-
-  if (existing) {
-    return Response.json({ received: true, already_processed: true })
-  }
-
-  const { error: paymentError } = await admin.from('payments').insert({
-    user_id: userId,
-    // Pack purchase isn't tied to a specific study — column is nullable.
-    case_study_id: null,
-    amount: session.amount_total ?? 0,
-    currency: session.currency ?? 'usd',
-    stripe_payment_id: session.id,
-    status: 'succeeded',
-  })
-
-  if (paymentError) {
-    console.error(
-      '[/api/stripe/webhook] insert payment failed:',
-      paymentError
-    )
-    return Response.json({ error: paymentError.message }, { status: 500 })
-  }
-
+  // Credit FIRST, then record the payment.
+  //
+  // add_credits() is the idempotency gate — it guards on
+  // credit_transactions.stripe_payment_id inside a single statement, so
+  // calling it on every delivery of the same event is safe. The payments row
+  // is bookkeeping and must not gate anything: an earlier version checked
+  // `payments` first and returned 200 `already_processed`, which meant a
+  // failure between the insert and the credit left the buyer paid and
+  // uncredited, with every Stripe retry short-circuiting on the row the
+  // failed attempt had already written.
+  //
+  // With this order every partial failure converges on retry, and the worst
+  // case flips to "credited, payments row still missing" — recoverable from
+  // Stripe's own record, unlike the reverse.
   const { data: newBalance, error: creditError } = await admin.rpc(
     'add_credits',
     {
@@ -125,6 +109,31 @@ export async function POST(req: Request) {
       creditError
     )
     return Response.json({ error: creditError.message }, { status: 500 })
+  }
+
+  // stripe_payment_id is unique, so a redelivery lands on the conflict and
+  // leaves the original row untouched instead of erroring.
+  const { error: paymentError } = await admin.from('payments').upsert(
+    {
+      user_id: userId,
+      // Pack purchase isn't tied to a specific study — column is nullable.
+      case_study_id: null,
+      amount: session.amount_total ?? 0,
+      currency: session.currency ?? 'usd',
+      stripe_payment_id: session.id,
+      status: 'succeeded',
+    },
+    { onConflict: 'stripe_payment_id', ignoreDuplicates: true }
+  )
+
+  // Credits are already granted at this point, so this 500 is asking Stripe
+  // to retry the bookkeeping, not the money. add_credits() no-ops next time.
+  if (paymentError) {
+    console.error(
+      '[/api/stripe/webhook] record payment failed (credits already granted):',
+      paymentError
+    )
+    return Response.json({ error: paymentError.message }, { status: 500 })
   }
 
   // Attach the email Stripe verified — non-fatal if it fails.
