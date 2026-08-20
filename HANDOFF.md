@@ -15,8 +15,9 @@ Aplikasinya SUDAH SELESAI dan sudah ter-commit. Yang tersisa adalah
 mengirimkannya ke produksi. Mulai dari bagian "SISA PEKERJAAN" di
 HANDOFF.md, kerjakan berurutan.
 
-Paling berisiko: jalur pembayaran (webhook → add_credits → saldo
-bertambah) BELUM PERNAH dijalankan sekali pun, di environment mana pun.
+Paling berisiko sekarang: custom SMTP belum dipasang (sender bawaan
+Supabase cuma 2 email/jam, magic link akan gagal diam-diam), dan
+metadata Stripe belum pernah dibuktikan pada transaksi sungguhan.
 
 Approval per-langkah: setelah satu langkah selesai + terverifikasi,
 berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
@@ -62,20 +63,39 @@ sengaja tidak di-rewrite.
 ## BELUM terverifikasi — jangan diklaim aman
 
 Bagian ini yang paling penting dibaca lebih dulu. Semua yang tercantum di
-"Status shipped" di bawah memang sudah diuji; empat hal berikut **belum**, dan
+"Status shipped" di bawah memang sudah diuji; hal-hal berikut **belum**, dan
 gampang keliru dianggap beres:
 
-1. **Jalur uang belum pernah jalan sekali pun.** Rantai
-   `checkout.session.completed → webhook → add_credits → saldo bertambah`
-   tidak pernah dieksekusi di environment mana pun — semua uji pembelian
-   sengaja berhenti di halaman Stripe. Ini risiko terbesar yang tersisa.
+1. **Jalur uang — separuh terbukti, separuh belum.** Rantai
+   `webhook → add_credits → saldo bertambah` **sudah** diuji (Aug 20) dengan
+   event `checkout.session.completed` yang ditandatangani asli memakai whsec
+   yang sama: saldo naik tepat 5, satu baris `payments`, tiga kali kirim ulang
+   tidak menambah apa pun. Yang **belum** terbukti adalah sambungan Stripe→kita
+   pada transaksi sungguhan — bahwa metadata `user_id` + `credit_amount` yang
+   ditulis `/api/checkout` benar-benar sampai di event asli, dan `amount_total`
+   sesuai. Hanya bisa dibuktikan dengan satu checkout kartu beneran.
 2. **Badge saldo saat login belum pernah dilihat** setelah logikanya diubah
    jadi `balance > 0` (sebelumnya `!== null`). Sesi browser keburu hilang
    sebelum sempat dilihat ter-render.
-3. **Belum ada deploy sama sekali** — tidak ada Vercel, tidak ada domain.
-4. **Compile belum dijalankan ulang** setelah label `business_impact` diganti
-   jadi "What was it costing them?". Koherensinya diperiksa dengan membaca
-   kode, bukan menjalankan compile. Ingat: label ikut masuk ke prompt.
+3. **Belum ada deploy sama sekali** — tidak ada Vercel. Domain sudah ada.
+4. ~~Compile belum dijalankan ulang setelah label `business_impact` diganti~~
+   **BERES (Aug 20).** Compile dijalankan sungguhan: 8 section, 243–289 kata,
+   nol kata terlarang dari 20 yang diuji, callout semua sesuai allowlist, nol
+   fabrikasi angka. Vision terbukti dibangun langsung di atas jawaban
+   `business_impact` — label barunya menajamkan, tidak merusak.
+5. **Custom SMTP belum dipasang.** Sender bawaan Supabase = 2 email/jam untuk
+   seluruh project. Magic link akan diam-diam gagal begitu ada lebih dari dua
+   pendaftar per jam. Lihat Deploy → Pre-flight nomor 4.
+6. **Rate limit terpakai walau compile gagal.** `rate_limit_compile` naik
+   sebelum panggilan Anthropic, jadi lima kegagalan mengunci user seharian
+   tanpa kesalahan mereka. Butuh RPC decrement.
+7. **401 pada compile pertama** — terlihat **sekali**: WritingLoader menembak
+   `/api/compile` sebelum cookie sesi anon sampai ke server. Belum
+   direproduksi, jadi belum layak disebut bug produksi — tapi kalau nyata, ini
+   kena user baru tepat di compile pertama mereka.
+8. **`/api/waitlist` tanpa rate limit.** Endpoint publik tanpa sesi. Unique
+   index menahan spam satu email, tapi tidak ada yang menahan ribuan alamat
+   berbeda.
 
 ---
 
@@ -450,6 +470,30 @@ copy polish. Preparing for real customers.
 1. **Supabase billing** — project sudah live (bukan paused). Cek tier limits (DB size, edge function invocations). Upgrade ke Pro kalau ada indikasi limit dekat.
 2. **Anthropic billing** — sudah aktif (verified session ini). Set spend limit di console. Estimasi cost ~$0.04/compile.
 3. **Stripe** — currently test mode. Untuk prod: activate live mode di dashboard, create live product $9/5 credits (Name: "Check — 5 credits pack", one-time payment, USD), salin live `price_id`. Live webhook secret akan berbeda dari test.
+4. **Email / custom SMTP** — WAJIB sebelum user sungguhan. Sender bawaan
+   Supabase dibatasi **2 email per jam untuk seluruh project**, dan Supabase
+   sendiri menyatakan itu bukan untuk produksi. Magic link adalah jalur login
+   default, jadi tanpa ini orang ketiga yang mendaftar dalam satu jam tidak
+   menerima apa pun — dan tidak ada error yang muncul di mana pun.
+
+   Provider yang dipilih: **Resend** (free tier 3.000/bulan, 100/hari).
+   Langkahnya, semuanya di dashboard — tidak ada perubahan kode:
+
+   1. resend.com → Domains → Add Domain → pasang record DNS yang ditampilkan
+      (DKIM + SPF), tunggu verified.
+   2. API Keys → buat satu key.
+   3. Supabase → Authentication → SMTP Settings → Enable Custom SMTP:
+      - Host `smtp.resend.com`
+      - Port `465` (SMTPS) atau `587` (STARTTLS)
+      - Username `resend`
+      - Password = API key dari langkah 2
+      - Sender email harus di domain yang sudah terverifikasi
+   4. Supabase → Authentication → Rate Limits → naikkan dari default 30/jam
+      sesuai kebutuhan.
+
+   Verifikasi: kirim magic link ke alamat di luar domain sendiri (Gmail),
+   pastikan masuk **inbox** bukan spam, lalu cek header `DKIM=pass` dan
+   `SPF=pass`. Mendarat di spam sama buruknya dengan tidak terkirim.
 
 ### Vercel setup
 1. `vercel` CLI atau dashboard link project ke repo.

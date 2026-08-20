@@ -77,6 +77,14 @@ Each of these has already cost real time:
 - **Every table entry in `types/database.ts` needs `Relationships: []`** — without it `.insert()` types as `never` and every write errors.
 - Stripe `apiVersion` must be `'2026-07-29.dahlia'` (matches SDK 22.5.0).
 - **Supabase Auth → URL Configuration → Redirect URLs** must include `http://localhost:3000/auth/callback` (dev) and the production origin's `/auth/callback`. Without the whitelist entry, magic-link `emailRedirectTo` silently degrades to Site URL and drops our `?next=…` query — user lands on `/` instead of `/c/[id]`. Landing IntakeFlow has a localStorage-based recovery for this, but the whitelist is the clean fix.
+- **Supabase's built-in auth email sender is capped at 2 messages per hour**,
+  for the whole project, and Supabase documents it as non-production only
+  ("exploring", "toy projects"). Magic-link login is the default sign-in path,
+  so on the built-in sender the third person to sign up in any hour simply
+  never receives their link — no error surfaces anywhere. Custom SMTP is
+  required before real users arrive; it also raises the cap to 30/hour, which
+  is then adjustable under Auth → Rate Limits. Email is configured entirely in
+  Supabase, which is why there is no email provider key in `.env.local`.
 - `NEXT_PUBLIC_SUPABASE_URL` takes **no** `/rest/v1/` suffix.
 - `.claude/launch.json` is read from the **session cwd**, not the project directory.
 - Webhook testing needs the Stripe CLI in a separate terminal:
