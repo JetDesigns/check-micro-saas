@@ -108,6 +108,24 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     rows: 3,
     step: 2,
   },
+  {
+    // The only field that is about HOW the writing should sound rather than
+    // what happened. Five tone presets are a guess at a register; this is the
+    // writer's actual register, which is the only thing that can make the
+    // output sound like them. The label is written to tell the model that too
+    // — labels are rendered into the prompt, so this one has a job to do
+    // beyond the form.
+    key: 'voice_sample',
+    label: 'In your own words, how would you explain this project out loud?',
+    placeholder:
+      "e.g. Honestly the site wasn't the problem, the search was. People couldn't find anything so they just left. We fixed the finding part first and the rest got easier.",
+    helper:
+      "Optional — but it's what makes the writing sound like you instead of like a template. Three or four sentences, however you'd actually say it.",
+    type: 'textarea',
+    required: false,
+    rows: 3,
+    step: 2,
+  },
 ] as const
 
 export const PROJECT_TYPES: ReadonlyArray<{

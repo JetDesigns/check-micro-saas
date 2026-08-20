@@ -31,6 +31,10 @@ export type Intake = {
   metrics?: string
   timeline_investment?: string
   client_reaction?: string
+  // Not a project fact — a sample of how the designer actually talks, used to
+  // anchor the prose style. The prompt is explicit that its CONTENT must never
+  // be treated as something that happened.
+  voice_sample?: string
 }
 
 // One section of the compiled case study. Named after the CSD process arc

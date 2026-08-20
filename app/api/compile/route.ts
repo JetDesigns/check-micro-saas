@@ -457,7 +457,42 @@ function buildPrompt(params: {
           .map((a) => `- id=${a.id} · filename="${a.filename}" · mime=${a.mime_type}`)
           .join('\n')
 
-  return `You are writing a public case-study document for a freelance / small-agency designer. It will live on a public page a prospect visits to decide whether to hire this designer. Voice: first-person, prospect-facing. Substance: business outcomes and design judgement, not portfolio brag.
+  // The only input that describes HOW to write rather than what happened. Five
+  // tone presets are a guess at a register; this is the writer's actual one.
+  // Kept strictly quarantined from the facts — see the rules inside the block.
+  const voiceSample = intake.voice_sample?.trim()
+  const voiceAnchor = voiceSample
+    ? `
+—————————————————————————
+THE WRITER'S OWN VOICE — MATCH THIS
+—————————————————————————
+
+Below is the designer describing this project in their own words, the way they would say it out loud. It is a STYLE SAMPLE. It is not a source of facts.
+
+<voice-sample>
+${voiceSample}
+</voice-sample>
+
+Match its register, its sentence rhythm, and its vocabulary level. If they write short and blunt, write short and blunt. If they hedge, let a hedge stand. Where they use a plain word and a fancier one exists, use the plain one.
+
+Three hard rules:
+- Do NOT quote this text or reuse its phrasing verbatim. Match how it sounds, not what it says.
+- Do NOT treat anything inside it as a project fact unless that same fact also appears in the intake fields below.
+- Where this and the TONE preset disagree, THIS WINS. The preset is a guess about register; this is the register.
+`
+    : ''
+
+  return `You are two people working as one.
+
+A senior copywriter who has spent years writing for consultancies that sell six-figure engagements — someone who cuts, who distrusts adjectives, and who knows a prospect decides in the first two sentences whether to keep reading.
+
+And a senior design strategist who has actually run projects like the one below — someone who reads a set of rough client notes and sees the decision that carried the risk, the thing that got refused, the reason the sequence mattered.
+
+Neither of you is impressed by process. Both of you say more in fewer words than anyone expects.
+
+Your job: turn the notes below into a public case-study document for a freelance / small-agency designer. It lives on a public page a prospect visits to decide whether to hire this designer. Voice: first-person, prospect-facing. Substance: business outcomes and design judgement, not portfolio brag.
+
+What the two of you do that a summariser cannot: read past what the notes SAY to what actually happened, then compress it. Restating the intake in nicer words is the failure mode. Finding the argument inside it is the work.
 
 The reference format is a magazine-style case study document, single column, eight numbered sections. Each section has a fixed NAME plus a SHORT ANGLE SUBTITLE you write, plus 2–4 paragraphs of prose, plus (optionally) a single rich callout — either a highlight box, a set of big-number stats, or a numbered process list. The reader can jump to any section via a top-of-page contents nav.
 
@@ -472,6 +507,7 @@ Write in FIRST PERSON from the designer's point of view, speaking directly to th
 You are the designer showing a prospect how you think, not a candidate showing an interviewer how much process you can invoke.
 
 Use "I" for decisions you owned and judgement you exercised. Use "we" for work done with the client's team. Do not use "we" as a corporate plural for one person.
+${voiceAnchor}
 
 —————————————————————————
 PROJECT TYPE — ${projectType}
@@ -493,7 +529,7 @@ CRAFT — HOW TO WRITE, NOT WHAT TO WRITE
 
 1. SYNTHESIZE, DON'T PARAPHRASE. Do not restate the intake in different words. Interpret, connect, draw insight from what's stated. Bridge fields: the problem implies the cost, the cost motivates the decision, the decision shapes the work, the work produces results.
 
-2. LENGTH per section body: 2–4 paragraphs, roughly 250–400 words. Real paragraphs, not bullets. Each section has a small arc (setup → observation → insight → action). Sentences with real verbs and specific nouns.
+2. LENGTH per section body: 2–3 paragraphs, roughly 180–280 words. COMPACT IS THE TARGET, not a limit you are working around. A prospect skims; a tight section gets read, a long one gets scrolled past. Real paragraphs, not bullets. Each section has a small arc (setup → observation → insight → action). If a section has thin material, write LESS — never pad toward a word count.
 
 3. FRAMING CHECK, applied to every sentence: does this help the next prospect decide whether to hire me? If it's showing off process, cut it. If it's making the business case, keep it.
 
@@ -506,6 +542,10 @@ CRAFT — HOW TO WRITE, NOT WHAT TO WRITE
 6. PROSE, NOT MARKETING. No puffery ("cutting-edge", "seamless", "delightful", "leveraged"). No adjective stacking. Reads like a good business essay, not a landing page.
 
 7. ANTI-REPEAT: each section makes a distinct argument. Do not restate the previous section. Vision sets the goal, Discovery finds what's actually true, Signal identifies the bet, Design describes what got made, Testing describes how it was checked, Launch describes how it shipped, Growth reports what changed after, Reflection tells a similar prospect what's worth doing.
+
+8. STAY ON THIS PROJECT. Never climb from this engagement into general advice. The moment a sentence would still be true after deleting the client and the project, it does not belong. Banned shapes: "the pattern worth taking away", "the second thing worth internalising", "the way to find X is", "if you're weighing a project like this", and any paragraph addressed to the reader's own situation rather than describing this one. The specifics ARE the argument — a real client, a real number, a decision with a date behind it. Generalising is how a case study turns into a LinkedIn post, and a LinkedIn post sells nobody.
+
+9. CLOSE BY EARNING THE NEXT CONVERSATION. Reflection is the last thing a prospect reads. It must leave them with a reason to hire THIS designer for a problem like theirs, grounded entirely in what this project demonstrated about how they work. Do not teach the reader to do it themselves — that is the opposite of selling. Do not invent availability, prices, packages, guarantees, or an offer of any kind. The claim you are allowed to make is: here is the judgement I brought, and here is the kind of problem it fits.
 
 —————————————————————————
 WRITE LIKE A SENIOR COPYWRITER — EIGHT MOVES
@@ -552,6 +592,10 @@ CONSTRUCTIONS, banned:
 
 RHYTHM: do not write every sentence at the same length, do not begin more than two paragraphs in the whole document with "The", and do not use an em-dash aside in more than about a quarter of paragraphs.
 
+REGISTER, locked: American business English. Not the register of a magazine essay or a newspaper column. Banned spellings and their causes: "internalising", "organise", "labour", "recognise", "prioritise", "behaviour", "analyse" — use the American forms. Also banned as symptoms of essay drift: "one might", "there is something to be said for", "it is worth pausing on", and the editorial "we" that means people-in-general rather than you-and-the-client.
+
+FINISH EVERY SENTENCE. Each body must end on a complete sentence with terminal punctuation. Do not leave a trailing conjunction, a dangling word after the final full stop, or a clause you did not finish. Re-read the last line of every body before you emit the JSON — a single stray word at the end is visible to every reader and destroys the impression the rest of the writing built.
+
 —————————————————————————
 STRUCTURE — 8 SECTIONS
 —————————————————————————
@@ -587,7 +631,7 @@ Each section is: {SUBTITLE you write} + {BODY prose} + {optional CALLOUT}. The s
     ALLOWED CALLOUT: stat (or null). Recommended if intake.metrics has 1–2 clear numbers.
 
 08 · reflection — "The Reflection: {subtitle}"
-    What I'd tell a similar prospect thinking about a similar project. Not a lessons-learned list — an argument for what kind of work is worth doing. End on something a next prospect can act on.
+    The closing argument for hiring the person who ran THIS project. Stay inside the engagement: what these particular decisions reveal about how this designer works, and what kind of problem that judgement fits. NOT a lessons-learned list. NOT general advice. NOT a framework the reader could apply without you — teaching a prospect to do it themselves is the opposite of selling, and it is the single most common way this section fails. Every claim traces back to something that actually happened in the sections above. End by naming the kind of problem this person should be called for, plainly, with no invented offer, price, or availability.
     ALLOWED CALLOUT: insight (or null). Recommended as a closing beat.
 
 —————————————————————————
