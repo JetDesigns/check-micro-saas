@@ -6,6 +6,8 @@
 // @supabase/postgrest-js GenericTable constraint requires it, and without it
 // `.from(...).insert(...)` falls back to `never` and every write errors.
 
+import type { PainFrequency, PriceWillingness } from '@/lib/waitlist'
+
 export type CaseStudyStatus = 'draft' | 'preview' | 'paid' | 'complete'
 export type PaymentStatus = 'pending' | 'succeeded' | 'failed'
 export type ReviewRole = 'user' | 'agent'
@@ -327,6 +329,33 @@ export type Database = {
           status?: PaymentStatus
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      // Landing-page early-access signups. Not tied to users — a visitor
+      // leaves an email long before there is any account to attach it to.
+      // The two answers are slugs from lib/waitlist.ts, not free text.
+      waitlist: {
+        Row: {
+          id: string
+          email: string
+          pain_frequency: PainFrequency
+          price_willingness: PriceWillingness
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          pain_frequency: PainFrequency
+          price_willingness: PriceWillingness
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string
+          pain_frequency?: PainFrequency
+          price_willingness?: PriceWillingness
+          created_at?: string
         }
         Relationships: []
       }

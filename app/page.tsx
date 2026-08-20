@@ -1,3 +1,4 @@
+import { EarlyAccess } from '@/components/landing/EarlyAccess'
 import { StartCta } from '@/components/landing/StartCta'
 import { TopBar } from '@/components/landing/TopBar'
 import { IntakeFlow } from '@/components/intake/IntakeFlow'
@@ -60,6 +61,11 @@ export default function Home() {
           </p>
         </section>
       </div>
+
+      {/* Sits under the grid, not inside the hero column: that column is
+          sticky and pinned to the viewport height, so anything added to it
+          breaks the pinning. */}
+      <EarlyAccess />
     </main>
   )
 }
