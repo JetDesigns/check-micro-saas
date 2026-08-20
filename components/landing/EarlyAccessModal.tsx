@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   PAIN_FREQUENCY_OPTIONS,
   PAIN_FREQUENCY_QUESTION,
@@ -10,16 +11,19 @@ import {
   type PriceWillingness,
 } from '@/lib/waitlist'
 
-// Early-access capture, below the hero. Everything happens in place: no
-// redirect to a form service, no modal, and on success the form is replaced
-// by the confirmation rather than sitting there next to it.
+// Early-access capture, opened from the hero's primary CTA.
 //
-// It cannot live inside the hero column. That column is sticky and its height
-// is pinned to the viewport (see the comment in app/page.tsx) — anything
-// added there stops the pinning, which is a regression the layout has already
-// hit once. So this is a full-width band under the two-column grid.
+// This was a full-width section under the two-column grid first, which put the
+// one thing the landing is currently trying to measure below the fold. As an
+// overlay it is reachable the moment someone lands, with no scrolling.
+//
+// Portalled to <body> for the same reason AuthGateModal is: the landing's left
+// column is `position: sticky`, a sticky element creates a stacking context,
+// and a modal rendered inside it has its z-50 confined there — the wizard
+// column, a later sibling, paints straight over it. The symptom is invisible
+// to getBoundingClientRect; document.elementFromPoint is what exposes it.
 
-export function EarlyAccess() {
+export function EarlyAccessModal({ onClose }: { onClose: () => void }) {
   const [painFrequency, setPainFrequency] = useState<PainFrequency | null>(null)
   const [priceWillingness, setPriceWillingness] =
     useState<PriceWillingness | null>(null)
@@ -33,6 +37,14 @@ export function EarlyAccess() {
   const [showErrors, setShowErrors] = useState(false)
 
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,32 +79,57 @@ export function EarlyAccess() {
     }
   }
 
-  return (
-    <section
-      id="early-access"
-      className="mx-auto w-full max-w-[1500px] px-6 pb-16 lg:px-10 lg:pb-24"
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="early-access-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
+      onClick={onClose}
     >
-      <div className="mx-auto max-w-2xl rounded-[28px] bg-canvas p-6 sm:p-10">
+      {/* Taller than the auth modal by a long way — two four-option questions
+          stack to one column below sm. Without the height cap and its own
+          scroller the submit button ends up off-screen on a phone. */}
+      <div
+        className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-white/70 bg-white p-6 shadow-[0_1px_2px_rgba(23,23,23,0.05),0_12px_32px_-8px_rgba(23,23,23,0.16),0_32px_80px_-20px_rgba(74,59,41,0.24)] sm:p-8"
+        onClick={(e) => e.stopPropagation()}
+      >
         {isDone ? (
-          // role="status" so the swap is announced — a sighted user sees the
-          // form vanish, everyone else needs telling.
-          <p
-            role="status"
-            className="py-8 text-center text-lg font-medium text-ink"
-          >
-            You&apos;re in. We&apos;ll reach out soon.
-          </p>
+          <div>
+            {/* role="status" so the swap is announced — a sighted user watches
+                the form vanish, everyone else needs telling. */}
+            <p
+              role="status"
+              id="early-access-title"
+              className="py-4 text-center text-lg font-medium text-ink"
+            >
+              You&apos;re in. We&apos;ll reach out soon.
+            </p>
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-line bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-ink-soft/40"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         ) : (
           <>
-            <h2 className="text-2xl font-medium tracking-[-0.02em] text-ink sm:text-3xl">
+            <h2
+              id="early-access-title"
+              className="text-2xl font-medium tracking-[-0.02em] text-ink"
+            >
               Want early access?
             </h2>
             <p className="mt-3 text-base leading-relaxed text-ink-soft">
-              Answer two quick questions and leave your email. First testers get
-              full access free.
+              Answer two quick questions and leave your email.
             </p>
 
-            <form onSubmit={onSubmit} className="mt-8" noValidate>
+            <form onSubmit={onSubmit} className="mt-7" noValidate>
               <ChoiceField
                 legend={PAIN_FREQUENCY_QUESTION}
                 name="pain_frequency"
@@ -151,13 +188,23 @@ export function EarlyAccess() {
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="mt-8 w-full rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-              >
-                {isSubmitting ? 'Sending…' : 'Request early access'}
-              </button>
+              <div className="mt-8 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="text-sm font-medium text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Not now
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink"
+                >
+                  {isSubmitting ? 'Sending…' : 'Request early access'}
+                </button>
+              </div>
 
               {error && (
                 <p role="alert" className="mt-3 text-sm text-red-700">
@@ -168,7 +215,8 @@ export function EarlyAccess() {
           </>
         )}
       </div>
-    </section>
+    </div>,
+    document.body
   )
 }
 

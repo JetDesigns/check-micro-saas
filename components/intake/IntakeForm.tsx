@@ -302,10 +302,18 @@ function Step1(props: Step1Props) {
         <p className="text-xs text-ink-muted sm:max-w-[60%]">
           Free to write. You only pay to unlock the full result.
         </p>
+        {/* Disabled for the early-access phase. The wizard stays fillable so
+            visitors can see what the product asks for, but nothing is written
+            yet — the landing's one live action is the early-access form.
+
+            Sealing this one button seals the whole wizard: `step` starts at 1
+            and handleNext is the only thing that ever sets it to 2, so step 2
+            and handleSubmit are both unreachable while this is off. */}
         <button
           type="button"
           onClick={onNext}
-          disabled={isBusy}
+          disabled
+          title="Not open yet — request early access to get in first"
           className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
         >
           Next: write the story

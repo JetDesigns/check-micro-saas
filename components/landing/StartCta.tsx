@@ -1,42 +1,44 @@
 'use client'
 
-// Client-only so it can focus the wizard's first field on click. The wizard
-// lives in a sibling column on desktop and below on mobile — either way,
-// focusing the input also scrolls it into view (browsers do this for focus()
-// by default).
+import { useState } from 'react'
+import { EarlyAccessModal } from '@/components/landing/EarlyAccessModal'
+
+// Hero call to action. The primary button opens the early-access form as an
+// overlay rather than scrolling anywhere: the whole point of asking is to
+// catch someone as they land, and anything below the fold does not get seen.
+//
+// The modal itself portals to <body>, so it is unaffected by this component
+// sitting inside the landing's sticky left column.
 
 export function StartCta() {
-  const focusWizard = () => {
-    // The wizard's first field. Falls back to the legacy textarea id so this
-    // keeps working if the wizard markup is swapped out.
-    const el =
-      (document.getElementById('wizard-input') as HTMLElement | null) ??
-      document.querySelector<HTMLElement>('form input[type="text"], form textarea')
-    if (!el) return
-    el.focus()
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {/* TODO: no demo recording exists yet — disabled until one does. */}
-      <button
-        type="button"
-        disabled
-        title="Demo coming soon"
-        className="inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft opacity-60"
-      >
-        <PlayIcon />
-        Watch demo
-      </button>
-      <button
-        type="button"
-        onClick={focusWizard}
-        className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black"
-      >
-        Start a case study
-      </button>
-    </div>
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        {/* TODO: no demo recording exists yet — disabled until one does. */}
+        <button
+          type="button"
+          disabled
+          title="Demo coming soon"
+          className="inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft opacity-60"
+        >
+          <PlayIcon />
+          Watch demo
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black"
+        >
+          Get early access
+        </button>
+      </div>
+
+      {isModalOpen && (
+        <EarlyAccessModal onClose={() => setIsModalOpen(false)} />
+      )}
+    </>
   )
 }
 
