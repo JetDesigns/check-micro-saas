@@ -3,13 +3,16 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
-// Full-page loader for the ~20-second Anthropic compile. Two things run in
-// parallel:
-//   1. A cosmetic phase animation (label + progress bar + rotating copy) that
-//      cycles every ~2.5s across 8 phases. This is UX theatre — the real
+// Full-page loader for the Anthropic compile, which a real run measured at
+// about 150 seconds. Two things run in parallel:
+//   1. A cosmetic phase animation (label + progress bar + rotating copy)
+//      spread across the measured duration. This is UX theatre — the real
 //      compile is a single API call — but it makes the wait feel deliberate
-//      and gives the user something to read.
+//      and gives the user something to read. The phase pacing is derived from
+//      COMPILE_MS: when the animation was sized for 20s the bar reached 92%
+//      and then sat there for two full minutes, which reads as broken.
 //   2. The actual POST /api/compile fetch. When it resolves, we skip the
 //      remaining phases, snap the progress bar to 100%, and push to /c/[id].
 //
@@ -59,8 +62,14 @@ const PHASES: readonly Phase[] = [
   },
 ] as const
 
-const PHASE_MS = 2500
-const EXPECTED_MS = PHASES.length * PHASE_MS // ~20s total
+// Measured end-to-end on a real compile (server log: 2.5min). The animation
+// is paced off this rather than the other way round.
+const COMPILE_MS = 150_000
+const PHASE_MS = Math.round(COMPILE_MS / PHASES.length) // ~19s per phase
+const EXPECTED_MS = COMPILE_MS
+
+// How often to re-check the row when another request already owns the compile.
+const POLL_MS = 3000
 
 type Status = 'loading' | 'redirecting' | 'error'
 
@@ -71,11 +80,15 @@ export function WritingLoader({ caseStudyId }: Props) {
   const [status, setStatus] = useState<Status>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // No dev-mode guard: React strict-mode's double-effect will fire /api/compile
-  // twice, but the route is idempotent — the second call finds the case
-  // study already at status='preview' and returns the stored situation
-  // without hitting Anthropic. Guarding here with a ref caused the first
-  // mount's cleanup to tear down timers that never got recreated.
+  // No dev-mode guard: React strict-mode's double-effect fires /api/compile
+  // twice. That used to mean two Anthropic calls — this comment previously
+  // claimed the second one found status='preview' and returned early, which
+  // is only true once the first compile has FINISHED. For the ~150s it is
+  // running the row is still 'draft', so both calls went through and the
+  // second overwrote the first. The route now claims the compile atomically
+  // and answers 202 to the loser, which is what `in_progress` below handles.
+  // Guarding here with a ref caused the first mount's cleanup to tear down
+  // timers that never got recreated.
   useEffect(() => {
     // Kick off the cosmetic phase cycle.
     const phaseTimer = window.setInterval(() => {
@@ -107,15 +120,23 @@ export function WritingLoader({ caseStudyId }: Props) {
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as {
           ok?: boolean
-          situation?: string
+          status?: string
           error?: string
           message?: string
         }
-        if (!res.ok || !body.ok) {
+
+        // 202: another request already owns this compile — a refresh, or
+        // strict-mode's second effect. Nothing is wrong and nothing needs
+        // starting; wait for the row the other call is going to write. This
+        // is what makes refreshing mid-compile safe instead of destructive.
+        if (res.status === 202 || body.status === 'in_progress') {
+          await waitForCompile(caseStudyId, controller.signal)
+        } else if (!res.ok || !body.ok) {
           throw new Error(
             body.message || body.error || `Compile failed (HTTP ${res.status})`
           )
         }
+
         // Success — snap phase to the last one, snap progress to 100%, then
         // hand off to the shareable page.
         setPhaseIdx(PHASES.length - 1)
@@ -214,5 +235,38 @@ export function WritingLoader({ caseStudyId }: Props) {
         )}
       </div>
     </div>
+  )
+}
+
+
+// Waits for whoever owns the compile to finish it.
+//
+// Reads `status` through the browser client, so RLS applies and this can only
+// ever see the caller's own row. compiled_narrative stays unreadable here —
+// migration 0005 revoked that column from `authenticated`, and the paywall
+// depends on it staying that way. Status alone is all we need: once it leaves
+// 'draft' the narrative has been written.
+async function waitForCompile(caseStudyId: string, signal: AbortSignal) {
+  const supabase = createClient()
+  // Generous: the compile itself is ~150s and the server allows up to 300s.
+  const deadline = Date.now() + 320_000
+
+  while (Date.now() < deadline) {
+    if (signal.aborted) return
+
+    const { data, error } = await supabase
+      .from('case_studies')
+      .select('status')
+      .eq('id', caseStudyId)
+      .single()
+
+    if (error) throw new Error(error.message)
+    if (data && data.status !== 'draft') return
+
+    await new Promise((resolve) => window.setTimeout(resolve, POLL_MS))
+  }
+
+  throw new Error(
+    'This case study is taking longer than expected. Refresh to check on it.'
   )
 }

@@ -169,6 +169,7 @@ export type Database = {
           status: CaseStudyStatus
           title: string | null
           headline: string | null
+          compile_claimed_at: string | null
           meta: CaseStudyMeta | null
           client_type: string | null
           project_type: ProjectType | null
@@ -184,6 +185,7 @@ export type Database = {
           status?: CaseStudyStatus
           title?: string | null
           headline?: string | null
+          compile_claimed_at?: string | null
           meta?: CaseStudyMeta | null
           client_type?: string | null
           project_type?: ProjectType | null
@@ -199,6 +201,7 @@ export type Database = {
           status?: CaseStudyStatus
           title?: string | null
           headline?: string | null
+          compile_claimed_at?: string | null
           meta?: CaseStudyMeta | null
           client_type?: string | null
           project_type?: ProjectType | null
@@ -388,6 +391,14 @@ export type Database = {
       rate_limit_compile: {
         Args: { p_max: number }
         Returns: number
+      }
+      // Atomic claim on a compile. Returns 'claimed' | 'in_progress' |
+      // 'already_done' | 'not_found'. Takes no user id — it scopes every
+      // statement to auth.uid() itself, the same lesson migration 0009 wrote
+      // into rate_limit_compile.
+      claim_compile: {
+        Args: { p_case_study_id: string; p_stale_after: string }
+        Returns: string
       }
       // Service-role only. Grants a one-time signup bonus of 1 credit,
       // idempotent per user_id via a 'signup_bonus' row in

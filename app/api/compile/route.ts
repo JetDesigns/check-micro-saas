@@ -33,6 +33,23 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
+// A real compile measured 2.5 minutes. Vercel's Hobby ceiling is 300s (default
+// and maximum), so the normal path fits with room to spare — but the retry
+// path below can run a second full Anthropic call, and two of those would sit
+// exactly on that ceiling. State the requirement rather than inheriting a
+// default that could change, or that depends on fluid compute being on.
+export const maxDuration = 300
+
+// How long a claim is honoured before another request may take it. Must be
+// comfortably above the worst-case compile (two attempts, ~300s); the route
+// clears the claim itself on failure, so this window only matters when a
+// function is killed outright.
+const STALE_CLAIM_AFTER = '10 minutes'
+
+// Don't start a second attempt if there isn't time to finish it. Failing at
+// ~150s with a real message beats a 504 at 300s with nothing saved.
+const RETRY_BUDGET_MS = 120_000
+
 // Locked per AGENTS.md — never downgrade to save cost.
 const MODEL = 'claude-opus-5'
 
@@ -107,6 +124,20 @@ AVOID: sentimentality, gushing, exclamation marks, and warmth as a substitute fo
 Sample register: "Their sales team was rewriting the same proposal three or four times a week, and every one of those rewrites took most of a morning. Nobody enjoyed it. It was the kind of task that quietly makes people avoid the work that earns the money."`,
 }
 
+// A failed attempt must not keep holding the claim. The stale window exists
+// only to recover from a function that died mid-flight; every failure we can
+// actually see should free the row immediately so the user can try again.
+async function releaseCompileClaim(caseStudyId: string) {
+  try {
+    await createAdminClient()
+      .from('case_studies')
+      .update({ compile_claimed_at: null })
+      .eq('id', caseStudyId)
+  } catch (e) {
+    console.error('[/api/compile] could not release compile claim:', e)
+  }
+}
+
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey && process.env.NODE_ENV === 'production') {
@@ -154,20 +185,43 @@ export async function POST(req: Request) {
     return Response.json({ error: 'no_intake' }, { status: 400 })
   }
 
-  // Idempotency guard — runs BEFORE rate limit so a refresh / retry / React
-  // strict-mode double-fire doesn't consume a compile slot or trigger a
-  // second Anthropic call. Once past 'draft', the compile has already saved
-  // everything the client cares about; just say ok.
-  if (
-    caseStudy.status === 'preview' ||
-    caseStudy.status === 'paid' ||
-    caseStudy.status === 'complete'
-  ) {
+  // Claim the compile before spending anything on it.
+  //
+  // The guard here used to check `status` and let anything still at 'draft'
+  // through. A compile runs ~150 seconds and status stays 'draft' for every
+  // one of them, so a second request inside that window — a refresh, a retry,
+  // React strict-mode's double effect — made its own Anthropic call and
+  // overwrote the first result. Aborting the client fetch does not stop the
+  // server, which is why the double-fire was never harmless. claim_compile()
+  // closes the window with an atomic update: only one caller can win it.
+  const { data: claim, error: claimError } = await supabase.rpc(
+    'claim_compile',
+    { p_case_study_id: caseStudyId, p_stale_after: STALE_CLAIM_AFTER }
+  )
+
+  if (claimError) {
+    console.error('[/api/compile] claim_compile failed:', claimError)
+    return Response.json({ error: claimError.message }, { status: 500 })
+  }
+
+  if (claim === 'not_found') {
+    return Response.json({ error: 'not_found' }, { status: 404 })
+  }
+
+  // Already compiled — everything the client needs is saved. Same answer the
+  // old guard gave, for the case the old guard actually handled correctly.
+  if (claim === 'already_done') {
     return Response.json({ ok: true })
   }
 
-  // Rate limit only counts fresh compiles. The atomic upsert prevents
-  // parallel requests from both squeaking past the cap.
+  // Someone else is mid-compile. 202 rather than an error: the work is
+  // happening, this caller just isn't the one doing it. The loader polls.
+  if (claim === 'in_progress') {
+    return Response.json({ ok: false, status: 'in_progress' }, { status: 202 })
+  }
+
+  // Rate limit counts only compiles we actually run — it sits after the claim
+  // so a duplicate that lost the race doesn't burn a slot.
   //
   // The RPC keys the counter to auth.uid() itself — it deliberately takes no
   // user id (migration 0009). Passing one used to let any signed-in caller
@@ -176,6 +230,8 @@ export async function POST(req: Request) {
     p_max: DAILY_COMPILE_LIMIT,
   })
   if (rateError) {
+    // We hold the claim at this point and are about to abandon it.
+    await releaseCompileClaim(caseStudyId)
     if (rateError.message.includes('rate_limit_exceeded')) {
       return Response.json(
         {
@@ -231,7 +287,17 @@ export async function POST(req: Request) {
     let lastRaw = ''
     let lastError: unknown = null
     let parsed: unknown = null
+    const startedAt = Date.now()
     for (let attempt = 0; attempt < 2; attempt++) {
+      // One attempt takes ~150s and maxDuration is 300s, so a blind retry can
+      // run the function straight into a 504 that saves nothing. If the budget
+      // is gone, stop and surface the parse error we already have.
+      if (attempt > 0 && Date.now() - startedAt > RETRY_BUDGET_MS) {
+        console.error(
+          `[/api/compile] skipping retry — ${Math.round((Date.now() - startedAt) / 1000)}s already spent, not enough budget for a second attempt`
+        )
+        break
+      }
       const response = await client.messages.create({
         model: MODEL,
         // Generous cap, not a target. max_tokens counts EVERY output token
@@ -313,6 +379,7 @@ export async function POST(req: Request) {
       meta = buildDevStubMeta({ intake, projectType, clientType, attachments })
     } else {
       console.error('[/api/compile] AI error:', e)
+      await releaseCompileClaim(caseStudyId)
       return Response.json(
         {
           error: 'ai_failed',
@@ -339,6 +406,7 @@ export async function POST(req: Request) {
     .eq('id', caseStudyId)
 
   if (updateError) {
+    await releaseCompileClaim(caseStudyId)
     return Response.json({ error: updateError.message }, { status: 500 })
   }
 
