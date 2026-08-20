@@ -11,30 +11,48 @@ import { DEMO_URL } from '@/lib/launch-mode'
 // The modal itself portals to <body>, so it is unaffected by this component
 // sitting inside the landing's sticky left column.
 
+// Shared so the live link and the inert placeholder stay the same shape — if
+// they drift, the hero visibly reflows on the day the URL is set.
+const DEMO_BUTTON_CLASS =
+  'inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft'
+
 export function StartCta() {
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        {/* Appears the moment NEXT_PUBLIC_DEMO_URL is set, and not before.
-            A disabled button advertising a video that does not exist spends
-            the visitor's attention on a dead end; until the recording is up,
-            the hero carries one live action and nothing else.
+        {/* Always present, in one of two states.
 
-            A real anchor rather than a button, because it goes somewhere —
-            and in a new tab, so someone who leaves to watch does not lose the
-            early-access page they came for. */}
-        {DEMO_URL && (
+            With NEXT_PUBLIC_DEMO_URL set it is a real anchor, opening in a
+            new tab so someone who leaves to watch does not lose the
+            early-access page they came for. Without it, the same control
+            renders inert: the pre-launch hero keeps its secondary weight
+            beside the primary button, and a visitor can see a demo is on the
+            way rather than wondering whether there is anything to see.
+
+            Both states share one class string apart from the interactive
+            bits, so the button does not move or resize when the URL lands. */}
+        {DEMO_URL ? (
           <a
             href={DEMO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft transition-colors hover:border-ink-soft/40 hover:text-ink"
+            className={DEMO_BUTTON_CLASS + ' transition-colors hover:border-ink-soft/40 hover:text-ink'}
           >
             <PlayIcon />
             Watch demo
           </a>
+        ) : (
+          <button
+            type="button"
+            disabled
+            title="Demo coming soon"
+            className={DEMO_BUTTON_CLASS + ' opacity-60'}
+          >
+            <PlayIcon />
+            Watch demo
+          </button>
         )}
         <button
           type="button"
