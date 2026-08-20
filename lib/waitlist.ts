@@ -36,7 +36,7 @@ export const PAIN_FREQUENCY_OPTIONS: WaitlistOption<PainFrequency>[] = [
 ]
 
 export const PRICE_WILLINGNESS_QUESTION =
-  'If a tool could help you turn finished design work into a business narrative ready to use with clients — in 15 minutes — what would be worth paying per project?'
+  'If a tool could help you turn finished design work into a business narrative ready to use with clients, what would be worth paying per project?'
 
 export const PRICE_WILLINGNESS_OPTIONS: WaitlistOption<PriceWillingness>[] = [
   { value: 'free_only', label: "Wouldn't pay, needs to be free" },
