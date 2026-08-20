@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { EarlyAccessModal } from '@/components/landing/EarlyAccessModal'
+import { DEMO_URL } from '@/lib/launch-mode'
 
 // Hero call to action. The primary button opens the early-access form as an
 // overlay rather than scrolling anywhere: the whole point of asking is to
@@ -16,16 +17,25 @@ export function StartCta() {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        {/* TODO: no demo recording exists yet — disabled until one does. */}
-        <button
-          type="button"
-          disabled
-          title="Demo coming soon"
-          className="inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft opacity-60"
-        >
-          <PlayIcon />
-          Watch demo
-        </button>
+        {/* Appears the moment NEXT_PUBLIC_DEMO_URL is set, and not before.
+            A disabled button advertising a video that does not exist spends
+            the visitor's attention on a dead end; until the recording is up,
+            the hero carries one live action and nothing else.
+
+            A real anchor rather than a button, because it goes somewhere —
+            and in a new tab, so someone who leaves to watch does not lose the
+            early-access page they came for. */}
+        {DEMO_URL && (
+          <a
+            href={DEMO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft transition-colors hover:border-ink-soft/40 hover:text-ink"
+          >
+            <PlayIcon />
+            Watch demo
+          </a>
+        )}
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}

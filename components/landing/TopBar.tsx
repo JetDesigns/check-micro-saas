@@ -5,6 +5,7 @@ import { AuthGateModal } from '@/components/auth/AuthGateModal'
 import { createClient } from '@/lib/supabase/client'
 import { ensureAnonymousSession } from '@/lib/supabase/anon'
 import { getCreditBalance } from '@/lib/case-studies'
+import { EARLY_ACCESS_MODE } from '@/lib/launch-mode'
 
 // Landing-page top bar: wordmark left, nav + Buy credit right.
 //
@@ -159,7 +160,14 @@ export function TopBar() {
             <NavLink href="#examples">Real examples</NavLink>
           </span>
 
-          {/* Balance + Buy as one floating control: a soft white pill holding
+          {/* Hidden entirely while the product is closed — balance pill and
+              all. A greyed-out payment control asks the visitor a question
+              this page does not want them holding ("is it broken, or am I not
+              allowed?"), and a credit count means nothing when there is
+              nothing to spend it on. The handlers stay wired below, so
+              opening the product is one env var rather than a rewrite.
+
+Balance + Buy as one floating control: a soft white pill holding
               a filled pill button. The nested button's own shape does the
               separating, so there's no divider rule — that's what keeps it
               from reading as two stacked chips.
@@ -167,41 +175,43 @@ export function TopBar() {
               When there's no balance to show, the wrapper is dropped and the
               button stands alone; a lone filled pill inside an empty white
               pill just looks like a mistake. */}
-          <div
-            className={
-              'ml-1 inline-flex items-center ' +
-              // rounded-2xl (16px) = the button's 12px + the 4px padding.
-              // Nested radii only look concentric when the outer one is the
-              // inner one plus the gap between them.
-              (showBalance
-                ? 'gap-2.5 rounded-2xl bg-white p-1 pl-4 shadow-[0_1px_2px_rgba(23,23,23,0.06),0_8px_24px_-10px_rgba(23,23,23,0.22)]'
-                : '')
-            }
-          >
-            {showBalance && (
-              <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-ink-soft">
-                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-                <span className="font-semibold text-ink">{balance}</span>
-                credit{balance === 1 ? '' : 's'}
-              </span>
-            )}
-
-            <button
-              type="button"
-              onClick={onBuyClick}
-              disabled={isStartingCheckout || session === 'unknown'}
+          {!EARLY_ACCESS_MODE && (
+            <div
               className={
-                'rounded-xl bg-[linear-gradient(135deg,#41598e_0%,#2c3e64_100%)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ' +
-                // Standing alone it needs its own lift; nested, the wrapper
-                // already provides it.
+                'ml-1 inline-flex items-center ' +
+                // rounded-2xl (16px) = the button's 12px + the 4px padding.
+                // Nested radii only look concentric when the outer one is the
+                // inner one plus the gap between them.
                 (showBalance
-                  ? ''
-                  : 'shadow-[0_1px_2px_rgba(23,23,23,0.06),0_8px_24px_-10px_rgba(23,23,23,0.22)]')
+                  ? 'gap-2.5 rounded-2xl bg-white p-1 pl-4 shadow-[0_1px_2px_rgba(23,23,23,0.06),0_8px_24px_-10px_rgba(23,23,23,0.22)]'
+                  : '')
               }
             >
-              {isStartingCheckout ? 'Opening…' : 'Buy credit'}
-            </button>
-          </div>
+              {showBalance && (
+                <span className="inline-flex items-center gap-2 text-sm whitespace-nowrap text-ink-soft">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+                  <span className="font-semibold text-ink">{balance}</span>
+                  credit{balance === 1 ? '' : 's'}
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={onBuyClick}
+                disabled={isStartingCheckout || session === 'unknown'}
+                className={
+                  'rounded-xl bg-[linear-gradient(135deg,#41598e_0%,#2c3e64_100%)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ' +
+                  // Standing alone it needs its own lift; nested, the wrapper
+                  // already provides it.
+                  (showBalance
+                    ? ''
+                    : 'shadow-[0_1px_2px_rgba(23,23,23,0.06),0_8px_24px_-10px_rgba(23,23,23,0.22)]')
+                }
+              >
+                {isStartingCheckout ? 'Opening…' : 'Buy credit'}
+              </button>
+            </div>
+          )}
         </nav>
       </header>
 

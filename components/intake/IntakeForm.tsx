@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createCaseStudy, uploadAttachments } from '@/lib/case-studies'
+import { EARLY_ACCESS_MODE } from '@/lib/launch-mode'
 import {
   DEFAULT_PROJECT_TYPE,
   DEFAULT_TONE,
@@ -312,8 +313,12 @@ function Step1(props: Step1Props) {
         <button
           type="button"
           onClick={onNext}
-          disabled
-          title="Not open yet — request early access to get in first"
+          disabled={EARLY_ACCESS_MODE || isBusy}
+          title={
+            EARLY_ACCESS_MODE
+              ? 'Not open yet — request early access to get in first'
+              : undefined
+          }
           className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
         >
           Next: write the story
