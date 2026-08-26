@@ -67,13 +67,21 @@ warning). `.env.local` ter-ignore; `.env.local.example` sengaja di-un-ignore
 lewat `!.env.local.example` karena itu satu-satunya catatan env var yang
 dibutuhkan aplikasi.
 
-**Sudah ter-push ke GitHub** (Aug 16, 2026) — remote `origin` =
-`https://github.com/seiyasekha-bot/check-micro-saas.git` (private). `main`
-di server ada di `0417a78`, sama persis dengan HEAD lokal; diverifikasi lewat
-`git ls-remote`, bukan lewat remote-tracking ref (ref lokal bisa bohong kalau
-belum pernah fetch). 60 file ter-push, satu-satunya file env di dalamnya
-`.env.local.example`. Kredensial GitHub HTTPS tersimpan di osxkeychain
-(akun `seiyasekha-bot`), jadi push berikutnya tidak perlu login ulang.
+**Sudah ter-push ke GitHub** — remote `origin` =
+`https://github.com/JetDesigns/check-micro-saas.git` (**private**).
+
+Repo ini semula milik akun pribadi `seiyasekha-bot`, lalu **dipindahkan ke
+organization `JetDesigns`** (Aug 25, 2026) supaya akses diatur per-tim, bukan
+menumpang di satu akun. URL lama masih hidup karena GitHub membuat redirect
+otomatis setelah transfer — tapi **jangan dibagikan**; pakai URL organization.
+
+Kredensial GitHub HTTPS tersimpan di osxkeychain (akun `seiyasekha-bot`, yang
+kini jadi anggota organization), jadi push tidak perlu login ulang.
+
+Verifikasi push selalu pakai `git ls-remote`, bukan remote-tracking ref —
+ref lokal bisa bohong kalau belum pernah fetch. `.env.local` tidak pernah
+masuk commit mana pun; satu-satunya file env di repo adalah
+`.env.local.example`.
 
 Catatan: keempat commit ber-author `MacBook Pro
 <macbookpro@MacBooks-MacBook-Pro.local>` karena git identity tidak pernah
@@ -280,10 +288,10 @@ statusnya jelas "belum compile".
 
 ## SISA PEKERJAAN — kerjakan berurutan
 
-### 1. ~~Push ke GitHub~~ — SELESAI (Aug 16, 2026)
+### 1. ~~Push ke GitHub~~ — SELESAI
 
-Lihat "Kondisi saat ini" di atas. Repo private `seiyasekha-bot/check-micro-saas`,
-`main` = `0417a78` di server, `.env.local` tidak ikut.
+Lihat "Kondisi saat ini" di atas. Repo private
+**`JetDesigns/check-micro-saas`** (organization), `.env.local` tidak ikut.
 
 ### 2. Uji jalur uang dengan Stripe CLI — user menjalankan sendiri
 
