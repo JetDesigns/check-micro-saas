@@ -29,10 +29,32 @@ Node butuh PATH export — lihat AGENTS.md § Environment gotchas.
 
 ---
 
-## Kondisi saat ini (Aug 15, 2026)
+## Kondisi saat ini (Aug 25, 2026)
 
-**Aplikasinya lengkap.** Intake → compile → halaman case study → kredit →
-pembayaran → auth, semuanya terbangun dan terverifikasi jalan di lokal.
+### ⚠️ Produknya SENGAJA DITUTUP — baca ini sebelum mengira ada yang rusak
+
+Check pivot ke **mode pra-rilis**: mengumpulkan calon user dulu lewat waitlist,
+sebelum produknya dibuka ke publik.
+
+- Landing punya **tepat satu aksi hidup**: modal "Get early access", yang
+  menyimpan dua jawaban survei + email ke `public.waitlist`.
+- Wizard intake tetap tampil dan bisa diisi, tapi tombol **"Next: write the
+  story" DISABLED dengan sengaja**. Tidak ada yang bisa memulai case study.
+- Tombol **"Buy credit" tidak dirender sama sekali**.
+
+Ketiganya dikuasai **satu** sakelar, `NEXT_PUBLIC_EARLY_ACCESS_MODE` di
+`lib/launch-mode.ts`. Default-nya **menyala** (tertutup), supaya salah ketik
+nama env var membuat halaman terlalu diam, bukan tidak sengaja menjual sesuatu
+yang belum siap. Set `false` untuk membuka — satu perubahan itu menghidupkan
+wizard dan tombol beli sekaligus.
+
+`NEXT_PUBLIC_DEMO_URL` adalah flag **terpisah** untuk video intro YouTube.
+Kosong → tombol "Watch demo" tetap ada tapi mati. Diisi → jadi tautan asli yang
+membuka tab baru. Sengaja dipisah karena video bisa rilis sebelum produknya.
+
+**Aplikasinya sendiri lengkap.** Intake → compile → halaman case study →
+kredit → pembayaran → auth, semuanya terbangun dan terverifikasi jalan di
+lokal — hanya digembok, bukan belum jadi.
 
 **Sudah masuk version control.** Sebelumnya seluruh aplikasi masih untracked —
 hanya ada commit scaffold `create-next-app`. Sekarang:
@@ -128,14 +150,18 @@ kesimpulan salah di sesi sebelumnya:
 |---|---|
 | `app/api/compile/route.ts` | Prompt lengkap: `TONE_BRIEFS`, `PROJECT_TYPE_BRIEFS`, delapan gerakan copywriter, daftar kata terlarang, `CALLOUT_ALLOWLIST`. Paling berpengaruh ke kualitas output |
 | `lib/narrative.ts` | Validator shape, dipakai bersama `/api/compile` dan `/api/edit` — satu kontrak, bukan dua salinan |
-| `lib/intake-fields.ts` | 8 field intake. **Label di sini ikut masuk ke prompt** |
+| `lib/intake-fields.ts` | 9 field intake (8 + `voice_sample`). **Label di sini ikut masuk ke prompt** |
+| `lib/launch-mode.ts` | `EARLY_ACCESS_MODE` + `DEMO_URL`. Satu-satunya sakelar pra-rilis — dibaca TopBar dan IntakeForm |
+| `lib/waitlist.ts` | Opsi + validasi form early access, dipakai bersama form dan `/api/waitlist` |
+| `components/landing/EarlyAccessModal.tsx` | Modal waitlist. Di-portal ke `document.body` (kolom kiri sticky bikin stacking context), `max-h-[85vh]` + scroll sendiri |
+| `components/landing/StartCta.tsx` | Tombol hero: "Get early access" (buka modal) + "Watch demo" (dua keadaan, lihat `DEMO_URL`) |
 | `types/database.ts` | `NarrativeSection`, `NarrativeCallout` (union 3 kind), `CaseStudyMeta`, `FREE_SECTION = 'vision'` |
 | `app/c/[id]/CaseStudyView.tsx` | Halaman case study: hero, meta grid, sticky ToC, renderer callout, gambar inline, edit in-place |
 | `app/c/[id]/page.tsx` | Batas paywall sisi baca — hanya `vision` yang menyeberang saat belum bayar |
 | `components/landing/TopBar.tsx` | Kontrol Buy credit + deteksi sesi (none / anon / email) |
 | `components/auth/AuthGateModal.tsx` | Email + Google; `linkIdentity` vs `signInWithOAuth`; di-portal ke `document.body` |
 | `components/intake/IntakeFlow.tsx` | Semua redirect landing: recovery magic-link, resume checkout, kembali dari Stripe |
-| `supabase/migrations/0001–0009` | Semuanya sudah applied di project live |
+| `supabase/migrations/0001–0012` | Semuanya sudah applied di project live. 0010 unique index idempotensi kredit · 0011 tabel `waitlist` · 0012 `claim_compile` |
 
 ---
 
@@ -259,12 +285,18 @@ statusnya jelas "belum compile".
 Lihat "Kondisi saat ini" di atas. Repo private `seiyasekha-bot/check-micro-saas`,
 `main` = `0417a78` di server, `.env.local` tidak ikut.
 
-### 2. Uji jalur uang dengan Stripe CLI  ⟵ MULAI DARI SINI — user menjalankan sendiri
+### 2. Uji jalur uang dengan Stripe CLI — user menjalankan sendiri
 
-**Ini yang paling berisiko.** Rantai `checkout.session.completed → webhook →
-add_credits → saldo bertambah` **belum pernah dijalankan sekali pun**, di
-environment mana pun. Semua uji pembelian selama ini sengaja berhenti di
-halaman Stripe.
+**Separuh sudah beres (Aug 20).** Rantai `webhook → add_credits → saldo`
+terbukti benar lewat event bertanda tangan asli: saldo naik tepat 5, satu baris
+`payments`, tiga kali kirim ulang tidak menambah apa pun. Bug urutan yang
+ditemukan saat itu (baris `payments` ditulis sebelum kredit diberikan, sehingga
+retry balas `already_processed` tanpa pernah memberi kredit) sudah diperbaiki di
+`5493949`.
+
+**Yang tersisa:** membuktikan metadata `user_id` + `credit_amount` dari
+`/api/checkout` benar-benar sampai di event Stripe sungguhan. Hanya bisa lewat
+satu checkout kartu beneran.
 
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook
@@ -284,17 +316,27 @@ MCP SQL:
 | Item | Detail |
 |---|---|
 | Vercel | Hubungkan repo dari langkah 1 |
-| Env vars | 8 buah, termasuk `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true` |
+| Env vars | Lihat `.env.local.example` — termasuk `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`, `NEXT_PUBLIC_EARLY_ACCESS_MODE`, dan `NEXT_PUBLIC_DEMO_URL` |
+| Domain | Sudah ada: `jet.studio`. DNS di **Porkbun** (nameserver `*.ns.porkbun.com`) |
 | Supabase → Redirect URLs | Tambah `https://<domain>/auth/callback` |
 | Stripe | Masih **Sandbox**. Perlu product/price live, endpoint webhook produksi, dan `STRIPE_WEBHOOK_SECRET` baru |
 | Google OAuth consent screen | Kalau masih *Testing*, hanya test user yang bisa login → harus Publish |
 | Anthropic | Set spend limit; ~$0.08/compile setelah `max_tokens` jadi 16000 |
 
-### 4. Putuskan tiga item nav yang mati
+### 4. Putuskan dua item nav yang mati
 
 Di landing: `Features` dan `Real examples` menunjuk `#features` / `#examples`
-yang tidak ada; `Watch demo` disabled. Pengunjung pertama pasti mengklik salah
-satunya. Entah dibuatkan tujuannya atau dihapus sebelum launch.
+yang tidak ada. Sejak "Buy credit" disembunyikan, **keduanya jadi satu-satunya
+isi nav di desktop** — makin menonjol, makin mungkin diklik. Pengunjung pertama
+pasti mencoba salah satunya.
+
+`Watch demo` sudah **tidak** termasuk daftar ini: sekarang mati dengan sengaja
+(tooltip "Demo coming soon") dan otomatis jadi tautan asli begitu
+`NEXT_PUBLIC_DEMO_URL` diisi.
+
+Catatan tampilan: di bawah `sm` kedua tautan itu tersembunyi dan Buy credit
+juga hilang, jadi **top bar di HP sekarang hanya wordmark**. Tidak rusak, tapi
+kosong.
 
 **`Real examples` yang paling merugikan** — produk ini belum punya bukti publik
 sama sekali. Ini bersinggungan dengan Fase H (halaman `/contoh`) di bawah.
@@ -548,6 +590,29 @@ copy polish. Preparing for real customers.
 - `HANDOFF.md` — file ini (status + sisa pekerjaan).
 
 ## Session log
+
+Session Aug 20–25, 2026 — pivot ke pra-rilis + perbaikan jalur uang & output:
+- **Jalur uang.** Bug urutan di webhook: baris `payments` ditulis sebelum
+  kredit diberikan, jadi kegagalan di antaranya membuat retry balas
+  `already_processed` dan pembeli tidak pernah dapat kredit. Kredit dulu,
+  catat kemudian (`5493949`). Migration 0010 menutup celah double-credit pada
+  pengiriman event bersamaan.
+- **Compile.** Diukur pertama kali: **~150 detik**. Guard idempotensi ternyata
+  berlubang selebar durasi itu — dua compile berjalan, yang kedua menimpa yang
+  pertama (terbukti: 2 baris `compile_attempts`, narasi berubah di antara dua
+  kueri). Migration 0012 `claim_compile` + `maxDuration = 300` + retry sadar
+  anggaran waktu (`57f5170`).
+- **Kualitas output.** Tiga keluhan user (generik, tidak menjual, bukan
+  suaranya) direproduksi pada output asli `c8996572`. Akar masalahnya: prompt
+  Reflection secara harfiah meminta nasihat umum. Ditulis ulang + peran
+  copywriter/design strategist senior + field `voice_sample` sebagai jangkar
+  gaya. Terukur: 2.209 → 1.657 kata, ejaan British dan frasa generik hilang;
+  dengan `voice_sample` kalimat turun 17,3 → 15,7 kata (`3fcd036`).
+- **Early access.** Tabel `waitlist` (0011), modal di-portal ke body,
+  `lib/launch-mode.ts` sebagai satu sakelar pra-rilis.
+- **Layout landing.** Pita kosong 356px di kolom hero dan scroll 133px yang
+  berhenti mendadak — keduanya diperbaiki, halaman kini tidak scroll di
+  desktop (`2258a8b`).
 
 Session Aug 12-13, 2026 execute:
 - Fase B verify + fix Wizard.tsx delete + migration 0004 (revoke RPC anon).
