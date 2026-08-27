@@ -10,9 +10,32 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Check
 
-Micro-SaaS that turns a finished client project into a **business-framed case study** aimed at winning the *next* client. Users are freelance / small-agency designers selling directly to B2B clients — **not** job seekers.
+Micro-SaaS that turns finished design work into a single-page **portfolio case study** — the kind a designer publishes to get hired. Users are designers presenting their work to reviewers and hiring teams.
 
-Reference competitor: `casestudydesigner.app` (CSD). We mirror its flow; we differ on **framing** (business outcomes, not portfolio-reviewer metrics) and **price**.
+> **GENRE CHANGED — Aug 25, 2026.** Check was previously built as *sales
+> collateral*: a business-framed case study aimed at winning the next client,
+> explicitly "not job seekers". That is no longer true. The revision spec
+> (`check-revision-prompt.md`) reverses it, and the reversal is deliberate and
+> approved.
+>
+> This matters when reading anything else in this repo. Prose written before
+> this date — the compile prompt's voice rules, the landing copy, the
+> early-access survey questions — was written for the sales genre and is being
+> migrated phase by phase. **If a piece of copy argues for hiring the designer
+> as a consultant, it predates this change and is not the target.**
+
+Reference competitor: `casestudydesigner.app` (CSD). Same genre now; we differ on **structure** (a guaranteed finding→requirement→move spine rather than freeform prose) and **price**.
+
+## The spine — the core structural idea
+
+A case study reads as senior when one idea is restated at three levels of resolution, mapped 1:1:
+
+| Finding (what you learned) | Requirement (what it demanded) | Move (what you designed) |
+|---|---|---|
+
+Generic case studies fail because those are three unrelated lists. Check guarantees the mapping **structurally**, in `lib/case-study-blocks.ts`, not by hoping the model complies.
+
+The wizard never asks for three lists. It asks for a repeated **decision unit** — what did you decide · what made you decide it · what did you reject — and derives all three levels from it. People can recall decisions; they cannot recall "requirements".
 
 Supabase project ref: `barsrclvvnuwjaqwecay` (ap-southeast-2).
 
