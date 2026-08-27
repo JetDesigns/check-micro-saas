@@ -1,35 +1,53 @@
-// The intake form: two-step card, eight fields, plus two selectors.
+// The intake form: five steps and a review screen, plus two selectors.
 //
-// Framing note: every label asks about the client's business, not about the
-// designer's craft. That is the whole difference between this and a portfolio
-// tool — the reader of the output is the next paying client, so the input has
-// to be gathered in their terms.
+// Framing note: these questions ask the designer to account for their own
+// decisions, because the reader of the output is someone deciding whether to
+// hire them. An earlier version of this file asked about the client's business
+// instead — that was the sales genre, and it is gone. See the genre banner in
+// AGENTS.md.
 //
 // `key` matches a property on the `Intake` type and is stored inside
 // `case_studies.intake`. Renaming a key orphans existing rows.
 //
-// `step` splits the form so the user isn't scrolling a wall of textareas.
-// Step 1 = attachments + choices + two short inputs (fast). Step 2 = the
-// long-form story. See AGENTS.md § Locked product decisions.
+// Only steps 1, 2 and 5 live here. Step 3 (the repeated decision unit) and
+// step 4 (one block per uploaded screen) are arrays of objects, which a flat
+// key/label registry cannot express — they have their own components and their
+// copy lives in lib/wizard-steps.ts.
 
-import type { Intake, ProjectType, Tone } from '@/types/database'
+import type { Intake, OutcomeStatus, ProjectType, Tone } from '@/types/database'
+
+/** Intake keys that are a single string the user types. */
+export type TextKey = Exclude<
+  keyof Intake,
+  'decisions' | 'image_notes' | 'outcome_status'
+>
+
+/** Steps a registry-driven field can belong to. */
+export type FieldStep = 1 | 2 | 5
 
 export type IntakeField = {
-  key: keyof Intake
+  key: TextKey
   label: string
   placeholder: string
   helper?: string
   type: 'input' | 'textarea'
+  /**
+   * Drives the "optional" tag and the review screen's neutral marker — and
+   * nothing else. It has not gated navigation since the wizard stopped
+   * blocking "next" (check-revision-prompt.md § Phase 2). Marking a field
+   * required is a statement about what the case study needs, not a lock.
+   */
   required: boolean
   rows?: number
-  step: 1 | 2
+  step: FieldStep
 }
 
 export const INTAKE_FIELDS: readonly IntakeField[] = [
+  // --- Step 1 — setup -----------------------------------------------------
   {
     key: 'title',
     label: 'What did you work on?',
-    placeholder: 'e.g. Pricing page rewrite for a niche SaaS',
+    placeholder: 'e.g. Rebuilding shift handover for a hospital ward',
     helper: 'Short. One sentence, no setup.',
     type: 'input',
     required: true,
@@ -38,17 +56,65 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'client_type',
     label: 'Who was it for?',
-    placeholder: 'e.g. 30-person B2B software company',
-    helper: 'Their industry + rough size. No names needed.',
+    placeholder: 'e.g. A regional hospital group',
+    // This one is printed on the page, in the metadata grid under the title.
+    helper: 'Their industry + rough size. No names needed — this one shows.',
     type: 'input',
     required: true,
     step: 1,
   },
   {
+    key: 'year_duration',
+    label: 'Year & duration',
+    placeholder: 'e.g. 2024 · 9 weeks',
+    helper: 'Both in one line. Rough is fine.',
+    type: 'input',
+    required: false,
+    step: 1,
+  },
+  {
+    key: 'role',
+    label: 'Your role',
+    placeholder: 'e.g. Product Designer',
+    helper: 'What you were called on this project.',
+    type: 'input',
+    required: false,
+    step: 1,
+  },
+  {
+    key: 'team_credit',
+    label: 'Team / credit',
+    placeholder: 'e.g. One engineer, one clinical lead',
+    helper: 'Who else was on it. Naming them reads as confidence, not dilution.',
+    type: 'input',
+    required: false,
+    step: 1,
+  },
+  {
+    // The only field that is about HOW the writing should sound rather than
+    // what happened. Five tone presets are a guess at a register; this is the
+    // writer's actual register, which is the only thing that can make the
+    // output sound like them. The label is written to tell the model that too
+    // — labels have been rendered into the prompt before, so this one has a
+    // job beyond the form.
+    key: 'voice_sample',
+    label: 'In your own words, how would you explain this project out loud?',
+    placeholder:
+      "e.g. Honestly the screen wasn't the problem, the handover was. Nobody trusted it to still be there, so they photographed it. We fixed the trust part first and the rest got easier.",
+    helper:
+      "Optional — but it's what makes the writing sound like you instead of like a template. Three or four sentences, however you'd actually say it.",
+    type: 'textarea',
+    required: false,
+    rows: 3,
+    step: 1,
+  },
+
+  // --- Step 2 — the problem -----------------------------------------------
+  {
     key: 'problem',
     label: 'What was wrong before?',
     placeholder:
-      'e.g. Their sales team rewrote the same proposal 3–4 times a week, losing about 6 hours each time to formatting.',
+      'e.g. The handover screen cleared itself sometimes, so nurses photographed it before every shift change.',
     helper: 'A specific example or number beats a vague description.',
     type: 'textarea',
     required: true,
@@ -56,75 +122,61 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     step: 2,
   },
   {
-    key: 'solution',
-    label: 'What did you change?',
+    key: 'why_it_mattered',
+    label: 'Why did it matter?',
     placeholder:
-      'e.g. A template-driven builder on top of the catalog they already had. A full CRM rebuild was rejected — they needed something live in 4 weeks.',
-    helper: 'The route matters as much as the deliverable.',
-    type: 'textarea',
-    required: true,
-    rows: 4,
-    step: 2,
-  },
-  {
-    key: 'business_impact',
-    label: 'What was it costing them?',
-    placeholder:
-      'e.g. Deals were stalling in the proposal stage, and two worth around $80k had gone cold waiting.',
-    helper: 'Cost of leaving it broken. Deadline. Business pressure.',
+      'e.g. Handover ran 14 minutes against a 6-minute budget, and the photo on someone’s phone had become the real record.',
+    helper: 'What was at risk if it stayed broken.',
     type: 'textarea',
     required: true,
     rows: 3,
     step: 2,
   },
+  {
+    key: 'constraints',
+    label: 'What constrained you?',
+    placeholder:
+      'e.g. The patient record system was off limits, so everything had to work as a layer on top of it.',
+    helper:
+      "A deadline, a system you couldn't touch, data you didn't have. Anything that changed the shape of the solution.",
+    type: 'textarea',
+    required: true,
+    rows: 3,
+    step: 2,
+  },
+
+  // --- Step 5 — where it landed -------------------------------------------
   {
     key: 'metrics',
-    label: "Numbers that moved (or didn't)?",
-    placeholder:
-      'e.g. Proposal turnaround dropped from ~6 hours to under 20 minutes.',
-    helper: 'Optional. Real numbers only — no guessing.',
+    label: 'Numbers that moved?',
+    placeholder: 'e.g. Handover reading time fell from 14 minutes to 7.',
+    helper: 'Real numbers only. Blank is better than a guess.',
     type: 'textarea',
     required: false,
     rows: 3,
-    step: 2,
+    step: 5,
   },
   {
-    key: 'timeline_investment',
-    label: 'Rough scope — how long, how much?',
-    placeholder: 'e.g. 5 weeks, $18k fixed fee',
-    helper: 'Optional. Ballpark is fine.',
-    type: 'input',
-    required: false,
-    step: 2,
-  },
-  {
-    key: 'client_reaction',
-    label: 'Anything they told you afterward?',
+    key: 'what_changed',
+    label: 'What changed for the team or client?',
     placeholder:
-      'e.g. Their head of sales said the team stopped avoiding warm leads.',
-    helper: 'Optional. Verbatim quote beats paraphrase.',
+      'e.g. The photographs stopped within two weeks. Nobody was asked to stop.',
+    helper: 'What people did differently afterwards.',
     type: 'textarea',
     required: false,
     rows: 3,
-    step: 2,
+    step: 5,
   },
   {
-    // The only field that is about HOW the writing should sound rather than
-    // what happened. Five tone presets are a guess at a register; this is the
-    // writer's actual register, which is the only thing that can make the
-    // output sound like them. The label is written to tell the model that too
-    // — labels are rendered into the prompt, so this one has a job to do
-    // beyond the form.
-    key: 'voice_sample',
-    label: 'In your own words, how would you explain this project out loud?',
+    key: 'do_differently',
+    label: 'What would you do differently?',
     placeholder:
-      "e.g. Honestly the site wasn't the problem, the search was. People couldn't find anything so they just left. We fixed the finding part first and the rest got easier.",
-    helper:
-      "Optional — but it's what makes the writing sound like you instead of like a template. Three or four sentences, however you'd actually say it.",
+      'e.g. I would have sat through a night handover earlier — the day shift told a much tidier story than the ward actually had.',
+    helper: 'The part a reviewer trusts most, because nobody fakes it.',
     type: 'textarea',
     required: false,
     rows: 3,
-    step: 2,
+    step: 5,
   },
 ] as const
 
@@ -136,7 +188,7 @@ export const PROJECT_TYPES: ReadonlyArray<{
   {
     value: 'focused_fix',
     label: 'Focused fix',
-    description: 'You improved one specific thing that was costing them.',
+    description: 'You improved one specific thing that was going wrong.',
   },
   {
     value: 'zero_to_one',
@@ -150,6 +202,10 @@ export const PROJECT_TYPES: ReadonlyArray<{
   },
 ] as const
 
+// Still five. The spec collapses these to Direct / Warm / Analytical, but
+// `analytical` is not in the CHECK constraint on case_studies.tone (migration
+// 0003), so the collapse needs a migration and was deliberately deferred out
+// of the wizard restructure. See AGENTS.md § Tone + project type.
 export const TONES: ReadonlyArray<{ value: Tone; label: string }> = [
   { value: 'professional', label: 'Professional' },
   { value: 'direct', label: 'Direct' },
@@ -158,21 +214,24 @@ export const TONES: ReadonlyArray<{ value: Tone; label: string }> = [
   { value: 'warm', label: 'Warm' },
 ] as const
 
+export const OUTCOME_OPTIONS: ReadonlyArray<{
+  value: OutcomeStatus
+  label: string
+}> = [
+  { value: 'shipped', label: 'Shipped' },
+  { value: 'proof_of_concept', label: 'Proof of concept' },
+  { value: 'not_launched', label: 'Not launched' },
+  { value: 'handed_off', label: 'Handed off' },
+] as const
+
 export const DEFAULT_PROJECT_TYPE: ProjectType = 'focused_fix'
 export const DEFAULT_TONE: Tone = 'professional'
 
-export const STEP_1_FIELDS = INTAKE_FIELDS.filter((f) => f.step === 1)
-export const STEP_2_FIELDS = INTAKE_FIELDS.filter((f) => f.step === 2)
+export function fieldsForStep(step: FieldStep): IntakeField[] {
+  return INTAKE_FIELDS.filter((f) => f.step === step)
+}
 
-/** Field keys that must be filled before the form can be submitted. */
-export const REQUIRED_KEYS = INTAKE_FIELDS.filter((f) => f.required).map(
-  (f) => f.key
-)
-
-/** Required field keys per step — used to gate Next / Submit. */
-export const REQUIRED_KEYS_STEP_1 = STEP_1_FIELDS.filter((f) => f.required).map(
-  (f) => f.key
-)
-export const REQUIRED_KEYS_STEP_2 = STEP_2_FIELDS.filter((f) => f.required).map(
-  (f) => f.key
-)
+/** DOM id for a field, shared by the input and the review screen's jump links. */
+export function fieldElementId(key: TextKey): string {
+  return `intake-${key}`
+}

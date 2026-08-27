@@ -1,90 +1,151 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createCaseStudy, uploadAttachments } from '@/lib/case-studies'
 import { EARLY_ACCESS_MODE } from '@/lib/launch-mode'
 import {
   DEFAULT_PROJECT_TYPE,
   DEFAULT_TONE,
-  INTAKE_FIELDS,
-  PROJECT_TYPES,
-  REQUIRED_KEYS_STEP_1,
-  REQUIRED_KEYS_STEP_2,
-  STEP_1_FIELDS,
-  STEP_2_FIELDS,
-  TONES,
-  type IntakeField,
+  type TextKey,
 } from '@/lib/intake-fields'
-import type { Intake, ProjectType, Tone } from '@/types/database'
-import { AttachmentStep } from '@/components/wizard/AttachmentStep'
-
-type Values = Partial<Record<keyof Intake, string>>
-type Step = 1 | 2
+import {
+  WIZARD_COPY,
+  buildIntake,
+  buildReview,
+  emptyWizardState,
+  nextStep,
+  prevStep,
+  stepMeta,
+  type StepId,
+} from '@/lib/wizard-steps'
+import type {
+  Decision,
+  OutcomeStatus,
+  ProjectType,
+  Tone,
+} from '@/types/database'
+import type { Attachment } from '@/components/wizard/AttachmentStep'
+import { StepIndicator } from '@/components/intake/StepIndicator'
+import { Step1Setup } from '@/components/intake/steps/Step1Setup'
+import { Step2Problem } from '@/components/intake/steps/Step2Problem'
+import { Step3Decisions } from '@/components/intake/steps/Step3Decisions'
+import { Step4Screens, type ScreenNote } from '@/components/intake/steps/Step4Screens'
+import { Step5Outcome } from '@/components/intake/steps/Step5Outcome'
+import { ReviewScreen } from '@/components/intake/steps/ReviewScreen'
 
 type Props = {
   /** Called once the case study exists and attachments are uploaded. */
   onCreated: (caseStudyId: string) => void
 }
 
+// Five steps and a review screen. All state lives here and the step
+// components are presentational, which is why going back never loses an
+// answer: nothing is stored inside the step that renders it.
+//
+// Nothing blocks "next". Empty answers are allowed all the way through to
+// submit — the review screen points at what is thin, and that is the only
+// pressure the wizard applies. See check-revision-prompt.md § Phase 2.
 export function IntakeForm({ onCreated }: Props) {
-  const [step, setStep] = useState<Step>(1)
-  const [values, setValues] = useState<Values>({})
-  const [projectType, setProjectType] =
-    useState<ProjectType>(DEFAULT_PROJECT_TYPE)
+  const [step, setStep] = useState<StepId>(1)
+  const [text, setText] = useState<Partial<Record<TextKey, string>>>({})
+  // Lazy, so the two starting decision blocks get their ids once rather than
+  // on every render.
+  const [decisions, setDecisions] = useState<Decision[]>(
+    () => emptyWizardState().decisions
+  )
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [imageNotes, setImageNotes] = useState<Record<string, ScreenNote>>({})
+  const [projectType, setProjectType] = useState<ProjectType>(DEFAULT_PROJECT_TYPE)
   const [tone, setTone] = useState<Tone>(DEFAULT_TONE)
-  const [files, setFiles] = useState<File[]>([])
-
-  // Two independent "tried" flags so validation errors show on the step
-  // the user actually attempted to leave — not on the other one.
-  const [nextTried, setNextTried] = useState(false)
-  const [submitTried, setSubmitTried] = useState(false)
+  const [outcome, setOutcome] = useState<OutcomeStatus | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const missingStep1 = REQUIRED_KEYS_STEP_1.filter((k) => !values[k]?.trim())
-  const missingStep2 = REQUIRED_KEYS_STEP_2.filter((k) => !values[k]?.trim())
-  const canAdvance = missingStep1.length === 0
-  const canSubmit = canAdvance && missingStep2.length === 0
+  const formRef = useRef<HTMLFormElement>(null)
+  const hasImages = attachments.length > 0
+  const meta = stepMeta(step)
 
-  const set = (key: keyof Intake, v: string) =>
-    setValues((prev) => ({ ...prev, [key]: v }))
-
-  const handleNext = () => {
-    setNextTried(true)
-    if (!canAdvance) return
-    setStep(2)
-    // Scroll to top of form so the user starts step 2 at the heading rather
-    // than mid-viewport (the form is often taller than the viewport).
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
+  const state = {
+    text,
+    decisions,
+    attachmentIds: attachments.map((a) => a.id),
+    imageNotes,
+    outcome,
   }
 
-  const handleBack = () => {
-    setStep(1)
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }
+  const setTextValue = (key: TextKey, value: string) =>
+    setText((prev) => ({ ...prev, [key]: value }))
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitTried(true)
-    if (!canSubmit || isBusy) return
+  const setNote = (id: string, patch: Partial<ScreenNote>) =>
+    setImageNotes((prev) => {
+      const current = prev[id] ?? { shows: '', notice: '' }
+      return { ...prev, [id]: { ...current, ...patch } }
+    })
+
+  // Scrolls the form itself rather than the window. On lg the wizard sits
+  // inside an overflow-y-auto column, so window.scrollTo — what this used to
+  // do — moved nothing at all on desktop.
+  const goTo = useCallback((target: StepId) => {
+    setStep(target)
+    formRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [])
+
+  // Jumping out of the review screen has to wait for the target step to
+  // mount before the element it wants exists. An effect is the right wait:
+  // requestAnimationFrame also works in a real browser, but it never runs at
+  // all in a hidden tab — including the preview pane this gets verified in,
+  // where the focus silently did nothing and looked correct in the DOM.
+  const pendingFocus = useRef<string | null>(null)
+  const [focusTick, setFocusTick] = useState(0)
+
+  useEffect(() => {
+    const anchor = pendingFocus.current
+    if (!anchor) return
+    pendingFocus.current = null
+
+    const el = document.getElementById(anchor)
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (el instanceof HTMLElement) el.focus({ preventScroll: true })
+  }, [focusTick])
+
+  const jumpTo = useCallback((target: StepId, anchor: string) => {
+    pendingFocus.current = anchor
+    setStep(target)
+    setFocusTick((t) => t + 1)
+  }, [])
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+
+    // Three guards, and the first two are the real ones.
+    //
+    // The wizard used to be sealed by disabling a single Next button, which
+    // held only because that button was the one thing that could advance the
+    // step. With five steps and jump links out of the review screen, that
+    // invariant is gone — so the seal lives on the action that writes, not on
+    // a button that leads to it.
+    //
+    // The second guard closes implicit submission: one form wraps every step,
+    // and a form with exactly one text input submits on Enter. Several steps
+    // here have exactly one.
+    if (EARLY_ACCESS_MODE) return
+    if (step !== 'review') return
+    if (isBusy) return
 
     setIsBusy(true)
     setError(null)
     try {
-      const intake = Object.fromEntries(
-        INTAKE_FIELDS.map((f) => [f.key, values[f.key]?.trim() ?? '']).filter(
-          ([, v]) => v !== ''
-        )
-      ) as unknown as Intake
-
-      const id = await createCaseStudy({ intake, projectType, tone })
-      if (files.length > 0) {
-        await uploadAttachments({ caseStudyId: id, files })
+      const id = await createCaseStudy({
+        intake: buildIntake(state),
+        projectType,
+        tone,
+      })
+      if (attachments.length > 0) {
+        await uploadAttachments({
+          caseStudyId: id,
+          files: attachments.map((a) => a.file),
+        })
       }
       onCreated(id)
     } catch (err) {
@@ -99,37 +160,138 @@ export function IntakeForm({ onCreated }: Props) {
 
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit}
       noValidate
       className="rounded-3xl border border-white/70 bg-surface/95 p-6 shadow-[0_1px_2px_rgba(23,23,23,0.05),0_12px_32px_-8px_rgba(23,23,23,0.16),0_32px_80px_-20px_rgba(74,59,41,0.24)] backdrop-blur-sm sm:p-8"
     >
-      <StepIndicator step={step} />
+      <StepIndicator current={step} hasImages={hasImages} />
 
-      {step === 1 ? (
-        <Step1
-          files={files}
-          onFilesChange={setFiles}
-          projectType={projectType}
-          onProjectTypeChange={setProjectType}
-          tone={tone}
-          onToneChange={setTone}
-          values={values}
-          onValueChange={set}
-          isBusy={isBusy}
-          nextTried={nextTried}
-          onNext={handleNext}
-          missingCount={missingStep1.length}
-        />
-      ) : (
-        <Step2
-          values={values}
-          onValueChange={set}
-          isBusy={isBusy}
-          submitTried={submitTried}
-          onBack={handleBack}
-          hasFiles={files.length > 0}
-          missingCount={missingStep2.length}
-        />
+      <h2 className="mt-3 text-xl font-medium leading-snug text-ink sm:text-2xl">
+        {meta.heading}
+      </h2>
+      {meta.subhead && (
+        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+          {meta.subhead}
+        </p>
+      )}
+
+      <div className="mt-6">
+        {step === 1 && (
+          <Step1Setup
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+            projectType={projectType}
+            onProjectTypeChange={setProjectType}
+            tone={tone}
+            onToneChange={setTone}
+            text={text}
+            onTextChange={setTextValue}
+            isBusy={isBusy}
+          />
+        )}
+        {step === 2 && (
+          <Step2Problem
+            text={text}
+            onTextChange={setTextValue}
+            isBusy={isBusy}
+          />
+        )}
+        {step === 3 && (
+          <Step3Decisions
+            decisions={decisions}
+            onChange={setDecisions}
+            isBusy={isBusy}
+          />
+        )}
+        {step === 4 && (
+          <Step4Screens
+            attachments={attachments}
+            decisions={decisions}
+            notes={imageNotes}
+            onNoteChange={setNote}
+            isBusy={isBusy}
+          />
+        )}
+        {step === 5 && (
+          <Step5Outcome
+            outcome={outcome}
+            onOutcomeChange={setOutcome}
+            text={text}
+            onTextChange={setTextValue}
+            isBusy={isBusy}
+          />
+        )}
+        {step === 'review' && (
+          <ReviewScreen
+            sections={buildReview(
+              buildIntake(state),
+              attachments.map((a) => a.id)
+            )}
+            onJump={jumpTo}
+          />
+        )}
+      </div>
+
+      <footer className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {step === 1 ? (
+          <p className="text-xs text-ink-muted sm:max-w-[60%]">
+            Free to write. You only pay to unlock the full result.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => goTo(prevStep(step, hasImages))}
+            disabled={isBusy}
+            className="text-sm font-medium text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline disabled:cursor-not-allowed disabled:opacity-40 sm:self-center"
+          >
+            ← Back
+          </button>
+        )}
+
+        {/* Both branches are type="button", and the keys keep them as two
+            separate DOM nodes.
+
+            A type="submit" here fired a real submit the moment the user
+            arrived at the review screen, without anyone pressing it. React
+            reuses one DOM node for both branches and patches the attribute in
+            place; the patch lands during the click that advances the step,
+            and the browser then reads the button's *current* type to pick its
+            default action — by which point it says submit. The step guard in
+            handleSubmit cannot catch that, because the step really is
+            'review' by then. Writing is an explicit onClick instead. */}
+        {step === 'review' ? (
+          <button
+            key="write"
+            type="button"
+            onClick={() => void handleSubmit()}
+            disabled={EARLY_ACCESS_MODE || isBusy}
+            title={EARLY_ACCESS_MODE ? WIZARD_COPY.earlyAccess : undefined}
+            className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
+          >
+            {isBusy
+              ? hasImages
+                ? 'Uploading…'
+                : 'Working…'
+              : WIZARD_COPY.reviewWrite}
+          </button>
+        ) : (
+          <button
+            key="next"
+            type="button"
+            onClick={() => goTo(nextStep(step, hasImages))}
+            disabled={isBusy}
+            className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
+          >
+            Next
+          </button>
+        )}
+      </footer>
+
+      {step === 'review' && EARLY_ACCESS_MODE && (
+        <p className="mt-3 text-xs text-ink-muted">
+          {WIZARD_COPY.earlyAccess}
+        </p>
       )}
 
       {error && (
@@ -141,346 +303,5 @@ export function IntakeForm({ onCreated }: Props) {
         </p>
       )}
     </form>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-function StepIndicator({ step }: { step: Step }) {
-  return (
-    <div className="flex items-center justify-between">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-        Step {step} of 2
-      </p>
-      <div className="flex items-center gap-1.5" aria-hidden>
-        <span
-          className={
-            'h-1.5 w-6 rounded-full ' +
-            (step === 1 ? 'bg-accent' : 'bg-accent/30')
-          }
-        />
-        <span
-          className={
-            'h-1.5 w-6 rounded-full ' +
-            (step === 2 ? 'bg-accent' : 'bg-line')
-          }
-        />
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-type Step1Props = {
-  files: File[]
-  onFilesChange: (files: File[]) => void
-  projectType: ProjectType
-  onProjectTypeChange: (t: ProjectType) => void
-  tone: Tone
-  onToneChange: (t: Tone) => void
-  values: Values
-  onValueChange: (k: keyof Intake, v: string) => void
-  isBusy: boolean
-  nextTried: boolean
-  onNext: () => void
-  missingCount: number
-}
-
-function Step1(props: Step1Props) {
-  const {
-    files,
-    onFilesChange,
-    projectType,
-    onProjectTypeChange,
-    tone,
-    onToneChange,
-    values,
-    onValueChange,
-    isBusy,
-    nextTried,
-    onNext,
-    missingCount,
-  } = props
-
-  return (
-    <div>
-      <h2 className="mt-3 text-xl font-medium leading-snug text-ink sm:text-2xl">
-        Quick setup
-      </h2>
-      <p className="mt-2 text-sm text-ink-soft">
-        A few quick choices, then we go into the story.
-      </p>
-
-      {/* Attachments — top of step 1, per the intake flow order. */}
-      <div className="mt-6">
-        <AttachmentStep
-          files={files}
-          onFilesChange={onFilesChange}
-          isBusy={isBusy}
-          variant="inline"
-        />
-      </div>
-
-      {/* Project type */}
-      <fieldset className="mt-6">
-        <legend className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-          What kind of project was it?
-        </legend>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          {PROJECT_TYPES.map((t) => {
-            const active = projectType === t.value
-            return (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => onProjectTypeChange(t.value)}
-                aria-pressed={active}
-                className={
-                  'rounded-xl border p-3 text-left transition-colors ' +
-                  (active
-                    ? 'border-accent bg-accent/5'
-                    : 'border-line bg-white hover:border-ink-soft/40')
-                }
-              >
-                <span className="block text-sm font-medium text-ink">
-                  {t.label}
-                </span>
-                <span className="mt-1 block text-xs leading-snug text-ink-muted">
-                  {t.description}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </fieldset>
-
-      {/* Tone */}
-      <fieldset className="mt-6">
-        <legend className="text-[11px] font-semibold uppercase tracking-wider text-accent">
-          Tone
-        </legend>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {TONES.map((t) => {
-            const active = tone === t.value
-            return (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => onToneChange(t.value)}
-                aria-pressed={active}
-                className={
-                  'rounded-lg border px-3.5 py-1.5 text-sm transition-colors ' +
-                  (active
-                    ? 'border-accent bg-accent text-white'
-                    : 'border-line bg-white text-ink-soft hover:border-ink-soft/40 hover:text-ink')
-                }
-              >
-                {t.label}
-              </button>
-            )
-          })}
-        </div>
-      </fieldset>
-
-      {/* Step 1 short inputs */}
-      <div className="mt-6 space-y-5">
-        {STEP_1_FIELDS.map((field) => (
-          <FieldRow
-            key={field.key}
-            field={field}
-            value={values[field.key] ?? ''}
-            isBusy={isBusy}
-            showError={
-              nextTried && field.required && !values[field.key]?.trim()
-            }
-            onChange={(v) => onValueChange(field.key, v)}
-          />
-        ))}
-      </div>
-
-      <footer className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-ink-muted sm:max-w-[60%]">
-          Free to write. You only pay to unlock the full result.
-        </p>
-        {/* Disabled for the early-access phase. The wizard stays fillable so
-            visitors can see what the product asks for, but nothing is written
-            yet — the landing's one live action is the early-access form.
-
-            Sealing this one button seals the whole wizard: `step` starts at 1
-            and handleNext is the only thing that ever sets it to 2, so step 2
-            and handleSubmit are both unreachable while this is off. */}
-        <button
-          type="button"
-          onClick={onNext}
-          disabled={EARLY_ACCESS_MODE || isBusy}
-          title={
-            EARLY_ACCESS_MODE
-              ? 'Not open yet — request early access to get in first'
-              : undefined
-          }
-          className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
-        >
-          Next: write the story
-        </button>
-      </footer>
-
-      {nextTried && missingCount > 0 && (
-        <p role="alert" className="mt-3 text-xs text-red-700">
-          {missingCount} required{' '}
-          {missingCount === 1 ? 'answer is' : 'answers are'} still empty.
-        </p>
-      )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-type Step2Props = {
-  values: Values
-  onValueChange: (k: keyof Intake, v: string) => void
-  isBusy: boolean
-  submitTried: boolean
-  onBack: () => void
-  hasFiles: boolean
-  missingCount: number
-}
-
-function Step2(props: Step2Props) {
-  const {
-    values,
-    onValueChange,
-    isBusy,
-    submitTried,
-    onBack,
-    hasFiles,
-    missingCount,
-  } = props
-
-  return (
-    <div>
-      <h2 className="mt-3 text-xl font-medium leading-snug text-ink sm:text-2xl">
-        The story of the project
-      </h2>
-      <p className="mt-2 text-sm text-ink-soft">
-        Plain answers in the client&apos;s terms. Rough numbers are fine — leave
-        optional ones blank rather than guess.
-      </p>
-
-      <div className="mt-6 space-y-5">
-        {STEP_2_FIELDS.map((field) => (
-          <FieldRow
-            key={field.key}
-            field={field}
-            value={values[field.key] ?? ''}
-            isBusy={isBusy}
-            showError={
-              submitTried && field.required && !values[field.key]?.trim()
-            }
-            onChange={(v) => onValueChange(field.key, v)}
-          />
-        ))}
-      </div>
-
-      <footer className="mt-8 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          disabled={isBusy}
-          className="text-sm font-medium text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline disabled:cursor-not-allowed disabled:opacity-40 sm:self-center"
-        >
-          ← Back
-        </button>
-        <button
-          type="submit"
-          disabled={isBusy}
-          className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
-        >
-          {isBusy
-            ? hasFiles
-              ? 'Uploading…'
-              : 'Working…'
-            : 'Write the case study'}
-        </button>
-      </footer>
-
-      {submitTried && missingCount > 0 && (
-        <p role="alert" className="mt-3 text-xs text-red-700">
-          {missingCount} required{' '}
-          {missingCount === 1 ? 'answer is' : 'answers are'} still empty.
-        </p>
-      )}
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-type FieldRowProps = {
-  field: IntakeField
-  value: string
-  isBusy: boolean
-  showError: boolean
-  onChange: (v: string) => void
-}
-
-function FieldRow({ field, value, isBusy, showError, onChange }: FieldRowProps) {
-  const id = `intake-${field.key}`
-
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-medium text-ink">
-        {field.label}
-        {!field.required && (
-          <span className="ml-2 text-xs font-normal text-ink-muted">
-            optional
-          </span>
-        )}
-      </label>
-
-      <div
-        className={
-          'mt-2 rounded-xl border bg-white transition-shadow focus-within:ring-2 focus-within:ring-accent/15 ' +
-          (showError
-            ? 'border-red-300 focus-within:border-red-400'
-            : 'border-line focus-within:border-accent')
-        }
-      >
-        {field.type === 'textarea' ? (
-          <textarea
-            id={id}
-            value={value}
-            rows={field.rows ?? 3}
-            disabled={isBusy}
-            placeholder={field.placeholder}
-            onChange={(e) => onChange(e.target.value)}
-            aria-invalid={showError || undefined}
-            className="block w-full resize-none rounded-xl bg-transparent px-4 py-3 text-[15px] leading-relaxed text-ink placeholder:font-normal placeholder:text-ink-muted/80 placeholder:italic disabled:opacity-60"
-          />
-        ) : (
-          <input
-            id={id}
-            type="text"
-            value={value}
-            disabled={isBusy}
-            placeholder={field.placeholder}
-            onChange={(e) => onChange(e.target.value)}
-            aria-invalid={showError || undefined}
-            className="block w-full rounded-xl bg-transparent px-4 py-3 text-[15px] text-ink placeholder:font-normal placeholder:text-ink-muted/80 placeholder:italic disabled:opacity-60"
-          />
-        )}
-      </div>
-
-      {showError ? (
-        <p role="alert" className="mt-1.5 text-xs text-red-700">
-          This one is needed to write the case study.
-        </p>
-      ) : (
-        field.helper && (
-          <p className="mt-1.5 text-xs text-ink-muted">{field.helper}</p>
-        )
-      )}
-    </div>
   )
 }

@@ -28,20 +28,86 @@ export type Tone =
 
 // The whole intake form, stored as one jsonb column. Submitted in a single
 // shot, so per-field rows buy nothing.
+//
+// EVERY TEXT FIELD IS OPTIONAL, deliberately. The wizard never blocks "next"
+// (check-revision-prompt.md § Phase 2), so any answer can be empty when the
+// row is written. The previous version of this type marked five fields
+// required and the submit path reached them through `as unknown as Intake` —
+// a cast that produced an object missing its own required properties without
+// a word of complaint from anyone. Optional here is the truth.
+//
+// `title` and `client_type` must keep their key names: lib/case-studies.ts
+// reads both by name to fill their own columns on case_studies.
 export type Intake = {
-  title: string
-  client_type: string
-  problem: string
-  solution: string
-  business_impact: string
-  metrics?: string
-  timeline_investment?: string
-  client_reaction?: string
+  // Step 1 — setup
+  title?: string
+  client_type?: string
+  /** Feeds the metadata grid. e.g. "2024 · 9 weeks". */
+  year_duration?: string
+  role?: string
+  team_credit?: string
   // Not a project fact — a sample of how the designer actually talks, used to
   // anchor the prose style. The prompt is explicit that its CONTENT must never
   // be treated as something that happened.
   voice_sample?: string
+
+  // Step 2 — the problem
+  problem?: string
+  why_it_mattered?: string
+  constraints?: string
+
+  // Step 3 — the decisions. The spine is derived from these, so this is the
+  // load-bearing part of the whole form.
+  decisions: Decision[]
+
+  // Step 4 — your screens
+  image_notes: ImageNote[]
+
+  // Step 5 — where it landed
+  outcome_status?: OutcomeStatus
+  metrics?: string
+  what_changed?: string
+  do_differently?: string
 }
+
+// One decision unit. The wizard asks for decisions because people can recall
+// them; it never asks for "requirements", which nobody can. All three levels
+// of the spine come out of this shape downstream (Phase 4):
+//
+//   decided  → move            (what you designed)
+//   why      → finding         (what you learned)
+//   rejected → move_section.tradeoff.rejected, which is what justifies the
+//              requirement — the level nobody can state directly
+//
+// See lib/case-study-blocks.ts for the far end of that mapping.
+export type Decision = {
+  /** Stable across edits and reorders; becomes SpineEntry.id. */
+  id: string
+  decided: string
+  why: string
+  rejected?: string
+}
+
+// What one uploaded screen is doing in the case study. `orderIndex` is the
+// join key: uploadAttachments writes order_index straight from the array
+// index, so position at submit time is what ties a note to its row. Notes are
+// carried by attachment id inside the wizard and only flattened to indices at
+// submit, so removing a screen mid-flow cannot shift notes onto the wrong one.
+export type ImageNote = {
+  orderIndex: number
+  /** A Decision.id, or one of the two fixed slots. */
+  shows: string
+  notice?: string
+}
+
+export const IMAGE_SLOT_HERO = 'hero'
+export const IMAGE_SLOT_SUPPORTING = 'supporting'
+
+export type OutcomeStatus =
+  | 'shipped'
+  | 'proof_of_concept'
+  | 'not_launched'
+  | 'handed_off'
 
 // AI-inferred, anonymized meta grid. Persisted in case_studies.meta (jsonb) —
 // see migration 0008.

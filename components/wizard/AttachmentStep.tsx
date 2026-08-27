@@ -2,34 +2,34 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-// Client-side constraints. Mirror these on the server upload path in step 4.
+// Client-side constraints. The bucket enforces the size and MIME rules too
+// (migration 0002), but MAX_FILES has no server counterpart.
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 const MAX_FILES = 6
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const ACCEPTED_HINT = 'JPG, PNG, WEBP'
 
+/**
+ * A picked file plus an id we mint ourselves.
+ *
+ * The id exists because step 4 annotates each screen, and identity used to be
+ * positional — remove the second screen after annotating the third and every
+ * note slides onto the wrong image. The database id would do, but it is not
+ * generated until upload, which happens after the whole form is submitted.
+ */
+export type Attachment = { id: string; file: File }
+
 type Props = {
-  files: File[]
-  onFilesChange: (files: File[]) => void
+  attachments: Attachment[]
+  onAttachmentsChange: (attachments: Attachment[]) => void
   isBusy?: boolean
-  /**
-   * 'standalone' renders its own heading and Continue/Skip footer.
-   * 'inline' drops both — the parent form owns the heading and submit button.
-   */
-  variant?: 'standalone' | 'inline'
-  onContinue?: () => void
-  onSkip?: () => void
 }
 
 export function AttachmentStep({
-  files,
-  onFilesChange,
+  attachments,
+  onAttachmentsChange,
   isBusy = false,
-  variant = 'standalone',
-  onContinue,
-  onSkip,
 }: Props) {
-  const inline = variant === 'inline'
   const [isDragging, setIsDragging] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
@@ -54,8 +54,11 @@ export function AttachmentStep({
         accepted.push(f)
       }
 
-      const combined = [...files, ...accepted].slice(0, MAX_FILES)
-      const dropped = files.length + accepted.length - combined.length
+      const combined = [
+        ...attachments,
+        ...accepted.map((file) => ({ id: crypto.randomUUID(), file })),
+      ].slice(0, MAX_FILES)
+      const dropped = attachments.length + accepted.length - combined.length
       if (dropped > 0) {
         nextErrors.push(
           `Only ${MAX_FILES} files allowed — ${dropped} skipped`
@@ -63,31 +66,22 @@ export function AttachmentStep({
       }
 
       setErrors(nextErrors)
-      onFilesChange(combined)
+      onAttachmentsChange(combined)
     },
-    [files, onFilesChange]
+    [attachments, onAttachmentsChange]
   )
 
-  const removeFile = (idx: number) => {
-    onFilesChange(files.slice(0, idx).concat(files.slice(idx + 1)))
+  const removeFile = (id: string) => {
+    onAttachmentsChange(attachments.filter((a) => a.id !== id))
     setErrors([])
   }
 
-  const atCapacity = files.length >= MAX_FILES
+  // Locked while the form is submitting: the files are already on their way
+  // to storage by then, so adding more would silently miss the upload.
+  const atCapacity = attachments.length >= MAX_FILES || isBusy
 
   return (
     <div>
-      {!inline && (
-        <>
-          <h2 className="text-xl font-medium leading-snug text-ink sm:text-2xl">
-            Got any visuals from this project?
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-ink-soft">
-            Screenshots, before/afters, final designs — whatever you have.
-            These show up alongside your story, but they&apos;re optional.
-          </p>
-        </>
-      )}
 
       {/* Dropzone */}
       <div
@@ -166,82 +160,61 @@ export function AttachmentStep({
         </ul>
       )}
 
-      {files.length > 0 && (
+      {attachments.length > 0 && (
         <div className="mt-4">
           <div className="mb-2 flex items-center justify-between text-xs text-ink-muted">
             <span>
-              {files.length} of {MAX_FILES} added
+              {attachments.length} of {MAX_FILES} added
             </span>
             <button
               type="button"
-              onClick={() => onFilesChange([])}
+              onClick={() => onAttachmentsChange([])}
               className="underline-offset-4 transition-colors hover:text-ink hover:underline"
             >
               Remove all
             </button>
           </div>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {files.map((file, i) => (
+            {attachments.map((a) => (
               <FilePreview
-                key={`${file.name}-${file.lastModified}-${i}`}
-                file={file}
-                onRemove={() => removeFile(i)}
+                key={a.id}
+                file={a.file}
+                onRemove={() => removeFile(a.id)}
               />
             ))}
           </ul>
         </div>
       )}
 
-      {!inline && (
-        <footer className="mt-8 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={onSkip}
-            disabled={isBusy}
-            className="text-sm font-medium text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Skip this step
-          </button>
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={isBusy}
-            className="rounded-xl bg-ink px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink"
-          >
-            {isBusy
-              ? files.length > 0
-                ? 'Uploading…'
-                : 'Starting…'
-              : files.length > 0
-                ? `Continue with ${files.length} file${files.length > 1 ? 's' : ''}`
-                : 'Continue'}
-          </button>
-        </footer>
-      )}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
 
-function FilePreview({
+/**
+ * A thumbnail of a picked file, exported because step 4 shows the same screens
+ * again to ask what each one is doing.
+ *
+ * Create AND revoke in the same effect so the URL's lifetime matches the
+ * effect's. Deriving it in render (useMemo) instead looks tidier and silences
+ * the lint rule below, but breaks under StrictMode: the dev remount runs the
+ * cleanup, revoking the URL, while the memo does not re-run — leaving the
+ * <img> pointed at a dead blob. Tried it, the thumbnail went blank.
+ *
+ * The setState here is genuinely synchronous, so the rule is right that it
+ * costs a render; that is the correct price for a resource that must be torn
+ * down and rebuilt with the effect.
+ */
+export function FileThumbnail({
   file,
-  onRemove,
+  className,
 }: {
   file: File
-  onRemove: () => void
+  className?: string
 }) {
   const [url, setUrl] = useState<string | null>(null)
 
-  // Create AND revoke in the same effect so the URL's lifetime matches the
-  // effect's. Deriving it in render (useMemo) instead looks tidier and silences
-  // the lint rule below, but breaks under StrictMode: the dev remount runs the
-  // cleanup, revoking the URL, while the memo does not re-run — leaving the
-  // <img> pointed at a dead blob. Tried it, the thumbnail went blank.
-  //
-  // The setState here is genuinely synchronous, so the rule is right that it
-  // costs a render; that is the correct price for a resource that must be
-  // torn down and rebuilt with the effect.
   useEffect(() => {
     const u = URL.createObjectURL(file)
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -250,18 +223,30 @@ function FilePreview({
   }, [file])
 
   return (
+    <div className={className ?? 'aspect-[4/3] bg-canvas'}>
+      {url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt=""
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
+      )}
+    </div>
+  )
+}
+
+function FilePreview({
+  file,
+  onRemove,
+}: {
+  file: File
+  onRemove: () => void
+}) {
+  return (
     <li className="group relative overflow-hidden rounded-lg border border-line bg-white">
-      <div className="aspect-[4/3] bg-canvas">
-        {url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={url}
-            alt=""
-            className="h-full w-full object-cover"
-            draggable={false}
-          />
-        )}
-      </div>
+      <FileThumbnail file={file} />
       <button
         type="button"
         onClick={onRemove}

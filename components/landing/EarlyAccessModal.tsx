@@ -10,6 +10,7 @@ import {
   type PainFrequency,
   type PriceWillingness,
 } from '@/lib/waitlist'
+import { ChoiceField } from '@/components/intake/ChoiceField'
 
 // Early-access capture, opened from the hero's primary CTA.
 //
@@ -217,83 +218,5 @@ export function EarlyAccessModal({ onClose }: { onClose: () => void }) {
       </div>
     </div>,
     document.body
-  )
-}
-
-// ---------------------------------------------------------------------------
-
-type ChoiceFieldProps<T extends string> = {
-  legend: string
-  name: string
-  options: readonly { value: T; label: string }[]
-  value: T | null
-  onChange: (value: T) => void
-  disabled: boolean
-  showError: boolean
-}
-
-// Radio inputs rather than the aria-pressed buttons the intake wizard uses.
-// Same look, but these are a required single-choice answer in a submitted
-// form, so the native grouping — arrow keys, one tab stop, screen-reader
-// "2 of 4" — is worth having instead of reimplementing.
-function ChoiceField<T extends string>({
-  legend,
-  name,
-  options,
-  value,
-  onChange,
-  disabled,
-  showError,
-}: ChoiceFieldProps<T>) {
-  return (
-    <fieldset>
-      <legend className="text-sm font-medium leading-relaxed text-ink">
-        {legend}
-      </legend>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        {options.map((o) => {
-          const active = value === o.value
-          return (
-            <label
-              key={o.value}
-              className={
-                'flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors ' +
-                (active
-                  ? 'border-accent bg-accent/5 text-ink'
-                  : 'border-line bg-white text-ink-soft hover:border-ink-soft/40 hover:text-ink') +
-                (disabled ? ' cursor-not-allowed opacity-60' : '')
-              }
-            >
-              <input
-                type="radio"
-                name={name}
-                value={o.value}
-                checked={active}
-                disabled={disabled}
-                onChange={() => onChange(o.value)}
-                className="sr-only"
-              />
-              {/* Drawn rather than a native dot so the control matches the
-                  warm palette instead of the OS accent colour. */}
-              <span
-                aria-hidden
-                className={
-                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors ' +
-                  (active ? 'border-accent' : 'border-line-soft bg-white')
-                }
-              >
-                {active && <span className="h-2 w-2 rounded-full bg-accent" />}
-              </span>
-              {o.label}
-            </label>
-          )
-        })}
-      </div>
-      {showError && (
-        <p role="alert" className="mt-2 text-xs text-red-700">
-          Pick one to continue.
-        </p>
-      )}
-    </fieldset>
   )
 }

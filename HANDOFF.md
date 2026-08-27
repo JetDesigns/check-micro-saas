@@ -20,8 +20,9 @@ adalah sisa genre lama.
 Jalur produk lama SUDAH DIHAPUS — /api/compile, /api/edit, /c/[id],
 /writing/[id], lib/narrative.ts. Itu disengaja, bukan hilang.
 
-Build order spec: Phase 1 (schema) dan Phase 5 (renderer) SELESAI.
-Berikutnya PHASE 2 — restrukturisasi wizard jadi 5 langkah.
+Build order spec: Phase 1 (schema), Phase 5 (renderer), dan Phase 2
+(wizard 5 langkah + layar review) SELESAI. Berikutnya PHASE 4 —
+pipeline 4 agent. Phase 3 dan 6 menyusul.
 
 Approval per-langkah: setelah satu langkah selesai + terverifikasi,
 berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
@@ -54,9 +55,17 @@ bersama jalur lama.
 ### ⚠️ Produknya sengaja DITUTUP
 
 Landing punya **tepat satu aksi hidup**: modal "Get early access" yang
-menyimpan dua jawaban survei + email ke `public.waitlist`. Wizard tampil dan
-bisa diisi tapi tombol majunya **disabled dengan sengaja**. Tombol "Buy credit"
+menyimpan dua jawaban survei + email ke `public.waitlist`. Tombol "Buy credit"
 **tidak dirender sama sekali**.
+
+Wizard sekarang **bisa dijalani sampai habis** — kelima langkah dan layar
+review — tapi tombol "Write the case study" **mati**, dengan ajakan early
+access di bawahnya. Ini berubah di Phase 2: dulu segelnya satu tombol Next di
+langkah 1, sekarang di aksi yang menulis. Lebih sesuai dengan niat aslinya
+(pengunjung boleh melihat apa yang diminta produk) dan **tidak bisa dilewati**
+— `handleSubmit` berhenti lebih dulu, jadi Enter di langkah berinput-tunggal
+maupun submit yang ditembakkan langsung sama-sama tidak menulis apa pun.
+Terbukti: nol baris `case_studies` setelah keduanya dicoba.
 
 Ketiganya dikuasai satu sakelar, `NEXT_PUBLIC_EARLY_ACCESS_MODE` di
 `lib/launch-mode.ts`. Default-nya **menyala** (tertutup) — salah ketik nama env
@@ -157,6 +166,20 @@ validator** — layout yang hanya bagus di dokumen ilegal tidak membuktikan apa
 pun. Judul section adalah keputusan si desainer sebagai kalimat perintah
 ("Freeze the note at shift change"), bukan label dekoratif.
 
+**Phase 2 — wizard 5 langkah + review**. `lib/wizard-steps.ts` memegang semua
+keputusannya sebagai fungsi murni, dengan **25 unit test** (total jadi 68) —
+satu-satunya cara menguji apa pun di sini, karena project ini tidak punya
+environment DOM sama sekali. Dijalani penuh di browser: maju dari tiap langkah
+dengan semua field kosong, step 4 hilang dari urutan saat tidak ada gambar (di
+kedua arah), tautan "Edit" melompat ke langkah tujuan **dan** memfokuskan
+field-nya, submit menulis baris dengan bentuk `intake` baru, dan segel
+early-access menahan tombol maupun submit langsung. Baris ujinya dihapus.
+
+Satu bug sungguhan ditemukan lewat verifikasi ini, bukan lewat penalaran:
+tiba di layar review **mengirim form sendiri** dan membuat satu baris tanpa
+ada yang menekan apa pun. Lihat Rechecks di bawah — penyebabnya React memakai
+ulang node DOM tombolnya.
+
 **Jalur uang — separuh terbukti** (`5493949`). Bug urutan diperbaiki: baris
 `payments` dulu ditulis sebelum kredit diberikan, jadi kegagalan di antaranya
 membuat retry balas `already_processed` dan pembeli tidak pernah dapat kredit.
@@ -211,6 +234,22 @@ Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
   server**.
 - **Label intake ikut masuk ke prompt.** Berlaku lagi begitu Phase 4 membangun
   pipeline baru.
+- **`type="submit"` yang muncul lewat render kondisional menembak sendiri.**
+  React memakai ulang satu node DOM untuk kedua cabang dan hanya menambal
+  atribut `type`; tambalan itu mendarat di tengah klik yang memajukan langkah,
+  lalu browser membaca type **terbaru** untuk memilih aksi bawaannya — dan
+  mengirim form tanpa ada yang menekannya. Penjaga `step !== 'review'` tidak
+  bisa menangkapnya, karena saat itu langkahnya memang sudah 'review'.
+  Terbukti: satu baris `case_studies` tercipta hanya karena tiba di layar
+  review. Sekarang kedua tombol `type="button"` dengan `key` berbeda.
+- **`requestAnimationFrame` tidak pernah jalan di browser pane** (pane
+  melaporkan `visibilityState: "hidden"`). Fokus setelah lompat dulu memakai
+  rAF dan diam-diam tidak melakukan apa pun di pane — DOM-nya terlihat benar.
+  Dipindah ke `useEffect`, yang jalan setelah commit apa pun keadaannya.
+- **Ref-click di browser pane meleset kalau viewport di-resize lebih besar
+  dari pane.** Pane menskalakan frame (mis. 1280×1800 → 800×450) dan koordinat
+  hasil resolusi ref jatuh di luar frame. Terbaca seperti "tombolnya rusak".
+  Pakai ukuran default, atau gulir kontainer lewat JS lalu klik.
 
 ---
 
@@ -227,7 +266,10 @@ Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
 | `lib/intake-fields.ts` | Field wizard. **Label di sini ikut masuk ke prompt** |
 | `lib/launch-mode.ts` | `EARLY_ACCESS_MODE` + `DEMO_URL` — satu-satunya sakelar pra-rilis |
 | `lib/waitlist.ts` | Opsi + validasi survei, dipakai bersama form dan `/api/waitlist` |
-| `components/intake/IntakeForm.tsx` | Wizard 2 langkah — **Phase 2 merestrukturisasinya jadi 5** |
+| `lib/wizard-steps.ts` | **Semua logika murni wizard**: urutan langkah, `buildIntake()`, aturan "thin", agregasi review, dan seluruh copy yang dikunci spec |
+| `components/intake/IntakeForm.tsx` | Wizard 5 langkah + review. Pemilik seluruh state; langkahnya presentational |
+| `components/intake/steps/` | Satu berkas per langkah, plus `ReviewScreen.tsx` |
+| `components/intake/FieldRow.tsx` · `ChoiceField.tsx` | Kontrol bersama; `ChoiceField` juga dipakai modal early access |
 | `components/landing/EarlyAccessModal.tsx` | Modal waitlist, di-portal ke `document.body` |
 | `supabase/migrations/0001–0013` | Semuanya applied di project live |
 
@@ -241,7 +283,34 @@ memberi tahu apakah outputnya cukup bagus **sebelum satu token pun dibelanjakan*
 ### 1. ~~Phase 1 — schema + validator~~ SELESAI (`b8d80f9`)
 ### 2. ~~Phase 5 — renderer diuji fixture~~ SELESAI (`62c4dac`)
 
-### 3. Phase 2 — restrukturisasi wizard  ⟵ MULAI DARI SINI
+### 3. ~~Phase 2 — restrukturisasi wizard~~ SELESAI
+
+Wizard 2 langkah jadi **5 langkah + layar review**. Yang perlu diketahui
+sebelum menyentuhnya lagi:
+
+- **Bentuk `Intake` berubah total** dan setiap field teks kini **opsional** —
+  spec melarang memblokir "next", jadi apa pun boleh kosong saat submit. Cast
+  `as unknown as Intake` yang lama diganti `buildIntake()` di
+  `lib/wizard-steps.ts`, satu-satunya penulis kolom `intake`.
+- **Step 3 adalah decision unit**, sumber spine. `decisions[]` membawa `id`
+  yang akan jadi `SpineEntry.id` di Phase 4.
+- **Step 4 dilewati** kalau tidak ada gambar, di kedua arah. Catatan gambar
+  dibawa per-id attachment di dalam wizard dan baru diratakan jadi
+  `orderIndex` saat submit, supaya menghapus satu layar tidak menggeser
+  catatan ke gambar yang salah.
+- **Tone tetap 5 chip.** Pemangkasan spec jadi Direct/Warm/Analytical ditunda
+  — `analytical` butuh migration untuk CHECK constraint `tone` di 0003, dan
+  constraint-nya harus **dilebarkan**, bukan disempitkan (baris lama memakai
+  nilai lama). Lihat AGENTS.md § Tone + project type.
+- **Segel `EARLY_ACCESS_MODE` pindah.** Dulu satu tombol Next; sekarang tiga
+  lapis di `handleSubmit` + tombol tulis. Orang kini bisa berjalan sampai
+  layar review saat mode tertutup — disengaja, sesuai niat "wizard tetap bisa
+  diisi supaya pengunjung melihat apa yang diminta produk".
+- `handleCreated` di `IntakeFlow.tsx` **masih dead end**. Submit sekarang
+  benar-benar menulis baris, lalu tombolnya berhenti di "Working…" selamanya
+  karena tidak ada tujuan. Phase 4 yang menyambungkannya.
+
+### 4. Phase 4 — pipeline 4 agent  ⟵ MULAI DARI SINI
 
 Wizard 2 langkah jadi **5 langkah** + layar review. Detail lengkap di
 `check-revision-prompt.md` § Phase 2.
@@ -265,8 +334,6 @@ Yang perlu diketahui sebelum mulai:
 - **Aturan copy spec mengikat**: jangan pernah blokir "next", jangan tampilkan
   skor kedalaman, dan jangan pakai kata "kurang", "belum cukup", "dangkal",
   "incomplete", atau "weak" di layar review.
-
-### 4. Phase 4 — pipeline 4 agent
 
 Interviewer · Extraction (vision) · Synthesis · QA. Detail di spec § Phase 4.
 
