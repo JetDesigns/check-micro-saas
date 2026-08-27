@@ -151,11 +151,11 @@ export function TradeOff({
 export function MoveSection({
   block,
   index,
-  imageSrc,
+  imageUrls,
 }: {
   block: Extract<Block, { type: 'move_section' }>
   index: number
-  imageSrc?: (id: string) => string | undefined
+  imageUrls?: Record<string, string>
 }) {
   return (
     <section
@@ -182,7 +182,7 @@ export function MoveSection({
       {block.tradeoff && <TradeOff tradeoff={block.tradeoff} />}
 
       {block.visuals.map((v) => (
-        <Visual key={v.imageId} visual={v} src={imageSrc?.(v.imageId)} />
+        <Visual key={v.imageId} visual={v} src={imageUrls?.[v.imageId]} />
       ))}
 
       <span className="sr-only">{`Move ${index + 1}`}</span>

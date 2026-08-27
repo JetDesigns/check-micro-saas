@@ -20,9 +20,13 @@ adalah sisa genre lama.
 Jalur produk lama SUDAH DIHAPUS — /api/compile, /api/edit, /c/[id],
 /writing/[id], lib/narrative.ts. Itu disengaja, bukan hilang.
 
-Build order spec: Phase 1 (schema), Phase 5 (renderer), dan Phase 2
-(wizard 5 langkah + layar review) SELESAI. Berikutnya PHASE 4 —
-pipeline 4 agent. Phase 3 dan 6 menyusul.
+Build order spec: Phase 1 (schema), Phase 5 (renderer), Phase 2 (wizard
+5 langkah), dan Phase 4 (pipeline) SELESAI. Berikutnya PHASE 6 (editor
+per-blok + route baca berbayar) lalu Phase 3 (adaptive probing).
+
+PENTING: kredit Anthropic HABIS di tengah run terakhir. Pipeline
+terbukti jalan sebelum itu, tapi tidak ada panggilan model yang bisa
+dijalankan sampai akunnya diisi ulang.
 
 Approval per-langkah: setelah satu langkah selesai + terverifikasi,
 berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
@@ -144,6 +148,12 @@ Baca ini **sebelum** daftar "Sudah terbukti" di bawah.
    sekali), keduanya konsisten dengan `auth.uid()` kosong sesaat saat token
    di-refresh. Belum direproduksi dengan sengaja.
 7. **`/api/waitlist` tanpa rate limit.** Endpoint publik tanpa sesi.
+8. **Vision pass belum pernah dijalankan.** Compile yang terbukti tidak punya
+   gambar, jadi agent extraction, penempatan `annotated_visual`, dan aturan
+   caption **belum teruji sama sekali**. Butuh compile dengan upload — dan
+   kredit.
+9. **Anggaran waktu belum muat di Vercel.** ~4 menit terukur lawan plafon 300
+   detik, sebelum vision pass ditambahkan. Lihat Phase 4 § temuan.
 
 ---
 
@@ -179,6 +189,21 @@ Satu bug sungguhan ditemukan lewat verifikasi ini, bukan lewat penalaran:
 tiba di layar review **mengirim form sendiri** dan membuat satu baris tanpa
 ada yang menekan apa pun. Lihat Rechecks di bawah — penyebabnya React memakai
 ulang node DOM tombolnya.
+
+**Phase 4 — pipeline agent, terbukti pada compile sungguhan.** Tiga agent
+(extraction · synthesis · QA), `/api/compile`, migration 0014. Dijalankan
+end-to-end pada intake asli tiga keputusan: rate limit lolos, `claim_compile`
+mengunci, synthesis menghasilkan dokumen yang **lolos seluruh validator**, QA
+mengembalikan catatan, synthesis mengulang, dan hasil akhirnya tersimpan di
+`case_studies.document` dengan status `preview`. Dilihat manusia di renderer
+lewat `/fixture?id=` — bukan cuma "JSON-nya lolos validator". Setiap panggilan
+tercatat di `agent_runs`.
+
+Jalur gagalnya juga terbukti, dua kali dan tanpa direncanakan: satu compile
+mati karena bug validator dan `compile_claimed_at` **dilepas dengan benar**
+sehingga retry langsung bisa; dan QA terakhir gagal karena kredit habis, yang
+ditangani sesuai desain — dokumen tetap tersimpan tanpa flag, bukan compile
+yang hangus.
 
 **Jalur uang — separuh terbukti** (`5493949`). Bug urutan diperbaiki: baris
 `payments` dulu ditulis sebelum kredit diberikan, jadi kegagalan di antaranya
@@ -232,8 +257,18 @@ Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
 - **StrictMode di dev** menjalankan mount → unmount → remount. `AbortController`
   di cleanup membatalkan fetch di klien tapi **tidak menghentikan function di
   server**.
-- **Label intake ikut masuk ke prompt.** Berlaku lagi begitu Phase 4 membangun
-  pipeline baru.
+- **Output model adalah data tak tepercaya, dan validator-lah yang membuatnya
+  aman — jadi validator sendiri tidak boleh memercayainya.** `validateCaseStudy`
+  membaca `block.visuals` karena tipenya bilang field itu wajib. Tipe itu
+  permintaan kepada model, bukan jaminan: move section tanpa gambar datang
+  tanpa key `visuals`, spread-nya melempar TypeError, dan compile sungguhan
+  mati dengan 502 alih-alih melaporkan kegagalan validasi. Sekarang semua
+  akses lewat accessor aman, dengan test yang menyuapinya dokumen sampah.
+- **Opus mengembalikan blok `thinking` lebih dulu**, jadi `content[0]` bukan
+  teks. Terverifikasi lewat API sungguhan, bukan dugaan.
+- **Prop berupa fungsi tidak bisa menyeberang dari Server ke Client Component.**
+  `imageSrc: (id) => string` aman dari parent client, dan melempar dari server.
+  Sekarang `imageUrls` berupa objek biasa.
 - **`type="submit"` yang muncul lewat render kondisional menembak sendiri.**
   React memakai ulang satu node DOM untuk kedua cabang dan hanya menambal
   atribut `type`; tambalan itu mendarat di tengah klik yang memajukan langkah,
@@ -266,6 +301,12 @@ Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
 | `lib/intake-fields.ts` | Field wizard. **Label di sini ikut masuk ke prompt** |
 | `lib/launch-mode.ts` | `EARLY_ACCESS_MODE` + `DEMO_URL` — satu-satunya sakelar pra-rilis |
 | `lib/waitlist.ts` | Opsi + validasi survei, dipakai bersama form dan `/api/waitlist` |
+| `lib/agents/prompts.ts` | **Prompt.** Tone brief, delapan gerakan copywriter, daftar terlarang, kontrak blok. Lever terbesar atas kualitas output |
+| `lib/agents/pipeline.ts` | Orkestrasi: extraction → synthesis → validate → QA → retry |
+| `lib/agents/parse.ts` | Ambil JSON dari respons model + deteksi truncation. Murni, diuji |
+| `lib/agents/client.ts` | Panggilan Anthropic + pencatatan `agent_runs` |
+| `app/api/compile/route.ts` | Rate limit · claim · pipeline · tulis dokumen |
+| `app/fixture/page.tsx` | Fixture, **dan `?id=` untuk melihat dokumen sungguhan** (dev-only) |
 | `lib/wizard-steps.ts` | **Semua logika murni wizard**: urutan langkah, `buildIntake()`, aturan "thin", agregasi review, dan seluruh copy yang dikunci spec |
 | `components/intake/IntakeForm.tsx` | Wizard 5 langkah + review. Pemilik seluruh state; langkahnya presentational |
 | `components/intake/steps/` | Satu berkas per langkah, plus `ReviewScreen.tsx` |
@@ -310,55 +351,62 @@ sebelum menyentuhnya lagi:
   benar-benar menulis baris, lalu tombolnya berhenti di "Working…" selamanya
   karena tidak ada tujuan. Phase 4 yang menyambungkannya.
 
-### 4. Phase 4 — pipeline 4 agent  ⟵ MULAI DARI SINI
+### 4. ~~Phase 4 — pipeline agent~~ SELESAI (dengan tiga catatan)
 
-Wizard 2 langkah jadi **5 langkah** + layar review. Detail lengkap di
-`check-revision-prompt.md` § Phase 2.
+Tiga agent, bukan empat. **Interviewer sengaja tidak dibangun** — tugasnya
+menggerakkan probe adaptif di dalam wizard, dan UI itu baru ada di Phase 3.
+Membangunnya sekarang berarti membuat sesuatu tanpa konsumen.
 
-**Step 3 (the decisions) adalah inti produknya**, bukan sekadar satu langkah.
-Di situlah spine terbentuk.
+Yang ada: `lib/agents/` (client · prompts · parse · pipeline),
+`/api/compile`, migration 0014 (`case_studies.document` + tabel `agent_runs`),
+dan `/fixture?id=` untuk melihat dokumen sungguhan.
 
-Yang perlu diketahui sebelum mulai:
+**Tiga temuan dari run sungguhan — baca sebelum menyentuh pipeline:**
 
-- `intake` disimpan sebagai **jsonb**, jadi mengubah bentuk field **tidak butuh
-  migration** — hanya `lib/intake-fields.ts` dan tipe `Intake`.
-- Wizard digembok `EARLY_ACCESS_MODE`. Untuk mengujinya set
-  `NEXT_PUBLIC_EARLY_ACCESS_MODE=false` di `.env.local` **lalu restart dev
-  server** — `NEXT_PUBLIC_*` di-inline saat build, hot reload saja tidak cukup.
-  **Kembalikan setelah selesai, dan buktikan dengan `diff`.**
-- Step 2 sudah melebihi viewport **sebelum** field apa pun ditambah (1289px
-  lawan 900px), jadi target "no in-step scrolling" di AGENTS.md sudah lama
-  tidak terpenuhi. Lima langkah justru memperbaikinya.
-- `handleCreated` di `IntakeFlow.tsx` sengaja dibuat **dead end yang berisik** —
-  tujuannya (`/writing/[id]`) sudah dihapus. Phase 4 yang menyambungkannya.
-- **Aturan copy spec mengikat**: jangan pernah blokir "next", jangan tampilkan
-  skor kedalaman, dan jangan pakai kata "kurang", "belum cukup", "dangkal",
-  "incomplete", atau "weak" di layar review.
+1. **Anggaran waktu nyaris habis.** Compile pertama yang berhasil memakai
+   **ketiga attempt** dan berjalan **~4 menit** (synthesis 48–58 detik per
+   attempt, QA ~20 detik). Plafon Vercel Hobby **300 detik**. Itu belum
+   termasuk vision pass. Pilihannya: turunkan `MAX_SYNTHESIS_ATTEMPTS` jadi 2,
+   longgarkan QA supaya tidak selalu menemukan sesuatu, atau pindahkan compile
+   ke background job. **Harus diputuskan sebelum deploy.**
+2. **QA menemukan masalah di setiap attempt.** Tidak pernah lolos bersih, jadi
+   setiap compile membayar harga maksimum. Prompt QA sudah menyuruh jangan
+   mengarang temuan; jelas belum cukup. Belum sempat dituning — kredit habis.
+3. **Kredit Anthropic habis di tengah run.** QA terakhir balas
+   `credit balance is too low`. Pipeline menangani itu dengan benar (dokumen
+   tetap tersimpan tanpa flag, sesuai desain), tapi tidak ada yang bisa
+   dijalankan lagi sampai diisi.
 
-Interviewer · Extraction (vision) · Synthesis · QA. Detail di spec § Phase 4.
+**Biaya terukur** untuk satu compile berhasil (3 keputusan, tanpa gambar):
+opus 15.391 token masuk / 12.081 keluar, sonnet 8.718 masuk / 3.494 keluar.
+Semuanya tercatat per panggilan di `agent_runs` — itu tabelnya ada.
 
-**Dua koreksi terhadap spec yang sudah diverifikasi:**
+**Artefak yang sengaja ditinggal**: case study `47bb55c8-eee8-47c6-9214-573c57c34ab9`
+berstatus `preview` dengan dokumen asli hasil pipeline. Bukan sampah uji —
+Phase 6 butuh sesuatu yang nyata untuk dirender. Lihat lewat
+`/fixture?id=47bb55c8-eee8-47c6-9214-573c57c34ab9`.
 
-- Spec menyebut `claude-opus-4-8` untuk synthesis. **Model itu tidak ada** di
-  generasi sekarang. Yang tersedia: `claude-opus-5`, `claude-sonnet-5`,
-  `claude-fable-5`, `claude-haiku-4-5`. AGENTS.md mengunci `claude-opus-5`.
-- **Anggaran waktu.** Compile lama terukur 150 detik untuk satu panggilan.
-  Pipeline spec bisa sampai 3 panggilan opus (synthesis + 2 retry QA). Plafon
-  Vercel Hobby **300 detik** (default sekaligus maksimum, dengan Fluid compute).
-  Tapi structured blocks jauh lebih sedikit token daripada 1.600 kata prosa —
-  mungkin 400–600 kata total, jadi synthesis bisa jauh lebih cepat. **Ukur,
-  jangan asumsikan ke salah satu arah.**
-  Pola `claim_compile` (migration 0012) masih ada dan layak dipakai ulang.
+### 5. Phase 6 — editor per-blok + route baca  ⟵ MULAI DARI SINI
 
-**Jangan bangun ulang aturan copy dari nol.** Delapan gerakan copywriter +
-daftar kata terlarang, `TONE_BRIEFS`, dan `PROJECT_TYPE_BRIEFS` semuanya masih
-ada di `git show 3fcd036:app/api/compile/route.ts`. Itu hasil tuning terhadap
-output sungguhan, bukan tebakan — ambil dari sana lalu arahkan ulang ke genre
-portfolio. Rinciannya di AGENTS.md § Copy craft dan § Tone + project type.
+Detail di spec § Phase 6. Keputusan yang masih terbuka dan **harus diambil di
+sana, bukan dikarang**: blok mana yang tampil sebelum bayar (AGENTS.md baris
+"Free preview" sengaja kosong).
 
-### 5. Phase 3 dan 6 — probing adaptif + editor per-blok
+### 6. Phase 3 — adaptive probing
 
-### 6. Sisa yang tidak terikat fase
+Detail di spec § Phase 3. Ringkasnya: interviewer agent memancing jawaban yang
+lebih spesifik **lewat contoh, bukan lewat tuntutan**, maksimum dua probe per
+pertanyaan, inline di bawah field, dan **tidak pernah menampilkan skor**.
+
+Ini satu-satunya bagian Phase 4 yang sengaja tidak dibangun — agent
+Interviewer tidak punya konsumen sampai UI ini ada.
+
+`isThin()` di `lib/wizard-steps.ts` sengaja bodoh (kosong atau di bawah ambang
+kata) dan cuma dipakai layar review. Daftar frasa generik yang diminta spec
+("improve UX", "modern look", "user-friendly") belum ada di mana pun.
+
+
+### 7. Sisa yang tidak terikat fase
 
 - Rate limit `/api/waitlist` — endpoint publik tanpa penahan
 - Dua tautan nav mati (`#features`, `#examples`) — kini satu-satunya isi nav di

@@ -311,3 +311,47 @@ describe('reporting shape', () => {
     expect(found.length).toBeGreaterThan(2)
   })
 })
+
+describe('malformed input', () => {
+  // The validator is the only thing standing between a model response and the
+  // renderer, so it is handed untrusted JSON by definition. It used to trust
+  // its own TypeScript types: a move_section written without images arrives
+  // with no `visuals` key, spreading it threw a TypeError, and a real compile
+  // died with a 502 instead of the validation failure it actually was.
+  //
+  // Every one of these must come back as issues, never as an exception.
+  it('reports a move_section with no visuals key instead of throwing', () => {
+    const doc = validDoc()
+    const move = doc.blocks.find((b) => b.type === 'move_section') as Extract<
+      Block,
+      { type: 'move_section' }
+    >
+    delete (move as Partial<typeof move>).visuals
+    expect(() => validateCaseStudy(doc, IMAGES)).not.toThrow()
+    expect(rules(doc, IMAGES)).toContain('image_placed_once')
+  })
+
+  it('survives a document whose every field is the wrong type', () => {
+    const junk = {
+      spine: 'not an array',
+      blocks: [
+        { type: 'prose' },
+        { type: 'move_section', spineId: 1, title: null, body: 'text', visuals: null },
+        { type: 'requirement_cards', cards: undefined },
+        { type: 'stat_headline' },
+        { type: 'cycle_diagram', nodes: 'three' },
+        { type: 'annotated_visual' },
+        null,
+      ],
+    } as unknown as CaseStudy
+
+    expect(() => validateCaseStudy(junk)).not.toThrow()
+    expect(validateCaseStudy(junk).length).toBeGreaterThan(0)
+  })
+
+  it('survives an empty object, which is what a refusal parses to', () => {
+    const empty = {} as unknown as CaseStudy
+    expect(() => validateCaseStudy(empty)).not.toThrow()
+    expect(rules(empty)).toContain('spine_length')
+  })
+})

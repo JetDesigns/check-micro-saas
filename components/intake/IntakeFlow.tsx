@@ -151,18 +151,29 @@ export function IntakeFlow() {
     }
   }, [router, startCheckout])
 
-  // Where a finished intake used to go. /writing/[id] and /api/compile were
-  // deleted with the rest of the sales-genre product, and the replacement
-  // pipeline is Phase 4 of check-revision-prompt.md.
-  //
-  // Left as a loud dead end rather than a redirect to nowhere: the submit path
-  // is unreachable today (EARLY_ACCESS_MODE disables the wizard's next button),
-  // so nobody can hit this, and whoever wires the new pipeline should find an
-  // obvious marker here rather than a push to a 404.
-  const handleCreated = useCallback((caseStudyId: string) => {
-    console.error(
-      `[IntakeFlow] Case study ${caseStudyId} was created, but there is no compile pipeline to send it to. See check-revision-prompt.md, Phase 4.`
-    )
+  // The finished intake goes to the pipeline. There is still nowhere to send
+  // the reader afterwards — the paid read route is Phase 6 — so this reports
+  // the outcome in place rather than navigating. In development it offers the
+  // fixture viewer, which is the only thing that can draw a document today.
+  const [compileState, setCompileState] = useState<
+    { status: 'idle' } | { status: 'done'; id: string }
+  >({ status: 'idle' })
+
+  const handleCreated = useCallback(async (caseStudyId: string) => {
+    const res = await fetch('/api/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caseStudyId }),
+    })
+    const body = await res.json().catch(() => ({}))
+
+    if (!res.ok) {
+      // Thrown rather than handled here, so IntakeForm's own catch restores
+      // the form with the answers intact. A dead end that keeps saying
+      // "Working…" is the worst of both.
+      throw new Error(body?.message ?? 'The case study could not be written.')
+    }
+    setCompileState({ status: 'done', id: caseStudyId })
   }, [])
 
   return (
@@ -178,7 +189,25 @@ export function IntakeFlow() {
         </div>
       )}
 
-      <IntakeForm onCreated={handleCreated} />
+      {compileState.status === 'done' ? (
+        <div className="rounded-3xl border border-line bg-surface p-6 sm:p-8">
+          <h2 className="text-xl font-medium text-ink">Your case study is written.</h2>
+          <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+            There is nowhere to read it yet — the published page is still being
+            built. It is saved against this case study.
+          </p>
+          {process.env.NODE_ENV !== 'production' && (
+            <a
+              href={`/fixture?id=${compileState.id}`}
+              className="mt-4 inline-block rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black"
+            >
+              Open it in the fixture viewer
+            </a>
+          )}
+        </div>
+      ) : (
+        <IntakeForm onCreated={handleCreated} />
+      )}
     </div>
   )
 }

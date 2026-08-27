@@ -84,25 +84,28 @@ its *text*.
 
 ## Architecture
 
-The write side is **not built** — `/api/compile` and the routes that fed it were
-deleted with the sales-genre product. What exists today is the front half
-(wizard, still gated) and the back half (schema + renderer, proven on a
-fixture), with the pipeline between them still to build in Phase 4.
+```
+IntakeForm (5 steps)  →  createCaseStudy()  →  POST /api/compile
+                                                      ↓
+                       rate_limit_compile → claim_compile (0012)
+                                                      ↓
+                       extraction (sonnet, all images in ONE call)
+                                                      ↓
+                       synthesis (opus) → validateCaseStudy → QA (sonnet)
+                         ↑______________ retry with notes, max 3 attempts
+                                                      ↓
+                       writes `document` + `headline`, status → 'preview'
+                       every model call logged to agent_runs
+                                                      ↓
+                       /api/unlock → spend_credit() RPC → status 'paid'
+                       (the paid read route is still Phase 6)
+```
 
-```
-IntakeForm  →  createCaseStudy()  →  [ Phase 4: interviewer · vision ·
-(Phase 2 makes it 5 steps)            synthesis · QA ]  →  CaseStudy
-                                                      { spine, blocks }
-                                                              ↓
-                                            validateCaseStudy() must pass
-                                            (lib/case-study-blocks.ts)
-                                                              ↓
-                            CaseStudyDocument — proven now at /fixture,
-                            wired to a real read route in Phase 6
-                                                              ↓
-                            /api/unlock → spend_credit() RPC → status 'paid'
-                            (returns {ok, newBalance}; no document content)
-```
+**Measured on the first real compile**, three decisions and no images: synthesis
+48–58s per attempt, QA ~20s, and it used all three attempts — about **four
+minutes end to end**. Vercel Hobby caps a function at 300s. That is a real
+ceiling, not a theoretical one, and a compile with images would add the vision
+pass on top of it. See HANDOFF for the options.
 
 - **Credits are server-authoritative.** `spend_credit(uuid)` and `add_credits(uuid,int,text)` are `security definer` Postgres functions. `spend_credit` is atomic (row locks) so two tabs can't unlock two studies on one credit. `add_credits` is idempotent on `stripe_payment_id` so a webhook retry can't double-credit.
 - **`credit_balance` is not user-writable.** RLS decides *which row*; a column-level grant decides *which columns* — `authenticated` may only UPDATE `email` on `public.users`. If you ever add a user-writable column, extend that grant explicitly; do not re-grant the whole table.
@@ -120,6 +123,8 @@ Each of these has already cost real time:
 - **`max_tokens` counts reasoning tokens too, not just the JSON.** *(No live call makes this bite today — it bites again the moment Phase 4 exists.)* A budget sized to the expected output gets eaten from the front and the response arrives truncated mid-string, which surfaces as `SyntaxError: Unterminated string in JSON`, never as an obvious length error. The deleted compile call sat at 16000. Billing is per token *generated*, so a high ceiling is free when the model finishes early — do not tune it down to "save cost".
 - **Intake labels are part of the prompt, not just UI.** The deleted `buildPrompt` rendered each field as `` `[${f.key}] ${f.label}` `` + the answer, so editing a label in `lib/intake-fields.ts` silently rewrote what the model was told the field meant. Renaming `business_impact` to "Why did you choose this approach?" put the prompt at odds with its own section instruction with no code change at all. Phase 2 rewrites these labels and Phase 4 rebuilds the prompt, so **whatever the new pipeline does, decide deliberately whether labels feed it** — the trap is a prompt that reads labels without anyone remembering it does.
 - **`position: sticky` creates a stacking context.** The landing's left column is sticky, so anything rendered inside it — including a `fixed inset-0 z-50` modal — has its z-index confined there and gets painted over by the wizard column, a later sibling. `AuthGateModal` is portalled to `document.body` for exactly this reason; keep it that way. Note the symptom is invisible to `getBoundingClientRect` (the rect was correct); `document.elementFromPoint` is what exposes it.
+- **Model output is untrusted data, and the validator is what makes it safe — so the validator itself must never trust it.** `validateCaseStudy` read `block.visuals` because the type says the field is required. The type is a request to the model, not a guarantee: a move section with no images arrives with no `visuals` key, spreading it threw a TypeError, and a real compile died with a 502 instead of reporting the validation failure it actually was. Every field in that function now goes through a safe accessor, and a test feeds it a document where every field is the wrong type.
+- **A function prop cannot cross from a Server Component to a Client Component.** `CaseStudyDocument` took `imageSrc: (id) => string | undefined`, which is fine from a client parent and throws "Functions cannot be passed directly to Client Components" from a server one. It takes a plain `imageUrls` record now. Anything crossing that boundary has to be serialisable.
 - **A dev stub may only fire when there is no `ANTHROPIC_API_KEY` at all.** The deleted one started out catching every failure in dev, and its plausible-looking prose masked the truncation bug above for a whole eval run. If a key is present and the call fails, that is a real error — 502 in every environment. Rebuild it that way in Phase 4 or not at all.
 - **Every table entry in `types/database.ts` needs `Relationships: []`** — without it `.insert()` types as `never` and every write errors.
 - Stripe `apiVersion` must be `'2026-07-29.dahlia'` (matches SDK 22.5.0).
@@ -139,7 +144,7 @@ Each of these has already cost real time:
 
 ## Known blockers
 
-- **Anthropic API — status unproven either way.** It was blocked on Aug 20 (credit exhausted, card hit an "already used" lock), and a later note in HANDOFF's deploy pre-flight records billing as active. Nothing in this repo has called the API since `/api/compile` was deleted, so neither line is evidence. **Check the console before Phase 4** instead of trusting either.
+- **Anthropic API — out of credit again, as of Aug 27.** No longer unproven in either direction: the pipeline ran real compiles successfully, then the balance ran out *during* a run and the final QA call came back `invalid_request_error: Your credit balance is too low`. Everything before that point is genuinely verified. **Nothing further can be run until the account is topped up**, and the failure is silent in the sense that it looks like an ordinary API error — check the balance first when a compile fails.
 - **Stripe lists Indonesia as Preview**, not fully supported — rates unpublished, live activation not guaranteed. Verify activation before building further on Stripe. If it's refused, move to a Merchant of Record (Paddle or Polar), which also handles the global VAT obligations Stripe leaves to the seller. Fee difference is ~0.6% of revenue, so the decision is about availability and tax, not rate.
 
 ## Env vars

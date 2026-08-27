@@ -6,6 +6,7 @@
 // @supabase/postgrest-js GenericTable constraint requires it, and without it
 // `.from(...).insert(...)` falls back to `never` and every write errors.
 
+import type { CaseStudy } from '@/lib/case-study-blocks'
 import type { PainFrequency, PriceWillingness } from '@/lib/waitlist'
 
 // NOTE: `case_studies.compiled_narrative` is typed `unknown` on purpose. It
@@ -172,6 +173,7 @@ export type Database = {
           tone: Tone | null
           intake: Intake | null
           compiled_narrative: unknown | null
+          document: CaseStudy | null
           created_at: string
           updated_at: string
         }
@@ -188,6 +190,7 @@ export type Database = {
           tone?: Tone | null
           intake?: Intake | null
           compiled_narrative?: unknown | null
+          document?: CaseStudy | null
           created_at?: string
           updated_at?: string
         }
@@ -204,6 +207,7 @@ export type Database = {
           tone?: Tone | null
           intake?: Intake | null
           compiled_narrative?: unknown | null
+          document?: CaseStudy | null
           created_at?: string
           updated_at?: string
         }
@@ -334,6 +338,51 @@ export type Database = {
       // Landing-page early-access signups. Not tied to users — a visitor
       // leaves an email long before there is any account to attach it to.
       // The two answers are slugs from lib/waitlist.ts, not free text.
+      // One row per model call, written only by the service role. See
+      // migration 0014: the pipeline makes up to four calls per compile and
+      // nothing else records what they cost.
+      agent_runs: {
+        Row: {
+          id: string
+          case_study_id: string
+          agent: string
+          model: string
+          attempt: number
+          input_tokens: number
+          output_tokens: number
+          duration_ms: number
+          ok: boolean
+          error: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          case_study_id: string
+          agent: string
+          model: string
+          attempt?: number
+          input_tokens?: number
+          output_tokens?: number
+          duration_ms?: number
+          ok?: boolean
+          error?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          case_study_id?: string
+          agent?: string
+          model?: string
+          attempt?: number
+          input_tokens?: number
+          output_tokens?: number
+          duration_ms?: number
+          ok?: boolean
+          error?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       waitlist: {
         Row: {
           id: string

@@ -34,8 +34,13 @@ import { Step5Outcome } from '@/components/intake/steps/Step5Outcome'
 import { ReviewScreen } from '@/components/intake/steps/ReviewScreen'
 
 type Props = {
-  /** Called once the case study exists and attachments are uploaded. */
-  onCreated: (caseStudyId: string) => void
+  /**
+   * Called once the case study exists and attachments are uploaded, and
+   * awaited — the compile it kicks off runs for a minute or more, and the
+   * form stays busy for all of it. If it throws, the form comes back with
+   * every answer still in place so the user can try again.
+   */
+  onCreated: (caseStudyId: string) => void | Promise<void>
 }
 
 // Five steps and a review screen. All state lives here and the step
@@ -147,7 +152,7 @@ export function IntakeForm({ onCreated }: Props) {
           files: attachments.map((a) => a.file),
         })
       }
-      onCreated(id)
+      await onCreated(id)
     } catch (err) {
       setError(
         err instanceof Error

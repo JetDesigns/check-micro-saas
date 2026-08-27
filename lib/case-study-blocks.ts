@@ -141,8 +141,20 @@ export function validateCaseStudy(
   const issues: ValidationIssue[] = []
   const add = (rule: string, message: string) => issues.push({ rule, message })
 
-  const spine = doc.spine ?? []
-  const blocks = doc.blocks ?? []
+  // The argument is typed CaseStudy, but at runtime it is whatever JSON.parse
+  // returned from a model — the entire reason this function exists. A required
+  // field in the type is a request, not a guarantee: a move_section with no
+  // images arrives with no `visuals` key at all, and spreading it threw a
+  // TypeError that surfaced as a 502 instead of as the validation failure it
+  // is. A validator that crashes on malformed input has failed at its one job,
+  // so every field is reached through these.
+  const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '')
+
+  const spine = arr<SpineEntry>(doc?.spine)
+  const blocks = arr<Block>(doc?.blocks).filter(
+    (b): b is Block => typeof b === 'object' && b !== null
+  )
 
   // 1 — spine length.
   if (spine.length < SPINE_MIN || spine.length > SPINE_MAX) {
@@ -152,7 +164,7 @@ export function validateCaseStudy(
     )
   }
 
-  const spineIds = spine.map((s) => s.id)
+  const spineIds = spine.map((s) => str(s?.id))
   const duplicateIds = spineIds.filter((id, i) => spineIds.indexOf(id) !== i)
   if (duplicateIds.length > 0) {
     add('spine_ids_unique', `duplicate spine id(s): ${[...new Set(duplicateIds)].join(', ')}`)
@@ -186,11 +198,11 @@ export function validateCaseStudy(
   }
   for (const block of blocks) {
     if (block.type !== 'requirement_cards') continue
-    for (const card of block.cards) {
-      if (!spineIds.includes(card.spineId)) {
+    for (const card of arr<{ spineId: string; title: string }>(block.cards)) {
+      if (!spineIds.includes(str(card?.spineId))) {
         add(
           'requirement_traces_to_spine',
-          `requirement card "${card.title}" references unknown spineId "${card.spineId}"`
+          `requirement card "${str(card?.title)}" references unknown spineId "${str(card?.spineId)}"`
         )
       }
     }
@@ -198,10 +210,10 @@ export function validateCaseStudy(
 
   // 4 — move titles are imperative.
   for (const move of moveSections) {
-    if (!isImperativeTitle(move.title)) {
+    if (!isImperativeTitle(str(move.title))) {
       add(
         'move_title_imperative',
-        `move_section title "${move.title}" reads as a noun phrase; it must start with a verb`
+        `move_section title "${str(move.title)}" reads as a noun phrase; it must start with a verb`
       )
     }
   }
@@ -209,14 +221,15 @@ export function validateCaseStudy(
   // 5 — prose caps.
   for (const block of blocks) {
     if (block.type === 'prose') {
-      if (block.paragraphs.length > PROSE_MAX_PARAGRAPHS) {
+      const paragraphs = arr<string>(block.paragraphs)
+      if (paragraphs.length > PROSE_MAX_PARAGRAPHS) {
         add(
           'prose_paragraph_cap',
-          `prose block has ${block.paragraphs.length} paragraphs; max ${PROSE_MAX_PARAGRAPHS}`
+          `prose block has ${paragraphs.length} paragraphs; max ${PROSE_MAX_PARAGRAPHS}`
         )
       }
-      block.paragraphs.forEach((p, i) => {
-        const words = countWords(p)
+      paragraphs.forEach((p, i) => {
+        const words = countWords(str(p))
         if (words > PROSE_MAX_WORDS_PER_PARAGRAPH) {
           add(
             'prose_word_cap',
@@ -225,10 +238,13 @@ export function validateCaseStudy(
         }
       })
     }
-    if (block.type === 'move_section' && block.body.length > MOVE_BODY_MAX_PARAGRAPHS) {
+    if (
+      block.type === 'move_section' &&
+      arr<string>(block.body).length > MOVE_BODY_MAX_PARAGRAPHS
+    ) {
       add(
         'move_body_cap',
-        `move_section "${block.title}" has ${block.body.length} body paragraphs; max ${MOVE_BODY_MAX_PARAGRAPHS}`
+        `move_section "${str(block.title)}" has ${arr(block.body).length} body paragraphs; max ${MOVE_BODY_MAX_PARAGRAPHS}`
       )
     }
   }
@@ -236,10 +252,10 @@ export function validateCaseStudy(
   // 6 — a stat headline without a number is an invented number waiting to
   // happen. The block is optional; a fabricated figure is not recoverable.
   for (const block of blocks) {
-    if (block.type === 'stat_headline' && !containsDigit(block.text)) {
+    if (block.type === 'stat_headline' && !containsDigit(str(block.text))) {
       add(
         'stat_has_digit',
-        `stat_headline "${block.text}" contains no digit; omit the block rather than inventing one`
+        `stat_headline "${str(block.text)}" contains no digit; omit the block rather than inventing one`
       )
     }
   }
@@ -248,18 +264,21 @@ export function validateCaseStudy(
   const visuals: AnnotatedVisual[] = []
   for (const block of blocks) {
     if (block.type === 'annotated_visual') visuals.push(block)
-    if (block.type === 'move_section') visuals.push(...block.visuals)
+    if (block.type === 'move_section') visuals.push(...arr<AnnotatedVisual>(block.visuals))
   }
 
   for (const visual of visuals) {
-    if (visual.caption.trim().length === 0) {
-      add('visual_caption_required', `annotated_visual "${visual.imageId}" has an empty caption`)
+    if (str(visual?.caption).trim().length === 0) {
+      add(
+        'visual_caption_required',
+        `annotated_visual "${str(visual?.imageId)}" has an empty caption`
+      )
     }
   }
 
   const uploaded = options.uploadedImageIds ?? []
   if (uploaded.length > 0) {
-    const placed = visuals.map((v) => v.imageId)
+    const placed = visuals.map((v) => str(v?.imageId))
     for (const id of uploaded) {
       const count = placed.filter((p) => p === id).length
       if (count === 0) add('image_placed_once', `uploaded image "${id}" never appears`)
@@ -284,10 +303,11 @@ export function validateCaseStudy(
         `cycle_diagram present with a ${spine.length}-entry spine; only allowed at 3 or 4`
       )
     }
-    if (cycle.nodes.length < CYCLE_NODES_MIN || cycle.nodes.length > CYCLE_NODES_MAX) {
+    const nodeCount = arr(cycle.nodes).length
+    if (nodeCount < CYCLE_NODES_MIN || nodeCount > CYCLE_NODES_MAX) {
       add(
         'cycle_node_count',
-        `cycle_diagram has ${cycle.nodes.length} nodes; must be ${CYCLE_NODES_MIN}–${CYCLE_NODES_MAX}`
+        `cycle_diagram has ${nodeCount} nodes; must be ${CYCLE_NODES_MIN}–${CYCLE_NODES_MAX}`
       )
     }
   }

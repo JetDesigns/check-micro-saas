@@ -34,15 +34,20 @@ import {
 type Props = {
   doc: CaseStudy
   title: string
-  /** Resolves an imageId to a URL. Omit and visuals render as labelled frames. */
-  imageSrc?: (id: string) => string | undefined
+  /**
+   * imageId → URL. A plain object rather than a resolver function, because
+   * this is a Client Component and a function cannot cross the boundary from
+   * a Server Component — React rejects it outright. Omit it and visuals
+   * render as labelled frames.
+   */
+  imageUrls?: Record<string, string>
 }
 
 function pick<T extends Block['type']>(blocks: Block[], type: T) {
   return blocks.filter((b): b is Extract<Block, { type: T }> => b.type === type)
 }
 
-export function CaseStudyDocument({ doc, title, imageSrc }: Props) {
+export function CaseStudyDocument({ doc, title, imageUrls }: Props) {
   const { spine, blocks } = doc
 
   const metadata = pick(blocks, 'metadata_grid')[0]
@@ -94,7 +99,7 @@ export function CaseStudyDocument({ doc, title, imageSrc }: Props) {
       <section id="context" className="mt-14 scroll-mt-24">
         {stat && <StatHeadline text={stat.text} />}
         {quote && <PullQuote text={quote.text} attribution={quote.attribution} />}
-        {hero && <Visual visual={hero} src={imageSrc?.(hero.imageId)} />}
+        {hero && <Visual visual={hero} src={imageUrls?.[hero.imageId]} />}
       </section>
 
       {/* ---- What we found ---- */}
@@ -130,7 +135,7 @@ export function CaseStudyDocument({ doc, title, imageSrc }: Props) {
       )}
 
       {moves.map((move, i) => (
-        <MoveSection key={move.spineId} block={move} index={i} imageSrc={imageSrc} />
+        <MoveSection key={move.spineId} block={move} index={i} imageUrls={imageUrls} />
       ))}
 
       {/* ---- Where it landed ---- */}
@@ -139,7 +144,7 @@ export function CaseStudyDocument({ doc, title, imageSrc }: Props) {
         {outcome && <OutcomeStatus status={outcome.status} note={outcome.note} />}
         {impact && <ImpactList items={impact.items} />}
         {supporting.map((v) => (
-          <Visual key={v.imageId} visual={v} src={imageSrc?.(v.imageId)} />
+          <Visual key={v.imageId} visual={v} src={imageUrls?.[v.imageId]} />
         ))}
       </section>
 
