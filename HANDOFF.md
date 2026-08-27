@@ -56,26 +56,23 @@ saya sebagai konsultan" berasal dari genre lama.** Sebagian sudah dimigrasi
 (headline landing, metadata halaman, survei waitlist), sebagian ikut terhapus
 bersama jalur lama.
 
-### ⚠️ Produknya sengaja DITUTUP
+### ⚠️ Produknya belum dijual, tapi wizard-nya TERBUKA
 
-Landing punya **tepat satu aksi hidup**: modal "Get early access" yang
-menyimpan dua jawaban survei + email ke `public.waitlist`. Tombol "Buy credit"
-**tidak dirender sama sekali**.
+Landing tidak menawarkan pembelian: tombol "Buy credit" **tidak dirender sama
+sekali** selama `NEXT_PUBLIC_EARLY_ACCESS_MODE` menyala (default: menyala).
+Modal "Get early access" adalah ajakan yang menggantikannya.
 
-Wizard sekarang **bisa dijalani sampai habis** — kelima langkah dan layar
-review — tapi tombol "Write the case study" **mati**, dengan ajakan early
-access di bawahnya. Ini berubah di Phase 2: dulu segelnya satu tombol Next di
-langkah 1, sekarang di aksi yang menulis. Lebih sesuai dengan niat aslinya
-(pengunjung boleh melihat apa yang diminta produk) dan **tidak bisa dilewati**
-— `handleSubmit` berhenti lebih dulu, jadi Enter di langkah berinput-tunggal
-maupun submit yang ditembakkan langsung sama-sama tidak menulis apa pun.
-Terbukti: nol baris `case_studies` setelah keduanya dicoba.
+**Wizard-nya sendiri tidak lagi digembok.** Sampai 27 Agustus sakelar yang
+sama mematikan tombol "Write the case study"; sekarang tidak. Alasannya:
+menghasilkan case study membelanjakan kredit Anthropic *kita*, bukan uang
+pengunjung — itu pertanyaan yang berbeda dari "sudah boleh berjualan?", dan
+menjalankan produk sendiri tanpa harus menyunting env var lebih berharga
+sekarang.
 
-Ketiganya dikuasai satu sakelar, `NEXT_PUBLIC_EARLY_ACCESS_MODE` di
-`lib/launch-mode.ts`. Default-nya **menyala** (tertutup) — salah ketik nama env
-var membuat halaman terlalu diam, bukan tidak sengaja menjual sesuatu yang
-belum siap. Set `false` untuk membuka; itu menghidupkan wizard **dan** tombol
-beli sekaligus.
+**Sebelum deploy, putuskan ulang.** Auth anonim berarti setiap pengunjung
+adalah user, dan `rate_limit_compile` memberi masing-masing 10 compile per
+hari — itu satu-satunya penahan yang tersisa di URL publik. Catatannya ada di
+`IntakeForm.handleSubmit`.
 
 `NEXT_PUBLIC_DEMO_URL` flag **terpisah** untuk video intro YouTube. Kosong →
 tombol "Watch demo" tetap ada tapi mati. Diisi → jadi tautan asli ke tab baru.

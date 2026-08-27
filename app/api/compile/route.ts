@@ -137,13 +137,35 @@ export async function POST(req: Request) {
 
     console.error('[/api/compile] failed:', err)
     return Response.json(
-      {
-        error: 'compile_failed',
-        message: err instanceof Error ? err.message : 'Compile failed.',
-      },
+      { error: 'compile_failed', message: readableFailure(err) },
       { status: 502 }
     )
   }
+}
+
+/**
+ * A sentence a person can act on, instead of the provider's raw JSON.
+ *
+ * The SDK puts the whole error body in `message`, so returning it verbatim
+ * printed a JSON blob complete with request_id into the page. The full object
+ * is already in the server log; this is the half the reader needs.
+ */
+function readableFailure(err: unknown): string {
+  const raw = err instanceof Error ? err.message : ''
+
+  if (raw.includes('credit balance is too low')) {
+    return 'The Anthropic account is out of credit, so nothing could be written. Top it up and try again — your answers are still here.'
+  }
+  if (raw.includes('rate_limit') || raw.includes('429')) {
+    return 'The model is rate limited right now. Wait a moment and try again.'
+  }
+  if (raw.includes('ANTHROPIC_API_KEY')) {
+    return 'No Anthropic API key is configured on the server.'
+  }
+  if (raw.startsWith('Synthesis failed after')) {
+    return 'The case study came back unusable three times running. Your answers are still here — try again, and if it keeps happening the prompt needs a look.'
+  }
+  return 'The case study could not be written. Please try again.'
 }
 
 async function loadImages(

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createCaseStudy, uploadAttachments } from '@/lib/case-studies'
-import { EARLY_ACCESS_MODE } from '@/lib/launch-mode'
 import {
   DEFAULT_PROJECT_TYPE,
   DEFAULT_TONE,
@@ -123,18 +122,19 @@ export function IntakeForm({ onCreated }: Props) {
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
 
-    // Three guards, and the first two are the real ones.
+    // WIZARD DELIBERATELY UNGATED. Writing a case study used to stop here
+    // when EARLY_ACCESS_MODE was on. It no longer does: that flag now means
+    // "we are not selling yet", which is a different question from "may this
+    // person generate". Compiling spends our own Anthropic credit, not the
+    // visitor's money, so it is safe to leave open while nothing is deployed.
     //
-    // The wizard used to be sealed by disabling a single Next button, which
-    // held only because that button was the one thing that could advance the
-    // step. With five steps and jump links out of the review screen, that
-    // invariant is gone — so the seal lives on the action that writes, not on
-    // a button that leads to it.
+    // BEFORE DEPLOYING, decide whether to re-gate. Anonymous auth means every
+    // visitor is a user, and rate_limit_compile allows each of them 10
+    // compiles a day — that is the only remaining backstop on a public URL.
     //
-    // The second guard closes implicit submission: one form wraps every step,
+    // The guard below closes implicit submission: one form wraps every step,
     // and a form with exactly one text input submits on Enter. Several steps
     // here have exactly one.
-    if (EARLY_ACCESS_MODE) return
     if (step !== 'review') return
     if (isBusy) return
 
@@ -270,8 +270,7 @@ export function IntakeForm({ onCreated }: Props) {
             key="write"
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={EARLY_ACCESS_MODE || isBusy}
-            title={EARLY_ACCESS_MODE ? WIZARD_COPY.earlyAccess : undefined}
+            disabled={isBusy}
             className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
           >
             {isBusy
@@ -292,12 +291,6 @@ export function IntakeForm({ onCreated }: Props) {
           </button>
         )}
       </footer>
-
-      {step === 'review' && EARLY_ACCESS_MODE && (
-        <p className="mt-3 text-xs text-ink-muted">
-          {WIZARD_COPY.earlyAccess}
-        </p>
-      )}
 
       {error && (
         <p
