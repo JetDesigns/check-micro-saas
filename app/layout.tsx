@@ -18,9 +18,9 @@ const fraunces = Fraunces({
 })
 
 export const metadata: Metadata = {
-  title: 'Check — Case studies that sell the next client',
+  title: 'Check — Case studies that get you hired',
   description:
-    'A structured interview that turns finished client work into a business-framed case study, proposal one-pager, and meeting talking points.',
+    'A structured interview that turns finished design work into a portfolio case study: what you found, what it demanded, and the moves you designed.',
 }
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

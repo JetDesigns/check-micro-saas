@@ -348,6 +348,9 @@ export type Database = {
           email: string
           pain_frequency: PainFrequency
           price_willingness: PriceWillingness
+          // Which wording the answers refer to. Slugs match across versions;
+          // the questions do not. See migration 0013.
+          survey_version: number
           created_at: string
         }
         Insert: {
@@ -355,6 +358,7 @@ export type Database = {
           email: string
           pain_frequency: PainFrequency
           price_willingness: PriceWillingness
+          survey_version?: number
           created_at?: string
         }
         Update: {
@@ -362,6 +366,7 @@ export type Database = {
           email?: string
           pain_frequency?: PainFrequency
           price_willingness?: PriceWillingness
+          survey_version?: number
           created_at?: string
         }
         Relationships: []

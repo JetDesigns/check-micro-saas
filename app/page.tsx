@@ -37,14 +37,14 @@ export default function Home() {
             </span>
 
             <h1 className="mt-7 max-w-2xl text-4xl font-medium leading-[1.06] tracking-[-0.025em] text-ink sm:text-5xl lg:text-[56px]">
-              Turn finished design work into a case study that sells the next
-              client.
+              Turn finished design work into a case study that gets you hired.
             </h1>
 
             <p className="mt-6 max-w-xl text-base leading-relaxed text-ink-soft">
-              Conversational questions, one structured narrative. Eight sections
-              — vision through reflection — written for the client you want
-              next, not for a portfolio reviewer.
+              A few questions about the decisions you made. Check turns them
+              into a structured case study — what you found, what it demanded,
+              and the moves you designed — written for the person deciding
+              whether to hire you.
             </p>
 
             <div className="mt-8">

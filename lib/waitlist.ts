@@ -7,6 +7,15 @@
 //
 // `value` is what lands in the database and must not be reworded once rows
 // exist; `label` is what the visitor reads and can be tuned freely.
+//
+// SURVEY_VERSION exists because the questions changed meaning on Aug 25, 2026
+// when the product's genre flipped from sales collateral to portfolio case
+// study. The option slugs did NOT change — 'often' is still 'often' — so rows
+// from before and after look comparable and are not. Bump this whenever a
+// question's wording changes what it is actually asking, and never compare
+// across versions.
+
+export const SURVEY_VERSION = 2
 
 export type WaitlistOption<T extends string> = {
   value: T
@@ -26,7 +35,7 @@ export type PriceWillingness =
   | 'usd_25_plus'
 
 export const PAIN_FREQUENCY_QUESTION =
-  'After finishing a design project, how often do you struggle to explain the business impact to your next prospect?'
+  'After finishing a design project, how often do you struggle to turn it into a portfolio case study?'
 
 export const PAIN_FREQUENCY_OPTIONS: WaitlistOption<PainFrequency>[] = [
   { value: 'almost_always', label: 'Almost always' },
@@ -36,7 +45,7 @@ export const PAIN_FREQUENCY_OPTIONS: WaitlistOption<PainFrequency>[] = [
 ]
 
 export const PRICE_WILLINGNESS_QUESTION =
-  'If a tool could help you turn finished design work into a business narrative ready to use with clients, what would be worth paying per project?'
+  'If a tool could turn finished design work into a portfolio-ready case study, what would be worth paying per case study?'
 
 export const PRICE_WILLINGNESS_OPTIONS: WaitlistOption<PriceWillingness>[] = [
   { value: 'free_only', label: "Wouldn't pay, needs to be free" },

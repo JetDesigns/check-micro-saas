@@ -13,7 +13,7 @@
 // dump of everyone else's email.
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { parseWaitlistSubmission } from '@/lib/waitlist'
+import { SURVEY_VERSION, parseWaitlistSubmission } from '@/lib/waitlist'
 
 export const runtime = 'nodejs'
 
@@ -43,7 +43,14 @@ export async function POST(req: Request) {
   // lowercased the address, which is what makes the plain-column unique
   // index case-insensitive in practice.
   const { error } = await admin.from('waitlist').upsert(
-    { email, pain_frequency: painFrequency, price_willingness: priceWillingness },
+    {
+      email,
+      pain_frequency: painFrequency,
+      price_willingness: priceWillingness,
+      // Stamped server-side, never taken from the request: the client has no
+      // business telling us which questions it thinks it asked.
+      survey_version: SURVEY_VERSION,
+    },
     { onConflict: 'email' }
   )
 
