@@ -1,18 +1,18 @@
 // POST /api/unlock
 //
-// Spends one credit against a case study, flipping its status to 'paid' and
-// returning the full 8-section narrative. All of the risky work (ownership
-// check, balance check, decrement, status flip) happens inside the
-// spend_credit RPC in a single transaction with row locks, so two tabs can't
-// double-unlock on one credit.
+// Spends one credit against a case study and flips its status to 'paid'. All
+// of the risky work (ownership check, balance check, decrement, status flip)
+// happens inside the spend_credit RPC in a single transaction with row locks,
+// so two tabs can't double-unlock on one credit.
 //
-// Narrative retrieval uses the service role because migration 0005 revoked
-// `compiled_narrative` SELECT from `authenticated` — server routes are the
-// only path to the locked sections.
+// It used to return the unlocked document as well. That half went with the
+// sales-genre product: the 8-section narrative no longer exists, and the
+// replacement is a subset of blocks decided by the read side (Phase 5/6 of
+// check-revision-prompt.md). Spending the credit is the part worth keeping
+// intact — it is the only piece of this flow that can lose someone money if
+// it goes wrong.
 
-import type { CompiledNarrative } from '@/types/database'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 export const runtime = 'nodejs'
 
@@ -70,38 +70,10 @@ export async function POST(req: Request) {
     )
   }
 
-  // Credit is spent — now hand back the full narrative. Service role because
-  // `authenticated` has no SELECT on this column post-migration-0005.
-  const admin = createAdminClient()
-  const { data, error: fetchError } = await admin
-    .from('case_studies')
-    .select('compiled_narrative')
-    .eq('id', caseStudyId)
-    .single()
-
-  if (fetchError || !data?.compiled_narrative) {
-    // The credit is gone but the narrative isn't loadable. Log loudly so we
-    // can refund manually — the user shouldn't be charged and shown nothing.
-    console.error(
-      '[/api/unlock] credit spent but narrative missing:',
-      caseStudyId,
-      fetchError
-    )
-    return Response.json(
-      {
-        error: 'narrative_missing',
-        message:
-          'Credit spent but narrative could not be loaded. Contact support.',
-      },
-      { status: 500 }
-    )
-  }
-
-  return Response.json({
-    ok: true,
-    newBalance,
-    narrative: data.compiled_narrative as CompiledNarrative,
-  })
+  // The credit is spent and the row is now 'paid'. The caller re-reads the
+  // document through the read side, which is where the paid/preview decision
+  // belongs — this route never puts document content on the wire.
+  return Response.json({ ok: true, newBalance })
 }
 
 function extractCaseStudyId(body: unknown): string | null {

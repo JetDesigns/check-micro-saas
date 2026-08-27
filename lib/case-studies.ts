@@ -90,11 +90,12 @@ export async function uploadAttachments(params: {
 }
 
 /**
- * Read case study status. The `compiled_narrative` column is not selectable
- * from the browser (column-level grant revoked in migration 0005) — narrative
- * access goes through server routes: /api/compile returns the `situation`
- * section only; /api/unlock returns the full 8 sections after spend_credit
- * succeeds. Use this helper for status polling, not for narrative data.
+ * Read case study status. Document content never travels through the browser
+ * client: `compiled_narrative`'s column-level SELECT grant was revoked from
+ * `authenticated` in migration 0005, and the block document that replaces it
+ * will read the same way — through a server route that decides preview vs paid
+ * (Phase 5/6 of check-revision-prompt.md). Use this helper for status polling
+ * only.
  */
 export async function getCaseStudy(
   caseStudyId: string

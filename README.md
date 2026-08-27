@@ -59,9 +59,10 @@ npm run dev
 explaining what each one does and when to change it. Values live only in
 `.env.local`, which is gitignored.
 
-You need credentials for **Supabase** (database, auth, storage), **Anthropic**
-(the compile call), and **Stripe** (test mode is fine) before the app does
-anything useful.
+You need credentials for **Supabase** (database, auth, storage) and **Stripe**
+(test mode is fine) before the app does anything useful. An `ANTHROPIC_API_KEY`
+buys you nothing yet — there is no route that calls the model; see *Shape of the
+code* below.
 
 ---
 
@@ -72,31 +73,42 @@ anything useful.
 - **Supabase** — Postgres, Auth (anonymous → email/Google), Storage, and the
   transactional email sender. Migrations in `supabase/migrations/`, all applied
   to the live project.
-- **Anthropic** `claude-opus-5` for the compile. One call, ~2.5 minutes,
-  ~$0.08 each.
+- **Anthropic** `claude-opus-5` — locked as the model for the writing pass, but
+  **nothing calls it right now**; the old compile route was deleted and the
+  replacement pipeline is unbuilt.
 - **Stripe** for the $9 / 5-credit pack. Test mode.
 - **Tailwind v4**.
 
 ## Shape of the code
 
 ```
-app/api/compile/       the prompt — the single biggest lever on output quality
-app/api/waitlist/      early-access signups
-app/api/checkout/      Stripe session
-app/api/stripe/webhook credits the buyer
-app/c/[id]/            the published case study; also the paywall read boundary
-app/writing/[id]/      the ~2.5 minute loader
-components/landing/    hero, top bar, early-access modal
-components/intake/     the two-step wizard
-lib/                   shared contracts: narrative validation, intake fields,
-                       waitlist options, launch-mode flags
+app/api/waitlist/           early-access signups
+app/api/checkout/           Stripe session
+app/api/stripe/webhook      credits the buyer
+app/api/unlock/             spends a credit, flips the row to 'paid'
+app/fixture/                dev-only: renders the document from a fixture
+components/landing/         hero, top bar, early-access modal
+components/intake/          the two-step wizard (disabled — see above)
+components/case-study/      the renderer: document assembly + one component
+                            per block type
+lib/case-study-blocks.ts    the content contract — block types and the eight
+                            validation rules, unit-tested
+lib/                        intake fields, waitlist options, launch-mode flags
 ```
 
-Two rules worth knowing before you touch the compile path:
+**The writing path is missing on purpose.** `/api/compile`, `/api/edit`,
+`/c/[id]`, `/writing/[id]` and `lib/narrative.ts` were deleted along with the
+sales-genre product they served. What replaces them is specified in
+`check-revision-prompt.md`; `HANDOFF.md` says which phase is next.
 
-1. **Intake labels are part of the prompt.** `buildPrompt` renders each field
-   as `` `[key] label` ``, so editing a label in `lib/intake-fields.ts`
-   silently changes what the model is told the field means.
-2. **The paywall is enforced server-side.** `/api/compile` returns no narrative
-   body at all; `app/c/[id]/page.tsx` is the only place that decides what
-   crosses to the client.
+Two rules that survive the rebuild:
+
+1. **Intake labels can end up inside the prompt.** The deleted `buildPrompt`
+   rendered each field as `` `[key] label` ``, so editing a label in
+   `lib/intake-fields.ts` silently changed what the model was told the field
+   meant. Whether the new pipeline does the same is a decision to make on
+   purpose, not to inherit by accident.
+2. **The paywall is enforced server-side.** The compile route returns no
+   document body at all, and exactly one server-side read boundary decides what
+   crosses to the client. `/api/unlock` keeps that shape today: it spends the
+   credit and returns `{ok, newBalance}`, nothing more.

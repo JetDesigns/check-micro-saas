@@ -1,154 +1,216 @@
-# Check — Handoff (Aug 15, 2026)
+# Check — Handoff (Aug 27, 2026)
 
 ## Buka chat baru — copy-paste ini di message pertama
 
 ```
 Lanjut Check di ~/dev/check-microsaas.
 
-Wajib baca dulu (dua file):
-1. AGENTS.md (root project) — architecture, locked decisions, gotchas
-2. HANDOFF.md (root project) — di dalamnya, baca "BELUM terverifikasi"
-   SEBELUM "Status shipped", supaya tidak salah mengira sesuatu sudah
-   aman padahal belum pernah diuji
+Wajib baca dulu, urut:
+1. check-revision-prompt.md (root project) — spec revisi. INI sumber
+   kebenaran untuk semua pekerjaan sekarang.
+2. AGENTS.md — arsitektur, keputusan terkunci, environment gotchas.
+3. HANDOFF.md — bagian "BELUM terverifikasi" DULU, baru "Sudah terbukti",
+   supaya tidak salah mengira sesuatu aman padahal belum pernah diuji.
 
-Aplikasinya SUDAH SELESAI dan sudah ter-commit. Yang tersisa adalah
-mengirimkannya ke produksi. Mulai dari bagian "SISA PEKERJAAN" di
-HANDOFF.md, kerjakan berurutan.
+PENTING: produknya baru saja GANTI GENRE. Dulu sales collateral (case
+study untuk menang klien), sekarang portfolio case study (untuk dapat
+kerja). Prosa apa pun yang berargumen "sewa saya sebagai konsultan"
+adalah sisa genre lama.
 
-Paling berisiko sekarang: custom SMTP belum dipasang (sender bawaan
-Supabase cuma 2 email/jam, magic link akan gagal diam-diam), dan
-metadata Stripe belum pernah dibuktikan pada transaksi sungguhan.
+Jalur produk lama SUDAH DIHAPUS — /api/compile, /api/edit, /c/[id],
+/writing/[id], lib/narrative.ts. Itu disengaja, bukan hilang.
+
+Build order spec: Phase 1 (schema) dan Phase 5 (renderer) SELESAI.
+Berikutnya PHASE 2 — restrukturisasi wizard jadi 5 langkah.
 
 Approval per-langkah: setelah satu langkah selesai + terverifikasi,
 berhenti, laporkan, tunggu approval. Jangan menumpuk beberapa langkah.
 
 Supabase project ref: barsrclvvnuwjaqwecay. MCP Supabase tersedia.
-Preview server: mcp__Claude_Browser__preview_start {name: "check-dev"}.
+Preview: mcp__Claude_Browser__preview_start {name: "check-dev"}.
 Node butuh PATH export — lihat AGENTS.md § Environment gotchas.
 ```
 
 ---
 
-## Kondisi saat ini (Aug 25, 2026)
+## Kondisi saat ini (Aug 27, 2026)
 
-### ⚠️ Produknya SENGAJA DITUTUP — baca ini sebelum mengira ada yang rusak
+### ⚠️ Genre berubah — ini yang paling penting dipahami
 
-Check pivot ke **mode pra-rilis**: mengumpulkan calon user dulu lewat waitlist,
-sebelum produknya dibuka ke publik.
+Check dulu **sales collateral**: case study berbahasa bisnis untuk memenangkan
+klien berikutnya, dan AGENTS.md secara eksplisit menyebut "**not** job
+seekers". Itu **dibalik** pada 25 Agustus 2026 mengikuti
+`check-revision-prompt.md`. Sekarang Check membuat **portfolio case study** —
+yang dipublikasikan desainer untuk **dapat kerja**.
 
-- Landing punya **tepat satu aksi hidup**: modal "Get early access", yang
-  menyimpan dua jawaban survei + email ke `public.waitlist`.
-- Wizard intake tetap tampil dan bisa diisi, tapi tombol **"Next: write the
-  story" DISABLED dengan sengaja**. Tidak ada yang bisa memulai case study.
-- Tombol **"Buy credit" tidak dirender sama sekali**.
+Pembalikan ini disengaja dan sudah disetujui setelah konfliknya diangkat
+secara eksplisit.
 
-Ketiganya dikuasai **satu** sakelar, `NEXT_PUBLIC_EARLY_ACCESS_MODE` di
-`lib/launch-mode.ts`. Default-nya **menyala** (tertutup), supaya salah ketik
-nama env var membuat halaman terlalu diam, bukan tidak sengaja menjual sesuatu
-yang belum siap. Set `false` untuk membuka — satu perubahan itu menghidupkan
-wizard dan tombol beli sekaligus.
+Konsekuensinya saat membaca repo ini: **prosa apa pun yang berargumen "sewa
+saya sebagai konsultan" berasal dari genre lama.** Sebagian sudah dimigrasi
+(headline landing, metadata halaman, survei waitlist), sebagian ikut terhapus
+bersama jalur lama.
 
-`NEXT_PUBLIC_DEMO_URL` adalah flag **terpisah** untuk video intro YouTube.
-Kosong → tombol "Watch demo" tetap ada tapi mati. Diisi → jadi tautan asli yang
-membuka tab baru. Sengaja dipisah karena video bisa rilis sebelum produknya.
+### ⚠️ Produknya sengaja DITUTUP
 
-**Aplikasinya sendiri lengkap.** Intake → compile → halaman case study →
-kredit → pembayaran → auth, semuanya terbangun dan terverifikasi jalan di
-lokal — hanya digembok, bukan belum jadi.
+Landing punya **tepat satu aksi hidup**: modal "Get early access" yang
+menyimpan dua jawaban survei + email ke `public.waitlist`. Wizard tampil dan
+bisa diisi tapi tombol majunya **disabled dengan sengaja**. Tombol "Buy credit"
+**tidak dirender sama sekali**.
 
-**Sudah masuk version control.** Sebelumnya seluruh aplikasi masih untracked —
-hanya ada commit scaffold `create-next-app`. Sekarang:
+Ketiganya dikuasai satu sakelar, `NEXT_PUBLIC_EARLY_ACCESS_MODE` di
+`lib/launch-mode.ts`. Default-nya **menyala** (tertutup) — salah ketik nama env
+var membuat halaman terlalu diam, bukan tidak sengaja menjual sesuatu yang
+belum siap. Set `false` untuk membuka; itu menghidupkan wizard **dan** tombol
+beli sekaligus.
 
-- `8cf8b14` Add the Check application (48 file, 7225 baris)
-- `bb33d78` Clear the lint backlog
+`NEXT_PUBLIC_DEMO_URL` flag **terpisah** untuk video intro YouTube. Kosong →
+tombol "Watch demo" tetap ada tapi mati. Diisi → jadi tautan asli ke tab baru.
 
-`tsc --noEmit`, `eslint`, dan `next build` semuanya **bersih** (nol error, nol
-warning). `.env.local` ter-ignore; `.env.local.example` sengaja di-un-ignore
-lewat `!.env.local.example` karena itu satu-satunya catatan env var yang
-dibutuhkan aplikasi.
+**Belum ada deploy sama sekali.** Tidak ada Vercel. Domain sudah ada
+(`jet.studio`, DNS di Porkbun).
 
-**Sudah ter-push ke GitHub** — remote `origin` =
-`https://github.com/JetDesigns/check-micro-saas.git` (**private**).
+### Jalur lama sudah dihapus — disengaja
 
-Repo ini semula milik akun pribadi `seiyasekha-bot`, lalu **dipindahkan ke
-organization `JetDesigns`** (Aug 25, 2026) supaya akses diatur per-tim, bukan
-menumpang di satu akun. URL lama masih hidup karena GitHub membuat redirect
-otomatis setelah transfer — tapi **jangan dibagikan**; pakai URL organization.
+Dihapus pada 27 Agustus, atas keputusan eksplisit: `app/api/compile/`,
+`app/api/edit/`, `app/c/[id]/`, `app/writing/[id]/`, `lib/narrative.ts`, dan
+seluruh tipe narrative 8-section di `types/database.ts`.
 
-Kredensial GitHub HTTPS tersimpan di osxkeychain (akun `seiyasekha-bot`, yang
-kini jadi anggota organization), jadi push tidak perlu login ulang.
+Yang tersisa di `app/`: landing, `/fixture`, `/api/checkout`,
+`/api/stripe/webhook`, `/api/unlock`, `/api/waitlist`, `/auth/callback`. Itu
+**tepat** bentuk produk pra-rilis yang sedang dijalankan.
 
-Verifikasi push selalu pakai `git ls-remote`, bukan remote-tracking ref —
-ref lokal bisa bohong kalau belum pernah fetch. `.env.local` tidak pernah
-masuk commit mana pun; satu-satunya file env di repo adalah
-`.env.local.example`.
+`/api/unlock` **dipertahankan tapi dipangkas**: ia masih memotong kredit lewat
+`spend_credit` (bagian yang bisa merugikan orang kalau salah), tapi tidak lagi
+mengembalikan dokumen. Sisi baca akan memutuskan preview vs paid di Phase 5/6.
 
-Catatan: keempat commit ber-author `MacBook Pro
-<macbookpro@MacBooks-MacBook-Pro.local>` karena git identity tidak pernah
-di-set. Di GitHub commit itu tidak terhubung ke akun mana pun. Kosmetik,
-sengaja tidak di-rewrite.
+**Database sengaja tidak disentuh.** Kolom `compiled_narrative` dan 25 baris
+lama dibiarkan — `DROP` tidak bisa dibatalkan dan menundanya tidak berbiaya.
+Efek samping yang menguntungkan: 5 baris `paid` yang selama ini bisa dibuka
+publik dalam keadaan kosong kini tidak terjangkau karena `/c/[id]` hilang.
+Masalah itu selesai tanpa menghapus apa pun. Kolomnya kini bertipe `unknown`
+dengan catatan di `types/database.ts`.
+
+---
+
+## Konsep inti: the spine
+
+Ini yang membuat sebuah case study terbaca senior — satu gagasan dinyatakan di
+tiga tingkat resolusi, dipetakan **1:1**:
+
+| Finding (apa yang kamu pelajari) | Requirement (apa yang dituntutnya) | Move (apa yang kamu rancang) |
+|---|---|---|
+
+Case study generik gagal karena ketiganya jadi tiga daftar yang tidak
+berhubungan. Check menjamin pemetaannya **secara struktural** di
+`lib/case-study-blocks.ts`, bukan dengan berharap model menurut.
+
+Wizard **tidak pernah** meminta tiga daftar. Ia meminta **decision unit** yang
+berulang — apa yang kamu putuskan · apa yang membuatmu memutuskannya · apa yang
+kamu tolak — lalu menurunkan ketiga tingkat itu darinya. Orang bisa mengingat
+keputusan; mereka tidak bisa mengingat "requirement".
 
 ---
 
 ## BELUM terverifikasi — jangan diklaim aman
 
-Bagian ini yang paling penting dibaca lebih dulu. Semua yang tercantum di
-"Status shipped" di bawah memang sudah diuji; hal-hal berikut **belum**, dan
-gampang keliru dianggap beres:
+Baca ini **sebelum** daftar "Sudah terbukti" di bawah.
 
-1. **Jalur uang — separuh terbukti, separuh belum.** Rantai
-   `webhook → add_credits → saldo bertambah` **sudah** diuji (Aug 20) dengan
-   event `checkout.session.completed` yang ditandatangani asli memakai whsec
-   yang sama: saldo naik tepat 5, satu baris `payments`, tiga kali kirim ulang
-   tidak menambah apa pun. Yang **belum** terbukti adalah sambungan Stripe→kita
-   pada transaksi sungguhan — bahwa metadata `user_id` + `credit_amount` yang
-   ditulis `/api/checkout` benar-benar sampai di event asli, dan `amount_total`
-   sesuai. Hanya bisa dibuktikan dengan satu checkout kartu beneran.
-2. **Badge saldo saat login belum pernah dilihat** setelah logikanya diubah
-   jadi `balance > 0` (sebelumnya `!== null`). Sesi browser keburu hilang
-   sebelum sempat dilihat ter-render.
-3. **Belum ada deploy sama sekali** — tidak ada Vercel. Domain sudah ada.
-4. ~~Compile belum dijalankan ulang setelah label `business_impact` diganti~~
-   **BERES (Aug 20).** Compile dijalankan sungguhan: 8 section, 243–289 kata,
-   nol kata terlarang dari 20 yang diuji, callout semua sesuai allowlist, nol
-   fabrikasi angka. Vision terbukti dibangun langsung di atas jawaban
-   `business_impact` — label barunya menajamkan, tidak merusak.
-5. **Custom SMTP belum dipasang.** Sender bawaan Supabase = 2 email/jam untuk
-   seluruh project. Magic link akan diam-diam gagal begitu ada lebih dari dua
-   pendaftar per jam. Lihat Deploy → Pre-flight nomor 4.
-6. **Rate limit terpakai walau compile gagal.** `rate_limit_compile` naik
-   sebelum panggilan Anthropic, jadi lima kegagalan mengunci user seharian
-   tanpa kesalahan mereka. Butuh RPC decrement.
-7. **401 pada compile pertama** — terlihat **sekali**: WritingLoader menembak
-   `/api/compile` sebelum cookie sesi anon sampai ke server. Belum
-   direproduksi, jadi belum layak disebut bug produksi — tapi kalau nyata, ini
-   kena user baru tepat di compile pertama mereka.
-8. **`/api/waitlist` tanpa rate limit.** Endpoint publik tanpa sesi. Unique
-   index menahan spam satu email, tapi tidak ada yang menahan ribuan alamat
-   berbeda.
+1. **Renderer baru belum pernah dilihat manusia dengan gambar sungguhan.**
+   `/fixture` memakai bingkai berlabel karena fixture tidak punya file. Layout
+   dengan screenshot asli belum teruji.
+2. **Sorotan nav di renderer baru belum terverifikasi di browser sungguhan.**
+   Logikanya diuji lewat unit test (`components/case-study/active-section.test.ts`)
+   karena browser pane menekan event scroll — lihat gotcha di bawah. Perlu
+   dicek manusia dengan scroll asli.
+3. **Metadata Stripe belum terbukti pada transaksi sungguhan.** Rantai
+   `webhook → add_credits → saldo` sudah terbukti lewat event bertanda tangan
+   asli, tapi bahwa `user_id` + `credit_amount` dari `/api/checkout` benar-benar
+   sampai di event Stripe nyata — belum.
+4. **Custom SMTP belum dipasang.** Sender bawaan Supabase = 2 email/jam untuk
+   seluruh project. Magic link akan gagal diam-diam. Lihat Deploy → Pre-flight.
+5. **Badge saldo saat login belum pernah dilihat** setelah logikanya jadi
+   `balance > 0`.
+6. **Race auth pada request bersamaan — terlihat DUA kali** (401 sekali, 404
+   sekali), keduanya konsisten dengan `auth.uid()` kosong sesaat saat token
+   di-refresh. Belum direproduksi dengan sengaja.
+7. **`/api/waitlist` tanpa rate limit.** Endpoint publik tanpa sesi.
+
+---
+
+## Sudah terbukti (dengan bukti, bukan asumsi)
+
+**Phase 1 — schema + validator** (`b8d80f9`). `lib/case-study-blocks.ts`:
+8 aturan validasi, semuanya ditegakkan di kode. **43 unit test**, tiap test
+memutasi satu field dari fixture yang lolos, jadi kegagalan menunjuk ke
+aturannya. Vitest dipasang dari nol — project ini sebelumnya tidak punya test
+runner sama sekali.
+
+Satu penyimpangan sadar dari spec: `move_section` diberi `spineId` eksplisit.
+Spec melacak pemetaan lewat string eyebrow (`"MOVE 1 — DEFAULTS"`), tapi
+memulihkan id dengan regex dari copy tampilan justru "berharap model benar" —
+persis yang schema ini ada untuk menghilangkannya.
+
+**Phase 5 — renderer diuji fixture** (`62c4dac`). `CaseStudyDocument` +
+`/fixture`. Dibuktikan pada dokumen buatan tangan yang **lolos seluruh
+validator** — layout yang hanya bagus di dokumen ilegal tidak membuktikan apa
+pun. Judul section adalah keputusan si desainer sebagai kalimat perintah
+("Freeze the note at shift change"), bukan label dekoratif.
+
+**Jalur uang — separuh terbukti** (`5493949`). Bug urutan diperbaiki: baris
+`payments` dulu ditulis sebelum kredit diberikan, jadi kegagalan di antaranya
+membuat retry balas `already_processed` dan pembeli tidak pernah dapat kredit.
+Diuji dengan event bertanda tangan asli: saldo naik tepat 5, satu baris
+`payments`, tiga kali kirim ulang tidak menambah apa pun.
+
+**Compile idempoten** (`57f5170`) — *catatan: route-nya kini terhapus, tapi
+migration `claim_compile` (0012) masih ada dan pola kerjanya layak ditiru
+Phase 4.* Compile terukur **~150 detik**. Guard lama berlubang selebar itu; dua
+compile berjalan dan yang kedua menimpa yang pertama (terbukti: 2 baris
+`compile_attempts`, narasi berubah di antara dua kueri).
+
+**Early access** (`1bc3617`, `0b44ecf`, `37e8741`). Tabel `waitlist`
+(migration 0011) dengan RLS nol policy — anon key membaca `[]` dan insert
+ditolak `42501`, keduanya diuji. Modal di-portal ke `document.body` karena
+kolom kiri sticky membuat stacking context.
+
+**Survei waitlist dipindah ke genre baru** (`bfbda20`). Migration 0013 memberi
+penanda `survey_version`: baris lama = 1 (genre penjualan), baru = 2
+(portfolio). Slug jawabannya identik antar versi, jadi tanpa penanda ini
+keduanya terlihat bisa dibandingkan padahal menjawab pertanyaan berbeda.
+
+**Layout landing** (`2258a8b`). Pita kosong 356px di kolom hero dan scroll
+133px yang berhenti mendadak — keduanya diperbaiki; desktop tidak scroll lagi.
 
 ---
 
 ## Rechecks — cara-cara yang pernah menipu
 
-Sebelum menganggap sesuatu beres, ingat lima ini. Semuanya sempat menghasilkan
-kesimpulan salah di sesi sebelumnya:
+Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
 
+- **`PIPESTATUS` tidak jalan di zsh.** Dan `grep` di ujung pipe mengembalikan
+  exit code miliknya sendiri — `tsc | grep` yang "exit 1" ternyata tsc sukses
+  dan grep tidak menemukan apa-apa. **Selalu cek exit code tanpa pipe.**
+- **Vitest hijau bukan bukti cukup.** Ia tidak melakukan typecheck; `tsc`
+  menangkap error yang lolos dari test.
+- **Vitest tidak membaca `paths` dari tsconfig.** Alias `@/` harus dideklarasi
+  ulang di `vitest.config.mts`, dan gagalnya terbaca seperti test rusak.
+- **Browser pane melaporkan `visibilityState: "hidden"`.** Di kondisi itu event
+  `scroll` **tidak pernah terkirim** (0 terdengar padahal `scrollY` berubah) dan
+  `requestAnimationFrame` **tidak berjalan**. Apa pun yang bergantung pada
+  keduanya tidak bisa diverifikasi lewat pane — pisahkan logikanya jadi fungsi
+  murni dan uji lewat test.
+- **Screenshot pada posisi ter-scroll balik kosong**, sebab yang sama. Akali
+  dengan meninggikan viewport supaya target berada di scroll 0.
 - **Bug stacking, bukan posisi.** `getBoundingClientRect` bisa benar sementara
-  elemennya tetap tertimpa. Pakai `document.elementFromPoint` untuk membuktikan
-  apa yang benar-benar ada di atas.
-- **`box-shadow` dari nilai arbitrary Tailwind** punya beberapa nilai default
-  transparan di depan. Jangan memotong string computed-nya — memotong di 60
-  karakter sempat memunculkan kesimpulan "bayangan tidak ter-render" yang
-  keliru.
+  elemennya tertimpa. Pakai `document.elementFromPoint`.
 - **`git show HEAD:file` yang gagal + redirect** menghasilkan file kosong, dan
-  eslint atas file kosong melaporkan "0 problems". Selalu cek exit code, jangan
-  percaya output kosong.
-- **StrictMode di dev** menjalankan mount → unmount → remount. Resource yang
-  dibuat di render (`useMemo`) tapi dibersihkan di effect akan mati setelah
-  remount — lihat komentar di `AttachmentStep`.
-- **Label intake ikut masuk ke prompt** (`buildPrompt` merender `[key] label`).
-  Mengganti label = mengganti arti field bagi model.
+  eslint atas file kosong melaporkan "0 problems".
+- **StrictMode di dev** menjalankan mount → unmount → remount. `AbortController`
+  di cleanup membatalkan fetch di klien tapi **tidak menghentikan function di
+  server**.
+- **Label intake ikut masuk ke prompt.** Berlaku lagi begitu Phase 4 membangun
+  pipeline baru.
 
 ---
 
@@ -156,232 +218,106 @@ kesimpulan salah di sesi sebelumnya:
 
 | Jalur | Isi |
 |---|---|
-| `app/api/compile/route.ts` | Prompt lengkap: `TONE_BRIEFS`, `PROJECT_TYPE_BRIEFS`, delapan gerakan copywriter, daftar kata terlarang, `CALLOUT_ALLOWLIST`. Paling berpengaruh ke kualitas output |
-| `lib/narrative.ts` | Validator shape, dipakai bersama `/api/compile` dan `/api/edit` — satu kontrak, bukan dua salinan |
-| `lib/intake-fields.ts` | 9 field intake (8 + `voice_sample`). **Label di sini ikut masuk ke prompt** |
-| `lib/launch-mode.ts` | `EARLY_ACCESS_MODE` + `DEMO_URL`. Satu-satunya sakelar pra-rilis — dibaca TopBar dan IntakeForm |
-| `lib/waitlist.ts` | Opsi + validasi form early access, dipakai bersama form dan `/api/waitlist` |
-| `components/landing/EarlyAccessModal.tsx` | Modal waitlist. Di-portal ke `document.body` (kolom kiri sticky bikin stacking context), `max-h-[85vh]` + scroll sendiri |
-| `components/landing/StartCta.tsx` | Tombol hero: "Get early access" (buka modal) + "Watch demo" (dua keadaan, lihat `DEMO_URL`) |
-| `types/database.ts` | `NarrativeSection`, `NarrativeCallout` (union 3 kind), `CaseStudyMeta`, `FREE_SECTION = 'vision'` |
-| `app/c/[id]/CaseStudyView.tsx` | Halaman case study: hero, meta grid, sticky ToC, renderer callout, gambar inline, edit in-place |
-| `app/c/[id]/page.tsx` | Batas paywall sisi baca — hanya `vision` yang menyeberang saat belum bayar |
-| `components/landing/TopBar.tsx` | Kontrol Buy credit + deteksi sesi (none / anon / email) |
-| `components/auth/AuthGateModal.tsx` | Email + Google; `linkIdentity` vs `signInWithOAuth`; di-portal ke `document.body` |
-| `components/intake/IntakeFlow.tsx` | Semua redirect landing: recovery magic-link, resume checkout, kembali dari Stripe |
-| `supabase/migrations/0001–0012` | Semuanya sudah applied di project live. 0010 unique index idempotensi kredit · 0011 tabel `waitlist` · 0012 `claim_compile` |
+| `check-revision-prompt.md` | **Spec revisi. Sumber kebenaran untuk semua fase.** |
+| `lib/case-study-blocks.ts` | Schema blok + 8 aturan validasi. Kontrak antara agent dan renderer |
+| `lib/fixtures/case-study-fixture.ts` | Case study buatan tangan untuk menguji renderer tanpa agent |
+| `components/case-study/CaseStudyDocument.tsx` | Perakitan halaman 7 bagian + sticky nav dari spine |
+| `components/case-study/blocks.tsx` | Satu komponen per tipe blok, termasuk cycle diagram SVG |
+| `app/fixture/page.tsx` | Route dev-only untuk melihat renderer |
+| `lib/intake-fields.ts` | Field wizard. **Label di sini ikut masuk ke prompt** |
+| `lib/launch-mode.ts` | `EARLY_ACCESS_MODE` + `DEMO_URL` — satu-satunya sakelar pra-rilis |
+| `lib/waitlist.ts` | Opsi + validasi survei, dipakai bersama form dan `/api/waitlist` |
+| `components/intake/IntakeForm.tsx` | Wizard 2 langkah — **Phase 2 merestrukturisasinya jadi 5** |
+| `components/landing/EarlyAccessModal.tsx` | Modal waitlist, di-portal ke `document.body` |
+| `supabase/migrations/0001–0013` | Semuanya applied di project live |
 
 ---
 
-## Status shipped (verified end-to-end)
+## SISA PEKERJAAN — build order dari spec
 
-**Fase A** (sebelum session ini) — DB pivot: migrations 0001-0003, 8-section
-narrative, credits, review_messages, case_study_attachments.
+Urutannya sengaja: schema adalah kontrak, dan renderer yang terbukti di fixture
+memberi tahu apakah outputnya cukup bagus **sebelum satu token pun dibelanjakan**.
 
-**Fase B** — build red → green, 2-step intake form, RPC anon lock
-(migration 0004).
+### 1. ~~Phase 1 — schema + validator~~ SELESAI (`b8d80f9`)
+### 2. ~~Phase 5 — renderer diuji fixture~~ SELESAI (`62c4dac`)
 
-**Fase D** — kredit flow, unlock in-place, Stripe checkout + webhook,
-purchase-return redirect ke /c/[id]?purchased=1, migration 0005 (paywall
-column + rate limit).
+### 3. Phase 2 — restrukturisasi wizard  ⟵ MULAI DARI SINI
 
-**Fase E** — halaman publikasi `/c/[id]`, serif Fraunces H1, meta row,
-owner action bar (waktu itu Copy link · Copy text · Start new — sekarang satu
-tombol saja, lihat CSD-exact rewrite di bawah), sticky CTA in-place
-(Unlock atau Buy 5 credits).
+Wizard 2 langkah jadi **5 langkah** + layar review. Detail lengkap di
+`check-revision-prompt.md` § Phase 2.
 
-**Loader page** `/writing/[id]` — full-page animasi 8-phase, gradient
-progress bar warna Check accent, "Step X of 8", copy rotating, redirect
-otomatis ke /c/[id] setelah compile.
+**Step 3 (the decisions) adalah inti produknya**, bukan sekadar satu langkah.
+Di situlah spine terbentuk.
 
-**Prompt overhaul** — first-person prospect-facing (bukan CSD portfolio
-brag), 4-8 kalimat per section dengan narrative arc, synthesis directive,
-anti-restatement few-shot, framing check, max_tokens 4000.
+Yang perlu diketahui sebelum mulai:
 
-**Login-gated export + signup bonus** — migration 0006 `grant_signup_bonus`
-RPC (idempotent per user_id via credit_transactions.reason='signup_bonus'),
-AuthGateModal.tsx, /auth/callback extended, ?login=1 flash toast di
-CaseStudyView. **Login recovery** via localStorage — landing IntakeFlow
-handles fallback kalau Supabase redirect drop `?next=…`.
+- `intake` disimpan sebagai **jsonb**, jadi mengubah bentuk field **tidak butuh
+  migration** — hanya `lib/intake-fields.ts` dan tipe `Intake`.
+- Wizard digembok `EARLY_ACCESS_MODE`. Untuk mengujinya set
+  `NEXT_PUBLIC_EARLY_ACCESS_MODE=false` di `.env.local` **lalu restart dev
+  server** — `NEXT_PUBLIC_*` di-inline saat build, hot reload saja tidak cukup.
+  **Kembalikan setelah selesai, dan buktikan dengan `diff`.**
+- Step 2 sudah melebihi viewport **sebelum** field apa pun ditambah (1289px
+  lawan 900px), jadi target "no in-step scrolling" di AGENTS.md sudah lama
+  tidak terpenuhi. Lima langkah justru memperbaikinya.
+- `handleCreated` di `IntakeFlow.tsx` sengaja dibuat **dead end yang berisik** —
+  tujuannya (`/writing/[id]`) sudah dihapus. Phase 4 yang menyambungkannya.
+- **Aturan copy spec mengikat**: jangan pernah blokir "next", jangan tampilkan
+  skor kedalaman, dan jangan pakai kata "kurang", "belum cukup", "dangkal",
+  "incomplete", atau "weak" di layar review.
 
-**Headline column** — migration 0007 `case_studies.headline`, prompt output
-9 kunci (headline + 8 sections), 6-10 word compact AI-generated title,
-rendered as serif H1 dengan fallback ke raw `title` untuk old rows.
+### 4. Phase 4 — pipeline 4 agent
 
-**~~3-format side-by-side~~** — SUPERSEDED. Dulu `/c/[id]` render Full case
-study + Proposal one-pager + Meeting bullets berdampingan, derived
-client-side. Semua dihapus di CSD-exact rewrite di bawah;
-`lib/case-study-formats.ts` sudah dihapus dari repo.
+Interviewer · Extraction (vision) · Synthesis · QA. Detail di spec § Phase 4.
 
-**CSD-exact rich case study** — output Check sekarang meniru struktur PDF
-referensi `casestudydesigner.app/examples/senjoy` (dibedah dari PDF asli di
-Vercel blob, 9 halaman).
+**Dua koreksi terhadap spec yang sudah diverifikasi:**
 
-- **Migration 0008** `case_studies.meta` jsonb + grant SELECT ke
-  authenticated (pola sama dengan headline 0007 — anonymized, pre-paywall).
-  Isi: `{role, client, audience, platform, image_captions}`.
-- **Shape narrative berubah** dari `Record<key,string>` jadi
-  `Record<key, NarrativeSection>` di `types/database.ts`.
-  `NarrativeSection = {subtitle, body, callout}`. Section keys ganti ke arc
-  CSD: vision · discovery · signal · design · testing · launch · growth ·
-  reflection. `FREE_SECTION` = `vision`.
-- **`NarrativeCallout`** discriminated union — 3 kind: `insight`
-  (label + ≤180 char), `stat` (1-2 big-number tiles dari intake.metrics),
-  `process` (3-4 numbered mini-steps). Allowlist per section di
-  `CALLOUT_ALLOWLIST`. Kind yang tidak diizinkan → di-drop diam-diam, bukan
-  throw. Persona sidebar / before-after / pull quote sengaja TIDAK
-  disupport (intake tidak punya datanya — anti-fabrikasi).
-- **Prompt rewrite total** di `/api/compile` — output 3 top-level key
-  (`headline`, `meta`, `sections`), per-section instruction (nama tetap +
-  subtitle 2-5 kata + body 250-400 kata + callout allowlist), callout JSON
-  contract, meta-grid inference rules, image-caption instruction per
-  attachment id, anti-repeat between sections. `max_tokens` 4000 → 8000.
-  `validateNarrative` / `validateCallout` / `validateMeta` semua baru.
-  Response body sekarang cuma `{ok: true}` — nol narrative crossing the wire.
-- **Attachments inline** — `/c/[id]` server component query
-  `case_study_attachments` + batch `createSignedUrls` (TTL 1 jam), lalu
-  distribusi deterministic round-robin ke 7 slot antar section. Caption dari
-  `meta.image_captions[attachmentId]`. Paid state only.
-- **`CaseStudyView` full rewrite** — single column magazine: serif hero H1,
-  4-col meta grid, sticky ToC 8 anchor dengan IntersectionObserver highlight
-  (paid only, horizontal-scroll + auto-center di mobile), section bernomor
-  (`01 · The Vision` + serif H2 subtitle + prose + callout), `<Callout>`
-  renderer per kind, `<InlineImage>` figure+caption. Preview state: Vision
-  live, 02-08 heading + skeleton.
-- **Owner action bar disederhanakan** jadi satu tombol **"Copy link case
-  study"**. Copy-text export + Start-new dihapus (URL-nya sendiri yang jadi
-  deliverable — user publish langsung). `buildPlainText` ikut terhapus.
-  `AuthGateModal` masih dipakai untuk signup nudge di sticky CTA.
-- **Edit in-place di `/c/[id]`** — tombol "Edit case study" di samping "Copy
-  link case study". Keduanya disabled saat locked (server juga menolak:
-  `POST /api/edit` balas 403 kalau status belum paid). Edit mode bikin
-  headline, subtitle, body, dan semua string callout jadi contentEditable di
-  layout aslinya; bar berubah jadi Cancel + "Save edit". Callout kind dan
-  jumlah item/step tidak bisa diubah — hanya teksnya. Validator dipindah ke
-  `lib/narrative.ts` supaya `/api/compile` dan `/api/edit` pakai kontrak yang
-  sama persis.
-- **Top bar landing + Google sign-in** — `components/landing/TopBar.tsx`:
-  Sign up + Buy credits, selalu terjangkau tanpa harus menulis case study dulu.
-  Sudah login → badge saldo (Sign up hilang) dan Buy langsung ke Stripe. Belum
-  login → modal auth dengan `returnTo='/?checkout=1'`, lalu `IntakeFlow`
-  melanjutkan ke Stripe otomatis (user menekan Buy sekali, bukan dua kali).
-  Google di balik `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED` — **sudah dikonfigurasi dan
-  terverifikasi** (Google Cloud OAuth client + Supabase provider + Manual
-  linking aktif). Tawaran "1 free credit" **dihapus dari halaman output**;
-  pitch itu sekarang hanya di landing.
+- Spec menyebut `claude-opus-4-8` untuk synthesis. **Model itu tidak ada** di
+  generasi sekarang. Yang tersedia: `claude-opus-5`, `claude-sonnet-5`,
+  `claude-fable-5`, `claude-haiku-4-5`. AGENTS.md mengunci `claude-opus-5`.
+- **Anggaran waktu.** Compile lama terukur 150 detik untuk satu panggilan.
+  Pipeline spec bisa sampai 3 panggilan opus (synthesis + 2 retry QA). Plafon
+  Vercel Hobby **300 detik** (default sekaligus maksimum, dengan Fluid compute).
+  Tapi structured blocks jauh lebih sedikit token daripada 1.600 kata prosa —
+  mungkin 400–600 kata total, jadi synthesis bisa jauh lebih cepat. **Ukur,
+  jangan asumsikan ke salah satu arah.**
+  Pola `claim_compile` (migration 0012) masih ada dan layak dipakai ulang.
 
-  Uji preservasi sesi anon lulus: user anon dengan 4 case study login Google →
-  `user_id` **tidak berubah**, keempat case study tetap miliknya, email
-  terpasang, bonus 1 credit masuk sekali. Itu bukti `linkIdentity` dipakai,
-  bukan `signInWithOAuth`.
-- **Intake copy rewrite** — 8 label/helper jadi designer-conversational
-  ("What sucked before?", "Numbers that moved (or didn't)?"). Field KEYS
-  tidak berubah → row lama tetap kebaca. Step heading: "Quick setup" /
-  "The story of the project". Submit: "Write the case study".
+**Jangan bangun ulang aturan copy dari nol.** Delapan gerakan copywriter +
+daftar kata terlarang, `TONE_BRIEFS`, dan `PROJECT_TYPE_BRIEFS` semuanya masih
+ada di `git show 3fcd036:app/api/compile/route.ts`. Itu hasil tuning terhadap
+output sungguhan, bukan tebakan — ambil dari sana lalu arahkan ulang ke genre
+portfolio. Rinciannya di AGENTS.md § Copy craft dan § Tone + project type.
 
-**Old rows** (compiled sebelum shape ini) render sebagai 8 heading +
-skeleton karena `narrative.vision` undefined. Acceptable — semua test row.
-Kalau mau bersih, set `compiled_narrative = null` untuk row lama supaya
-statusnya jelas "belum compile".
+### 5. Phase 3 dan 6 — probing adaptif + editor per-blok
+
+### 6. Sisa yang tidak terikat fase
+
+- Rate limit `/api/waitlist` — endpoint publik tanpa penahan
+- Dua tautan nav mati (`#features`, `#examples`) — kini satu-satunya isi nav di
+  desktop, jadi makin menonjol
+- Top bar di HP tinggal wordmark
+- Race auth pada request bersamaan (terlihat dua kali)
+- Metadata Stripe pada transaksi sungguhan
 
 ---
 
-## SISA PEKERJAAN — kerjakan berurutan
+## ⚠️ Bagian di bawah ini USANG — ditulis untuk produk genre lama
 
-### 1. ~~Push ke GitHub~~ — SELESAI
+Fase F / G / H di bawah dirancang untuk produk **sales collateral** dengan
+narrative 8-section yang sudah dihapus. **Jangan dikerjakan apa adanya.**
 
-Lihat "Kondisi saat ini" di atas. Repo private
-**`JetDesigns/check-micro-saas`** (organization), `.env.local` tidak ikut.
+Sebagian niatnya masih berlaku dan layak diangkat ke fase baru:
+- **Halaman contoh publik** (Fase H) — produk ini masih belum punya bukti
+  publik sama sekali, dan `Real examples` di nav masih menunjuk ke ketiadaan.
+- **Pernyataan privasi + byline** (Fase H) — masih relevan.
+- **Prompt regression fixtures** (Fase H) — idenya sudah sebagian terwujud di
+  `lib/fixtures/`, tinggal diperluas saat Phase 4 ada.
 
-### 2. Uji jalur uang dengan Stripe CLI — user menjalankan sendiri
-
-**Separuh sudah beres (Aug 20).** Rantai `webhook → add_credits → saldo`
-terbukti benar lewat event bertanda tangan asli: saldo naik tepat 5, satu baris
-`payments`, tiga kali kirim ulang tidak menambah apa pun. Bug urutan yang
-ditemukan saat itu (baris `payments` ditulis sebelum kredit diberikan, sehingga
-retry balas `already_processed` tanpa pernah memberi kredit) sudah diperbaiki di
-`5493949`.
-
-**Yang tersisa:** membuktikan metadata `user_id` + `credit_amount` dari
-`/api/checkout` benar-benar sampai di event Stripe sungguhan. Hanya bisa lewat
-satu checkout kartu beneran.
-
-```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
-```
-
-`whsec_…` yang tercetak harus cocok dengan `STRIPE_WEBHOOK_SECRET` di
-`.env.local`. Beli dengan kartu tes `4242 4242 4242 4242`, lalu buktikan lewat
-MCP SQL:
-
-- `users.credit_balance` bertambah **tepat 5**
-- `payments` punya **tepat satu** baris untuk session id itu
-- kirim ulang webhook yang sama → saldo **tidak** bertambah lagi (idempoten
-  dijaga `add_credits` via `stripe_payment_id`)
-
-### 3. Konfigurasi deploy
-
-| Item | Detail |
-|---|---|
-| Vercel | Hubungkan repo dari langkah 1 |
-| Env vars | Lihat `.env.local.example` — termasuk `NEXT_PUBLIC_GOOGLE_AUTH_ENABLED=true`, `NEXT_PUBLIC_EARLY_ACCESS_MODE`, dan `NEXT_PUBLIC_DEMO_URL` |
-| Domain | Sudah ada: `jet.studio`. DNS di **Porkbun** (nameserver `*.ns.porkbun.com`) |
-| Supabase → Redirect URLs | Tambah `https://<domain>/auth/callback` |
-| Stripe | Masih **Sandbox**. Perlu product/price live, endpoint webhook produksi, dan `STRIPE_WEBHOOK_SECRET` baru |
-| Google OAuth consent screen | Kalau masih *Testing*, hanya test user yang bisa login → harus Publish |
-| Anthropic | Set spend limit; ~$0.08/compile setelah `max_tokens` jadi 16000 |
-
-### 4. Putuskan dua item nav yang mati
-
-Di landing: `Features` dan `Real examples` menunjuk `#features` / `#examples`
-yang tidak ada. Sejak "Buy credit" disembunyikan, **keduanya jadi satu-satunya
-isi nav di desktop** — makin menonjol, makin mungkin diklik. Pengunjung pertama
-pasti mencoba salah satunya.
-
-`Watch demo` sudah **tidak** termasuk daftar ini: sekarang mati dengan sengaja
-(tooltip "Demo coming soon") dan otomatis jadi tautan asli begitu
-`NEXT_PUBLIC_DEMO_URL` diisi.
-
-Catatan tampilan: di bawah `sm` kedua tautan itu tersembunyi dan Buy credit
-juga hilang, jadi **top bar di HP sekarang hanya wordmark**. Tidak rusak, tapi
-kosong.
-
-**`Real examples` yang paling merugikan** — produk ini belum punya bukti publik
-sama sekali. Ini bersinggungan dengan Fase H (halaman `/contoh`) di bawah.
-
-### 5. Bersihkan data lama
-
-Dari 21 baris `case_studies` di project live:
-
-| Bentuk | Jumlah | Akibat |
-|---|---|---|
-| Shape baru (`vision`…) | 3 | render normal |
-| **Shape lama** | **16** | render 8 heading + body kosong |
-| — di antaranya berstatus `paid` | **5** | **bisa dibuka siapa pun lewat link, tampil kosong** |
-
-Lima baris `paid` itu yang paling mengganggu: statusnya membuat halaman bisa
-diakses publik, tapi isinya kosong karena `compiled_narrative`-nya masih pakai
-kunci lama (`situation`, `cost`, …) yang tidak dikenal renderer.
-
-Semuanya baris uji dari masa pengembangan. Putuskan: hapus, atau biarkan karena
-link-nya toh tidak pernah disebar. **Jangan di-recompile** — buang-buang credit
-dan panggilan API untuk data uji.
-
-Query untuk melihatnya:
-
-```sql
-select id, status, title from public.case_studies
-where compiled_narrative is not null
-  and not (compiled_narrative ? 'vision');
-```
-
-### 6. Sisa fase produk (opsional untuk launch)
-
-- **Fase F** — Review agent (tabel `review_messages` sudah ada, UI/route belum)
-- **Fase H** — Halaman contoh publik, byline, pernyataan privasi
+Sisanya (review agent Fase F, loop verifikasi Fase G) mengasumsikan alur yang
+sudah tidak ada. Dibiarkan sebagai catatan sejarah, bukan sebagai rencana.
 
 ---
-
 ## Fase F — Review agent
 
 **Goal**: setelah unlock, owner bisa chat dengan AI review agent yang tunjuk
@@ -586,93 +522,45 @@ copy polish. Preparing for real customers.
 
 ## Bugs kecil / polish yang tercatat tapi belum di-fix
 
-- Login toast ("Signed in. 1 free credit added") kadang tidak visible di screenshot — hydration timing / z-index. Logic benar (state + timer OK). Iterate kalau perlu.
-- Progress bar di `/writing/[id]` warna hijau kelihatan dark (ink) di screenshot, bukan orange accent seperti design. Ganti gradient class kalau mau: `from-orange-500 via-amber-500 to-orange-400`.
-- Sticky CTA text kadang truncate di mobile — cek responsive kalau di verifikasi Fase G ketemu.
+- Login toast ("Signed in. 1 free credit added") kadang tidak visible di
+  screenshot — hydration timing / z-index. Logic benar (state + timer OK).
+- ~~Progress bar `/writing/[id]`~~ dan ~~sticky CTA truncate~~ — keduanya ikut
+  terhapus bersama jalur lama. Tidak relevan lagi.
+- Dua tautan nav mati (`#features`, `#examples`). Sejak "Buy credit"
+  disembunyikan, keduanya jadi satu-satunya isi nav di desktop — makin
+  menonjol, makin mungkin diklik.
+- Top bar di HP tinggal wordmark: dua tautan nav tersembunyi di bawah `sm` dan
+  Buy credit kini juga hilang. Tidak rusak, tapi kosong.
 
 ## Reference files (di project root)
 
-- `AGENTS.md` — architecture, locked decisions, gotchas (SATU-satunya source of truth arsitektur).
-- `supabase/migrations/0001-0009.sql` — semua applied di project live.
-- `.env.local.example` — env var names (values di `.env.local`, gitignored). Sengaja di-un-ignore lewat `!.env.local.example`.
+- `check-revision-prompt.md` — **spec revisi. Sumber kebenaran untuk semua
+  pekerjaan sekarang.** Semua fase merujuk ke sini.
+- `AGENTS.md` — arsitektur, keputusan terkunci, environment gotchas.
+- `README.md` — pintu depan repo; memimpin dengan status pra-rilis, karena
+  "tombol wizard tidak melakukan apa-apa" adalah hal pertama yang akan dikira
+  bug oleh orang baru.
+- `supabase/migrations/0001-0013.sql` — semua applied di project live.
+- `.env.local.example` — nama env var (nilainya di `.env.local`, gitignored).
 - `HANDOFF.md` — file ini (status + sisa pekerjaan).
 
 ## Session log
 
-Session Aug 20–25, 2026 — pivot ke pra-rilis + perbaikan jalur uang & output:
-- **Jalur uang.** Bug urutan di webhook: baris `payments` ditulis sebelum
-  kredit diberikan, jadi kegagalan di antaranya membuat retry balas
-  `already_processed` dan pembeli tidak pernah dapat kredit. Kredit dulu,
-  catat kemudian (`5493949`). Migration 0010 menutup celah double-credit pada
-  pengiriman event bersamaan.
-- **Compile.** Diukur pertama kali: **~150 detik**. Guard idempotensi ternyata
-  berlubang selebar durasi itu — dua compile berjalan, yang kedua menimpa yang
-  pertama (terbukti: 2 baris `compile_attempts`, narasi berubah di antara dua
-  kueri). Migration 0012 `claim_compile` + `maxDuration = 300` + retry sadar
-  anggaran waktu (`57f5170`).
-- **Kualitas output.** Tiga keluhan user (generik, tidak menjual, bukan
-  suaranya) direproduksi pada output asli `c8996572`. Akar masalahnya: prompt
-  Reflection secara harfiah meminta nasihat umum. Ditulis ulang + peran
-  copywriter/design strategist senior + field `voice_sample` sebagai jangkar
-  gaya. Terukur: 2.209 → 1.657 kata, ejaan British dan frasa generik hilang;
-  dengan `voice_sample` kalimat turun 17,3 → 15,7 kata (`3fcd036`).
-- **Early access.** Tabel `waitlist` (0011), modal di-portal ke body,
-  `lib/launch-mode.ts` sebagai satu sakelar pra-rilis.
-- **Layout landing.** Pita kosong 356px di kolom hero dan scroll 133px yang
-  berhenti mendadak — keduanya diperbaiki, halaman kini tidak scroll di
-  desktop (`2258a8b`).
+Session Aug 20–27, 2026 — perbaikan jalur uang, lalu PIVOT GENRE:
+- **Jalur uang.** Bug urutan di webhook diperbaiki (kredit dulu, catat
+  kemudian). Migration 0010 menutup celah double-credit.
+- **Compile.** Diukur pertama kali: ~150 detik. Guard idempotensi berlubang
+  selebar itu; migration 0012 `claim_compile` + `maxDuration` + retry sadar
+  anggaran waktu.
+- **Kualitas output.** Tiga keluhan direproduksi pada output asli. Akarnya:
+  prompt Reflection secara harfiah meminta nasihat umum. Ditulis ulang +
+  field `voice_sample`. Terukur 2.209 → 1.657 kata.
+- **Early access.** Tabel `waitlist`, modal, `lib/launch-mode.ts` sebagai satu
+  sakelar pra-rilis. Landing dirapikan jadi satu ajakan.
+- **Repo dipindah** ke organization `JetDesigns`.
+- **PIVOT GENRE** (25 Agt) mengikuti `check-revision-prompt.md`. Phase 1
+  (schema, 43 test, vitest dari nol) dan Phase 5 (renderer + fixture) selesai.
+  Survei waitlist dipindah ke genre baru dengan penanda `survey_version`.
+- **Jalur lama dihapus** (27 Agt): `/api/compile`, `/api/edit`, `/c/[id]`,
+  `/writing/[id]`, `lib/narrative.ts`, tipe narrative 8-section.
 
-Session Aug 12-13, 2026 execute:
-- Fase B verify + fix Wizard.tsx delete + migration 0004 (revoke RPC anon).
-- Fase D full: kredit flow, unlock, Stripe integration, migration 0005.
-- Parser hardening (retry + tolerant JSON cleanup + prompt rules).
-- Fase E: dedicated /c/[id] + serif polish.
-- Prompt overhaul first-person prospect-facing.
-- Login-gated export + signup bonus (migration 0006) + AuthGateModal + callback extension.
-- Login recovery via localStorage.
-- Headline column (migration 0007) + 9-key prompt output.
-- 3-format side-by-side layout + signup nudge.
-- `/writing/[id]` full-page loader + IntakeFlow simplification + idempotency guard.
-
-Session Aug 14, 2026 — CSD-exact rewrite:
-- Bedah PDF referensi Senjoy (via iframe → Vercel blob → Swift PDFKit extract).
-- Migration 0008 `case_studies.meta` jsonb + grant.
-- `CompiledNarrative` jadi rich shape (`NarrativeSection` + `NarrativeCallout`
-  union 3 kind). `FREE_SECTION` → `vision`.
-- Prompt rewrite total (per-section + callout contract + meta + image
-  captions), max_tokens 8000, response `{ok:true}`.
-- Intake copy designer-conversational; keys tetap.
-- `lib/case-study-formats.ts` + `components/preview/PartialPreview.tsx`
-  dihapus (yang kedua sudah orphaned sejak lama).
-- `CaseStudyView` full rewrite jadi single-column magazine + sticky ToC +
-  callout renderer + inline attachment images. Owner action bar → satu tombol
-  "Copy link case study".
-- `npx tsc --noEmit` clean, `npx next build` hijau.
-
-Session Aug 14-15, 2026 — landing redesign + produksi:
-
-- **Landing didesain ulang**: top bar (logo + Features/Real examples + kontrol
-  Buy credit), hero di-anchor ke bawah, latar putih, wizard dalam frame
-  ber-tint. Semua radius tombol `rounded-full` → `rounded-xl` (12px), tone chip
-  → `rounded-lg`.
-- **Kontrol Buy credit**: pill putih dengan tombol gradient bersarang. Badge
-  saldo hanya muncul saat login **dan** saldo > 0 — "0 credits" di sebelah
-  tombol Buy itu mengatakan hal yang sama dua kali. `CreditBadge` dihapus
-  (jadi yatim setelah segmennya di-inline).
-- **Sticky diperbaiki**: kolom kiri sempat 105vh untuk memperbesar gap, dan itu
-  mematikan sticky — CSS berhenti memaku elemen yang lebih tinggi dari
-  viewport. Dikembalikan ke `calc(100vh-4rem)`. Gap dan sticky berebut ruang
-  yang sama; tidak bisa keduanya.
-- **Bug modal ketimpa wizard**: `position: sticky` membentuk stacking context,
-  jadi modal `z-50` di dalam kolom kiri tertimpa kolom kanan. Diperbaiki
-  dengan portal ke `document.body`.
-- **Bug sesi**: pengambilan saldo yang gagal ikut menurunkan sesi jadi
-  "belum login", membuat user yang sudah login diarahkan ke modal login
-  alih-alih Stripe. Fetch saldo dipisah ke `try` sendiri.
-- **Label intake** disederhanakan (What did you work on? / What was wrong
-  before? / What did you change? / What was it costing them?), legend tone →
-  "Tone". Field key tidak berubah.
-- **Version control**: seluruh aplikasi di-commit untuk pertama kalinya
-  (sebelumnya untracked). Lint dibereskan sampai nol error/warning.
-
-Migrations applied on `barsrclvvnuwjaqwecay`: 0001–0009.

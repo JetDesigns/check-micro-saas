@@ -151,12 +151,19 @@ export function IntakeFlow() {
     }
   }, [router, startCheckout])
 
-  const handleCreated = useCallback(
-    (caseStudyId: string) => {
-      router.push(`/writing/${caseStudyId}`)
-    },
-    [router]
-  )
+  // Where a finished intake used to go. /writing/[id] and /api/compile were
+  // deleted with the rest of the sales-genre product, and the replacement
+  // pipeline is Phase 4 of check-revision-prompt.md.
+  //
+  // Left as a loud dead end rather than a redirect to nowhere: the submit path
+  // is unreachable today (EARLY_ACCESS_MODE disables the wizard's next button),
+  // so nobody can hit this, and whoever wires the new pipeline should find an
+  // obvious marker here rather than a push to a 404.
+  const handleCreated = useCallback((caseStudyId: string) => {
+    console.error(
+      `[IntakeFlow] Case study ${caseStudyId} was created, but there is no compile pipeline to send it to. See check-revision-prompt.md, Phase 4.`
+    )
+  }, [])
 
   return (
     <div>
