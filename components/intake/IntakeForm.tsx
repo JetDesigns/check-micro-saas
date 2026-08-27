@@ -11,6 +11,7 @@ import {
   WIZARD_COPY,
   buildIntake,
   buildReview,
+  compileBlockers,
   emptyWizardState,
   nextStep,
   prevStep,
@@ -137,6 +138,9 @@ export function IntakeForm({ onCreated }: Props) {
     // here have exactly one.
     if (step !== 'review') return
     if (isBusy) return
+    // Nothing that cannot produce a legal document is allowed to spend a
+    // vision pass and three opus calls arriving at that conclusion.
+    if (compileBlockers(buildIntake(state)).length > 0) return
 
     setIsBusy(true)
     setError(null)
@@ -233,6 +237,7 @@ export function IntakeForm({ onCreated }: Props) {
               buildIntake(state),
               attachments.map((a) => a.id)
             )}
+            blockers={compileBlockers(buildIntake(state))}
             onJump={jumpTo}
           />
         )}
@@ -270,7 +275,7 @@ export function IntakeForm({ onCreated }: Props) {
             key="write"
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={isBusy}
+            disabled={isBusy || compileBlockers(buildIntake(state)).length > 0}
             className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
           >
             {isBusy

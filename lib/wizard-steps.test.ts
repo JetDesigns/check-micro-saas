@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DECISIONS_MAX,
+  DECISIONS_MIN,
   DECISION_FIELDS,
   DISCOURAGING_WORDS,
   SCREEN_FIELDS,
@@ -7,6 +9,7 @@ import {
   WIZARD_STEPS,
   buildIntake,
   buildReview,
+  compileBlockers,
   createDecision,
   emptyWizardState,
   isThin,
@@ -18,6 +21,7 @@ import {
   type WizardState,
 } from './wizard-steps'
 import { INTAKE_FIELDS } from './intake-fields'
+import { SPINE_MAX, SPINE_MIN } from './case-study-blocks'
 
 // What this file guards, in order of how expensive the mistake would be:
 //
@@ -270,5 +274,56 @@ describe('copy rules', () => {
   it('keeps the two review buttons equal in weight, which means neither label hedges', () => {
     expect(WIZARD_COPY.reviewFill).toBe('Fill these in')
     expect(WIZARD_COPY.reviewWrite).toBe('Write the case study')
+  })
+})
+
+describe('compileBlockers', () => {
+  // Found in production, not in review. Someone filled one decision, the
+  // wizard let them through because it never blocks "next", and the block
+  // schema then rejected the one-entry spine. The retry told the model to fix
+  // it — which it can only do by inventing a decision the designer never made,
+  // and on one attempt it did exactly that. Four minutes and a vision pass
+  // over six screens spent reaching nothing.
+  //
+  // The rules were both right; they had just never been checked against each
+  // other. This is where they meet now, for free, before anything is spent.
+  it('refuses a single decision, because one entry cannot be a spine', () => {
+    const state = emptyWizardState()
+    state.decisions[0].decided = 'Group the settings by intent'
+    expect(compileBlockers(buildIntake(state))).toHaveLength(1)
+  })
+
+  it('refuses an empty step 3 outright', () => {
+    expect(compileBlockers(buildIntake(emptyWizardState()))).toHaveLength(1)
+  })
+
+  it('allows the minimum, so the check gates nothing it should not', () => {
+    const state = emptyWizardState()
+    for (const d of state.decisions) d.decided = 'Freeze the note at shift change'
+    expect(state.decisions).toHaveLength(DECISIONS_MIN)
+    expect(compileBlockers(buildIntake(state))).toEqual([])
+  })
+
+  it('counts only decisions that say what was decided, not blocks that were opened', () => {
+    const state = emptyWizardState()
+    state.decisions[0].decided = 'Group the settings by intent'
+    state.decisions[1].why = 'I typed a reason but never named the decision'
+    expect(compileBlockers(buildIntake(state))).toHaveLength(1)
+  })
+
+  it('never phrases the blocker as a judgement of the answer', () => {
+    const state = emptyWizardState()
+    state.decisions[0].decided = 'Group the settings by intent'
+    const [blocker] = compileBlockers(buildIntake(state))
+    for (const word of DISCOURAGING_WORDS) {
+      expect(blocker.toLowerCase()).not.toContain(word)
+    }
+  })
+})
+
+describe('wizard limits track the schema', () => {
+  it('keeps DECISIONS_MIN equal to the spine minimum, since one decision makes one entry', () => {
+    expect(DECISIONS_MIN).toBe(SPINE_MIN)
+    expect(DECISIONS_MAX).toBe(SPINE_MAX)
   })
 })

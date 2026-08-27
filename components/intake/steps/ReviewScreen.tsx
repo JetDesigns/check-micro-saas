@@ -4,6 +4,8 @@ import { WIZARD_COPY, reviewIntro, type ReviewSection, type StepId } from '@/lib
 
 type Props = {
   sections: ReviewSection[]
+  /** Reasons the case study cannot be written yet. Usually empty. */
+  blockers: string[]
   onJump: (step: StepId, anchor: string) => void
 }
 
@@ -11,7 +13,7 @@ type Props = {
 // visible without making it a verdict: a neutral marker, a link to the answer,
 // and two buttons of equal weight. No score, no meter, no percentage — a
 // visible number makes people game the number and write long empty answers.
-export function ReviewScreen({ sections, onJump }: Props) {
+export function ReviewScreen({ sections, blockers, onJump }: Props) {
   const firstThin = sections
     .flatMap((s) => s.entries)
     .find((e) => e.thin)
@@ -19,8 +21,18 @@ export function ReviewScreen({ sections, onJump }: Props) {
   return (
     <div>
       <p className="text-sm leading-relaxed text-ink-soft">
-        {reviewIntro(sections)}
+        {blockers.length > 0 ? blockers[0] : reviewIntro(sections)}
       </p>
+
+      {blockers.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onJump(3, 'decisions-step')}
+          className="mt-4 w-full rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black sm:w-auto"
+        >
+          Go to the decisions
+        </button>
+      )}
 
       <div className="mt-6 space-y-5">
         {sections.map((section) => (

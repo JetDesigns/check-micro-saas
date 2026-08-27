@@ -31,7 +31,7 @@ export function Step3Decisions({ decisions, onChange, isBusy }: Props) {
   const remove = (id: string) => onChange(decisions.filter((d) => d.id !== id))
 
   return (
-    <div>
+    <div id="decisions-step">
       <div className="space-y-6">
         {decisions.map((d, i) => (
           <div

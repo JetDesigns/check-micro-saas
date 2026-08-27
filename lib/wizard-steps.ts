@@ -8,7 +8,7 @@
 // markup. Step order, what gets written to the database, and what the review
 // screen says are exactly the parts worth guarding.
 
-import { countWords } from '@/lib/case-study-blocks'
+import { SPINE_MAX, SPINE_MIN, countWords } from '@/lib/case-study-blocks'
 import {
   INTAKE_FIELDS,
   OUTCOME_OPTIONS,
@@ -21,8 +21,13 @@ import type { Decision, ImageNote, Intake, OutcomeStatus } from '@/types/databas
 
 export type StepId = 1 | 2 | 3 | 4 | 5 | 'review'
 
-export const DECISIONS_MIN = 2
-export const DECISIONS_MAX = 4
+// Derived from the schema, not restated. One spine entry comes from one
+// decision, so the wizard's limits and the block schema's limits are the same
+// numbers by necessity — writing 2 and 4 here again would let the schema
+// change without the wizard noticing, and the mismatch would only surface as
+// a failed compile four minutes and one vision pass later.
+export const DECISIONS_MIN = SPINE_MIN
+export const DECISIONS_MAX = SPINE_MAX
 
 // Under this, an answer gets a neutral marker on the review screen. It is
 // deliberately crude — a word count, nothing more. Phase 3's probing threshold
@@ -47,6 +52,13 @@ export const WIZARD_COPY = {
   markerThin: 'Still short',
   markerEmpty: 'Not answered',
   earlyAccess: 'Not open yet — request early access to get in first',
+
+  // Stated as what the structure needs, never as a judgement about the
+  // answer. The forbidden-word rule applies here like everywhere else.
+  blockerOneDecision:
+    'A case study is built from at least two decisions — the structure maps each one to what you learned and what you designed. Add one more in step 3.',
+  blockerNoDecisions:
+    'Step 3 is where the case study comes from. Add at least two decisions before writing.',
 } as const
 
 // The words the spec forbids on the review screen. Two are English and three
@@ -274,6 +286,40 @@ export function buildIntake(state: WizardState): Intake {
 // ---------------------------------------------------------------------------
 // The review screen
 // ---------------------------------------------------------------------------
+
+/**
+ * Reasons the case study cannot be written yet.
+ *
+ * This is NOT the "never block next" rule being walked back. Navigation stays
+ * unblocked all the way to the review screen. This is about not letting
+ * someone buy a guaranteed failure: the block schema requires a spine of
+ * DECISIONS_MIN–DECISIONS_MAX entries and the wizard derives one per
+ * decision, so a single decision cannot produce a legal document no matter how
+ * good the writing is.
+ *
+ * Found the hard way. Someone submitted with one decision; synthesis emitted
+ * one spine entry, validation rejected it, and the retry then pressured the
+ * model to INVENT a second decision to satisfy the minimum — which it did
+ * once, in direct violation of the anti-fabrication rule that is the whole
+ * point of this product. Four minutes and a vision pass over six images were
+ * spent arriving at nothing.
+ *
+ * Better to say it in the review screen, in advance, for free.
+ */
+export function compileBlockers(intake: Intake): string[] {
+  const blockers: string[] = []
+  const decisions = intake.decisions.filter((d) => d.decided.trim())
+
+  if (decisions.length < DECISIONS_MIN) {
+    blockers.push(
+      decisions.length === 0
+        ? WIZARD_COPY.blockerNoDecisions
+        : WIZARD_COPY.blockerOneDecision
+    )
+  }
+
+  return blockers
+}
 
 export function isThin(answer: string | undefined): boolean {
   const trimmed = answer?.trim() ?? ''

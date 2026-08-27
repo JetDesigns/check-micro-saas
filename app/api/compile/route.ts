@@ -17,6 +17,7 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runPipeline, type PipelineImage } from '@/lib/agents/pipeline'
+import { compileBlockers } from '@/lib/wizard-steps'
 import type { Intake, ProjectType, Tone } from '@/types/database'
 
 export const runtime = 'nodejs'
@@ -92,6 +93,23 @@ export async function POST(req: Request) {
 
     if (readError || !row?.intake) {
       throw new Error(`case study ${caseStudyId} has no intake to compile`)
+    }
+
+    // Fail in milliseconds rather than in four minutes. The UI already
+    // refuses, but the UI is not the rule: an intake that cannot produce a
+    // legal document would otherwise burn a vision pass over six images and
+    // three opus calls before the validator said so — and the retry in
+    // between would push the model to invent the decision that is missing.
+    const blockers = compileBlockers(row.intake as Intake)
+    if (blockers.length > 0) {
+      await admin
+        .from('case_studies')
+        .update({ compile_claimed_at: null })
+        .eq('id', caseStudyId)
+      return Response.json(
+        { error: 'not_ready', message: blockers[0] },
+        { status: 422 }
+      )
     }
 
     const images = await loadImages(admin, caseStudyId)

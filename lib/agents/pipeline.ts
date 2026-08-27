@@ -66,8 +66,15 @@ export async function runPipeline(params: {
 
   const system = buildSynthesisSystem(tone, projectType)
   let notes: string[] = []
-  let lastDoc: SynthesisPayload | null = null
   let lastFailure = 'synthesis never produced a usable document'
+
+  // The best document seen so far: one that passed every validation rule,
+  // even if QA still had opinions about the prose. Kept because a later
+  // attempt can come back WORSE — observed in the wild, where attempt 1 was
+  // legal and attempt 2 regressed, and the whole compile was thrown away with
+  // a valid document already in hand.
+  let bestValid: { doc: CaseStudy; headline: string; issues: string[] } | null =
+    null
 
   for (let attempt = 0; attempt < MAX_SYNTHESIS_ATTEMPTS; attempt++) {
     const { text } = await callAgent({
@@ -92,7 +99,6 @@ export async function runPipeline(params: {
     }
 
     const doc: CaseStudy = { spine: parsed.value.spine, blocks: parsed.value.blocks }
-    lastDoc = parsed.value
 
     // The schema is the contract, so it is checked before spending a QA call.
     // A document that breaks it cannot render, and no amount of critique on
@@ -111,6 +117,13 @@ export async function runPipeline(params: {
       return { doc, headline, remainingIssues: [], attempts: attempt + 1 }
     }
 
+    // Valid, but the critic still has notes. Hold on to it — fewer notes wins
+    // if a later attempt is also valid, and having ANY valid document beats
+    // whatever the next attempt does.
+    if (!bestValid || issues.length < bestValid.issues.length) {
+      bestValid = { doc, headline, issues }
+    }
+
     // Last time round: ship it with the flags rather than burning another
     // call. The document is valid, and QA notes are opinions about prose.
     if (attempt === MAX_SYNTHESIS_ATTEMPTS - 1) {
@@ -120,11 +133,20 @@ export async function runPipeline(params: {
     notes = issues
   }
 
-  // Every attempt produced something unusable. Better to fail loudly than to
-  // store a document the renderer cannot draw.
+  // The last attempt was unusable — but an earlier one may not have been.
+  if (bestValid) {
+    return {
+      doc: bestValid.doc,
+      headline: bestValid.headline,
+      remainingIssues: bestValid.issues,
+      attempts: MAX_SYNTHESIS_ATTEMPTS,
+    }
+  }
+
+  // Nothing legal was produced at any point. Fail loudly rather than store a
+  // document the renderer cannot draw.
   throw new Error(
-    `Synthesis failed after ${MAX_SYNTHESIS_ATTEMPTS} attempts — ${lastFailure}` +
-      (lastDoc ? '' : ' (no parseable response at all)')
+    `Synthesis failed after ${MAX_SYNTHESIS_ATTEMPTS} attempts — ${lastFailure}`
   )
 }
 
