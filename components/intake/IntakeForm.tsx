@@ -12,6 +12,7 @@ import {
   buildIntake,
   buildReview,
   compileBlockers,
+  reviewNotes,
   emptyWizardState,
   nextStep,
   prevStep,
@@ -238,6 +239,10 @@ export function IntakeForm({ onCreated }: Props) {
               attachments.map((a) => a.id)
             )}
             blockers={compileBlockers(buildIntake(state))}
+            notes={reviewNotes(
+              buildIntake(state),
+              attachments.map((a) => a.id)
+            )}
             onJump={jumpTo}
           />
         )}

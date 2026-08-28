@@ -6,6 +6,8 @@ type Props = {
   sections: ReviewSection[]
   /** Reasons the case study cannot be written yet. Usually empty. */
   blockers: string[]
+  /** Worth knowing before writing, but never a reason to stop. */
+  notes: string[]
   onJump: (step: StepId, anchor: string) => void
 }
 
@@ -13,7 +15,7 @@ type Props = {
 // visible without making it a verdict: a neutral marker, a link to the answer,
 // and two buttons of equal weight. No score, no meter, no percentage — a
 // visible number makes people game the number and write long empty answers.
-export function ReviewScreen({ sections, blockers, onJump }: Props) {
+export function ReviewScreen({ sections, blockers, notes, onJump }: Props) {
   const firstThin = sections
     .flatMap((s) => s.entries)
     .find((e) => e.thin)
@@ -33,6 +35,15 @@ export function ReviewScreen({ sections, blockers, onJump }: Props) {
           Go to the decisions
         </button>
       )}
+
+      {notes.map((note) => (
+        <p
+          key={note}
+          className="mt-4 rounded-xl border border-line bg-canvas/60 px-4 py-3 text-xs leading-relaxed text-ink-soft"
+        >
+          {note}
+        </p>
+      ))}
 
       <div className="mt-6 space-y-5">
         {sections.map((section) => (

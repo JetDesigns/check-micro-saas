@@ -59,6 +59,11 @@ export const WIZARD_COPY = {
     'A case study is built from at least two decisions — the structure maps each one to what you learned and what you designed. Add one more in step 3.',
   blockerNoDecisions:
     'Step 3 is where the case study comes from. Add at least two decisions before writing.',
+
+  noteNoScreens:
+    'No screens attached, so the case study will be text only. You can add up to six in step 1 — reviewers look at the work as well as the reasoning.',
+  noteUnlabelledScreens:
+    'Your screens have no notes yet. Step 4 asks what each one shows, and that is what makes a caption point at a decision instead of describing the layout.',
 } as const
 
 // The words the spec forbids on the review screen. Two are English and three
@@ -319,6 +324,33 @@ export function compileBlockers(intake: Intake): string[] {
   }
 
   return blockers
+}
+
+/**
+ * Things worth saying before writing, none of which stop it.
+ *
+ * The first one exists because someone lost six uploads to a page reload and
+ * only found out by reading a finished case study with no pictures in it.
+ * Step 4 removes itself when there are no screens — correct, an empty step
+ * reads as a bug — but that left nothing anywhere in the wizard mentioning
+ * images, so their absence was invisible right up to the output.
+ */
+export function reviewNotes(
+  intake: Intake,
+  attachmentIds: string[] = []
+): string[] {
+  const notes: string[] = []
+
+  if (attachmentIds.length === 0) {
+    notes.push(WIZARD_COPY.noteNoScreens)
+  } else if (intake.image_notes.length === 0) {
+    // Uploaded, but step 4 was walked straight past. The captions will be
+    // guessed from the vision pass alone, which is exactly the "describes the
+    // UI" failure the caption rule exists to prevent.
+    notes.push(WIZARD_COPY.noteUnlabelledScreens)
+  }
+
+  return notes
 }
 
 export function isThin(answer: string | undefined): boolean {

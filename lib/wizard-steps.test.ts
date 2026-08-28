@@ -10,6 +10,7 @@ import {
   buildIntake,
   buildReview,
   compileBlockers,
+  reviewNotes,
   createDecision,
   emptyWizardState,
   isThin,
@@ -325,5 +326,45 @@ describe('wizard limits track the schema', () => {
   it('keeps DECISIONS_MIN equal to the spine minimum, since one decision makes one entry', () => {
     expect(DECISIONS_MIN).toBe(SPINE_MIN)
     expect(DECISIONS_MAX).toBe(SPINE_MAX)
+  })
+})
+
+describe('reviewNotes', () => {
+  // Six uploads were lost to a page reload, the wizard removed step 4 because
+  // there were no longer any screens, and nothing anywhere mentioned images
+  // again. The absence only became visible in the finished case study.
+  it('says so when there are no screens, because step 4 removes itself silently', () => {
+    const notes = reviewNotes(buildIntake(emptyWizardState()), [])
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toContain('text only')
+  })
+
+  it('says so when screens were uploaded but never described', () => {
+    const state = emptyWizardState()
+    state.attachmentIds = ['img-a']
+    const notes = reviewNotes(buildIntake(state), ['img-a'])
+    expect(notes[0]).toContain('Step 4')
+  })
+
+  it('stays quiet once the screens carry notes', () => {
+    const state = emptyWizardState()
+    state.attachmentIds = ['img-a']
+    state.imageNotes = { 'img-a': { shows: 'hero', notice: 'The rebuilt board' } }
+    expect(reviewNotes(buildIntake(state), ['img-a'])).toEqual([])
+  })
+
+  it('never stops the compile — a case study with no screens is still legal', () => {
+    const state = emptyWizardState()
+    for (const d of state.decisions) d.decided = 'Group the settings by intent'
+    expect(reviewNotes(buildIntake(state), [])).toHaveLength(1)
+    expect(compileBlockers(buildIntake(state))).toEqual([])
+  })
+
+  it('never phrases a note as a judgement', () => {
+    for (const note of reviewNotes(buildIntake(emptyWizardState()), [])) {
+      for (const word of DISCOURAGING_WORDS) {
+        expect(note.toLowerCase()).not.toContain(word)
+      }
+    }
   })
 })
