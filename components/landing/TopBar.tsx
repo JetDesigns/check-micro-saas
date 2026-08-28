@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useCallback, useEffect, useState } from 'react'
 import { AuthGateModal } from '@/components/auth/AuthGateModal'
 import { createClient } from '@/lib/supabase/client'
@@ -152,11 +154,12 @@ export function TopBar() {
 
         <nav className="flex items-center gap-1 sm:gap-2">
           {/* Text links drop below sm — three items plus the button overflow
-              a 375px bar. Buy credit is the one that has to survive. */}
-          {/* TODO: these have no destination yet — no /features section or
-              examples page exists. Wire them up when those ship. */}
+              a 375px bar. Buy credit is the one that has to survive. Below
+              that width SiteFooter is how these are reached instead. */}
+          {/* "Real examples" still has no destination: it needs a public case
+              study, and the read route it would live on is unbuilt. */}
           <span className="hidden items-center gap-1 sm:flex sm:gap-2">
-            <NavLink href="#features">Features</NavLink>
+            <NavLink href="/features">Features</NavLink>
             <NavLink href="#examples">Real examples</NavLink>
           </span>
 
@@ -234,14 +237,24 @@ Balance + Buy as one floating control: a soft white pill holding
 
 // ---------------------------------------------------------------------------
 
+// Hash hrefs stay plain anchors — next/link has nothing to prefetch for an
+// in-page target, and "Real examples" is still one.
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const className =
+    'rounded-xl px-3 py-2.5 text-sm text-ink-soft transition-colors hover:text-ink'
+
+  if (href.startsWith('#')) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    )
+  }
+
   return (
-    <a
-      href={href}
-      className="rounded-xl px-3 py-2.5 text-sm text-ink-soft transition-colors hover:text-ink"
-    >
+    <Link href={href} className={className}>
       {children}
-    </a>
+    </Link>
   )
 }
 

@@ -86,9 +86,10 @@ Dihapus pada 27 Agustus, atas keputusan eksplisit: `app/api/compile/`,
 `app/api/edit/`, `app/c/[id]/`, `app/writing/[id]/`, `lib/narrative.ts`, dan
 seluruh tipe narrative 8-section di `types/database.ts`.
 
-Yang tersisa di `app/`: landing, `/fixture`, `/api/checkout`,
-`/api/stripe/webhook`, `/api/unlock`, `/api/waitlist`, `/auth/callback`. Itu
-**tepat** bentuk produk pra-rilis yang sedang dijalankan.
+Yang tersisa di `app/`: landing, `/features`, `/fixture`, `/api/checkout`,
+`/api/compile`, `/api/stripe/webhook`, `/api/unlock`, `/api/waitlist`,
+`/auth/callback`. (`/api/compile` dibangun ulang di Phase 4; `/features`
+ditambahkan setelahnya.)
 
 `/api/unlock` **dipertahankan tapi dipangkas**: ia masih memotong kredit lewat
 `spend_credit` (bagian yang bisa merugikan orang kalau salah), tapi tidak lagi
@@ -186,6 +187,20 @@ Satu bug sungguhan ditemukan lewat verifikasi ini, bukan lewat penalaran:
 tiba di layar review **mengirim form sendiri** dan membuat satu baris tanpa
 ada yang menekan apa pun. Lihat Rechecks di bawah — penyebabnya React memakai
 ulang node DOM tombolnya.
+
+**Halaman `/features`.** Tautan nav pertama yang akhirnya punya tujuan.
+Keunggulan produk dijelaskan berpasangan dengan manfaatnya, dan **setiap klaim
+dicocokkan dengan daftar "Sudah terbukti"** — tidak ada tautan publik, harga,
+testimoni, atau angka pengguna, karena tidak satu pun dari itu benar hari ini.
+Harga sengaja absen: tombol beli disembunyikan `EARLY_ACCESS_MODE`, dan harga
+di halaman tanpa yang bisa dibeli mengulang inkonsistensi yang sama.
+
+`SiteFooter` dirender `sm:hidden` di landing. Bukan selera: layout landing
+terkunci `lg:h-screen` dan dua komentar panjang di `app/page.tsx` menjaga
+tingginya — footer di sana mengembalikan scroll ~130px yang "reads as a bug".
+Di bawah `sm` tautan nav memang hilang, jadi footer duduk persis di tempat
+yang membutuhkannya. Terukur sebelum dan sesudah: `scrollHeight` 800 di
+viewport 800, tidak berubah.
 
 **Phase 4 — pipeline agent, terbukti pada compile sungguhan.** Tiga agent
 (extraction · synthesis · QA), `/api/compile`, migration 0014. Dijalankan
@@ -406,8 +421,9 @@ kata) dan cuma dipakai layar review. Daftar frasa generik yang diminta spec
 ### 7. Sisa yang tidak terikat fase
 
 - Rate limit `/api/waitlist` — endpoint publik tanpa penahan
-- Dua tautan nav mati (`#features`, `#examples`) — kini satu-satunya isi nav di
-  desktop, jadi makin menonjol
+- **Satu** tautan nav mati: `#examples`. `Features` sudah punya halaman asli
+  (`/features`). Halaman contoh butuh case study publik, yang belum bisa ada
+  sampai Phase 6 membangun route bacanya
 - Top bar di HP tinggal wordmark
 - Race auth pada request bersamaan (terlihat dua kali)
 - Metadata Stripe pada transaksi sungguhan
@@ -638,11 +654,11 @@ copy polish. Preparing for real customers.
   screenshot — hydration timing / z-index. Logic benar (state + timer OK).
 - ~~Progress bar `/writing/[id]`~~ dan ~~sticky CTA truncate~~ — keduanya ikut
   terhapus bersama jalur lama. Tidak relevan lagi.
-- Dua tautan nav mati (`#features`, `#examples`). Sejak "Buy credit"
-  disembunyikan, keduanya jadi satu-satunya isi nav di desktop — makin
-  menonjol, makin mungkin diklik.
-- Top bar di HP tinggal wordmark: dua tautan nav tersembunyi di bawah `sm` dan
-  Buy credit kini juga hilang. Tidak rusak, tapi kosong.
+- `#examples` masih mati. `Features` sudah dibereskan — lihat di bawah.
+- Top bar di HP tinggal wordmark: tautan nav tersembunyi di bawah `sm` dan Buy
+  credit juga hilang. **`SiteFooter` sekarang menutupi sebagian**: ia render
+  `sm:hidden` di landing, jadi `/features` tetap terjangkau di HP. Top bar-nya
+  sendiri belum disentuh dan masih tidak punya menu hamburger.
 
 ## Reference files (di project root)
 

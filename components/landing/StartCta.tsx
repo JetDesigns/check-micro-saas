@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { EarlyAccessModal } from '@/components/landing/EarlyAccessModal'
+import { EarlyAccessButton } from '@/components/landing/EarlyAccessButton'
 import { DEMO_URL } from '@/lib/launch-mode'
 
 // Hero call to action. The primary button opens the early-access form as an
@@ -17,11 +16,8 @@ const DEMO_BUTTON_CLASS =
   'inline-flex items-center gap-2.5 rounded-xl border border-line bg-white px-5 py-3 text-sm font-medium text-ink-soft'
 
 export function StartCta() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
         {/* Always present, in one of two states.
 
             With NEXT_PUBLIC_DEMO_URL set it is a real anchor, opening in a
@@ -54,19 +50,8 @@ export function StartCta() {
             Watch demo
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black"
-        >
-          Get early access
-        </button>
-      </div>
-
-      {isModalOpen && (
-        <EarlyAccessModal onClose={() => setIsModalOpen(false)} />
-      )}
-    </>
+      <EarlyAccessButton />
+    </div>
   )
 }
 

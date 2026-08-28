@@ -1,3 +1,4 @@
+import { SiteFooter } from '@/components/landing/SiteFooter'
 import { StartCta } from '@/components/landing/StartCta'
 import { TopBar } from '@/components/landing/TopBar'
 import { IntakeFlow } from '@/components/intake/IntakeFlow'
@@ -74,6 +75,15 @@ export default function Home() {
           </p>
         </section>
       </div>
+
+      {/* Phone only, and the breakpoint is the whole point.
+
+          The top bar's text links are `hidden sm:flex`, so below 640px there
+          is no route to /features at all. Above it the bar already carries
+          them — and on lg this page is a viewport-locked grid whose height
+          two long comments above are devoted to protecting. A footer there
+          would put back the ~130px scroll that "reads as a bug". */}
+      <SiteFooter className="sm:hidden" />
     </main>
   )
 }
