@@ -146,11 +146,18 @@ export function TopBar() {
     <>
       <header className="flex items-center justify-between gap-6">
         {/* Wordmark is one text node so the flex gap only separates it from
-            the glyph — otherwise the full stop drifts away from the "k". */}
-        <span className="inline-flex items-center gap-2 text-[19px] font-semibold tracking-tight text-ink">
+            the glyph — otherwise the full stop drifts away from the "k".
+
+            A link, because /features carries no footer and the nav lists no
+            "Home": without this there is no way back to the landing from
+            there at any screen size. */}
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-[19px] font-semibold tracking-tight text-ink transition-opacity hover:opacity-70"
+        >
           <Mark />
           <span>Check.</span>
-        </span>
+        </Link>
 
         <nav className="flex items-center gap-1 sm:gap-2">
           {/* Text links drop below sm — three items plus the button overflow
