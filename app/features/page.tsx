@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { TopBar } from '@/components/landing/TopBar'
 import { SiteFooter } from '@/components/landing/SiteFooter'
 import { EarlyAccessButton } from '@/components/landing/EarlyAccessButton'
+import { CardBackdrop } from '@/components/landing/CardBackdrop'
 
 // What the product does and why its shape is unusual.
 //
@@ -55,6 +56,68 @@ export default function FeaturesPage() {
             rather than requested in a prompt and hoped for.
           </p>
         </header>
+
+        {/* ---- How it works ----
+
+            An overview row: the three columns are the sections below in
+            miniature, so someone who reads only this far still knows what the
+            product does. Eyebrow, rule, headline, cards, rule, closing. */}
+        <section className="mt-16">
+          <p className="text-[11px] font-semibold uppercase leading-[1.7] tracking-[0.2em] text-accent/70">
+            Built for how your work gets judged —
+            <br />
+            not for how it gets displayed
+          </p>
+
+          <hr className="mt-6 border-t border-line-soft" />
+
+          <h2
+            className={`mt-8 ${SERIF} text-3xl font-medium leading-[1.15] tracking-tight text-ink sm:text-4xl`}
+          >
+            Great screens don&rsquo;t get you hired. The thinking behind them
+            does.
+            <br />
+            Here&rsquo;s how Check works.
+          </h2>
+
+          <div className="mt-10 grid grid-cols-1 gap-7 sm:grid-cols-3">
+            <HowCard
+              title="Framed for the reviewer"
+              body="Every question is built around what a hiring team weighs — the decisions you made, not the screens you shipped."
+              blur={10}
+              shift={0}
+            >
+              <VignetteDecision />
+            </HowCard>
+
+            <HowCard
+              title="Your words, organized"
+              body="Answer in plain language. The review screen shows what is still brief, and nothing you did not say gets invented."
+              blur={22}
+              shift={45}
+            >
+              <VignetteReview />
+            </HowCard>
+
+            <HowCard
+              title="One decision, three levels"
+              body="What you found, what it demanded, and what you designed — mapped one to one and held in the schema."
+              blur={36}
+              shift={90}
+            >
+              <VignetteSpine />
+            </HowCard>
+          </div>
+
+          <hr className="mt-16 border-t border-line-soft" />
+
+          <p className="mt-16 max-w-2xl text-xl font-medium leading-snug tracking-[-0.01em] text-ink sm:text-2xl">
+            Nothing on the page is invented. Every sentence traces back to
+            something you actually said —
+            <br className="hidden sm:block" /> which is why you can defend it in
+            the room.
+          </p>
+        </section>
 
         {/* ---- The spine ---- */}
         <section className={SECTION}>
@@ -240,6 +303,122 @@ export default function FeaturesPage() {
 }
 
 // ---------------------------------------------------------------------------
+
+// The image card: atmospheric panel, white card floating inside it.
+//
+// The card contents are composed from divs rather than screenshots. This page
+// has no <img> anywhere and that is deliberate — a screenshot of a screen that
+// is still being built goes stale silently, and two of the three screens a
+// literal reading of this layout would want do not exist yet.
+function HowCard({
+  title,
+  body,
+  blur,
+  shift,
+  children,
+}: {
+  title: string
+  body: string
+  blur: number
+  shift: number
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <div className="relative aspect-[4/5] overflow-hidden rounded-2xl border border-line">
+        <CardBackdrop blur={blur} shift={shift} />
+        <div className="absolute inset-x-4 top-1/2 -translate-y-1/2">
+          <div className="rounded-xl border border-line-soft bg-surface p-3.5 shadow-[0_8px_24px_-6px_rgba(23,23,23,0.22)]">
+            {children}
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm font-medium text-ink">{title}</p>
+      <p className="mt-2 text-sm leading-relaxed text-ink-soft">{body}</p>
+    </div>
+  )
+}
+
+// The three vignettes mirror real screens: a step 3 decision block, a review
+// screen row, and the spine strip that appears full size further down.
+
+function VignetteDecision() {
+  return (
+    <div>
+      <p className="text-[8px] font-semibold uppercase tracking-[0.18em] text-accent">
+        Decision 1
+      </p>
+      <p className="mt-2 text-[9px] font-medium text-ink">
+        What did you decide?
+      </p>
+      <div className="mt-1.5 h-4 rounded border border-line bg-canvas/60" />
+      <p className="mt-2.5 text-[9px] font-medium text-ink">
+        What made you decide it?
+      </p>
+      <div className="mt-1.5 space-y-1 rounded border border-line bg-canvas/60 p-1.5">
+        <div className="h-1 w-full rounded-full bg-line" />
+        <div className="h-1 w-4/5 rounded-full bg-line" />
+      </div>
+    </div>
+  )
+}
+
+function VignetteReview() {
+  return (
+    <div className="divide-y divide-line-soft">
+      {[
+        { label: 'What was wrong before?', value: 'The screen cleared itself', thin: false },
+        { label: 'Why did it matter?', value: 'Not answered', thin: true },
+      ].map((row) => (
+        <div key={row.label} className="flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0">
+          <div className="min-w-0">
+            <p className="text-[8px] text-ink-muted">{row.label}</p>
+            <p
+              className={
+                'mt-0.5 truncate text-[9px] ' +
+                (row.thin ? 'italic text-ink-muted' : 'text-ink')
+              }
+            >
+              {row.value}
+            </p>
+          </div>
+          {row.thin && (
+            <span className="shrink-0 rounded-full bg-canvas px-1.5 py-0.5 text-[7px] text-ink-muted">
+              Still short
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function VignetteSpine() {
+  return (
+    <div className="space-y-2">
+      {[
+        { label: 'Finding', text: 'Nurses photographed the screen' },
+        { label: 'Requirement', text: 'It had to survive the shift' },
+      ].map((row) => (
+        <div key={row.label}>
+          <p className="text-[7px] font-semibold uppercase tracking-[0.18em] text-accent">
+            {row.label}
+          </p>
+          <p className="mt-0.5 text-[9px] leading-snug text-ink-soft">{row.text}</p>
+        </div>
+      ))}
+      <div className="border-t border-line-soft pt-2">
+        <p className="text-[7px] font-semibold uppercase tracking-[0.18em] text-accent">
+          Move
+        </p>
+        <p className={`mt-0.5 ${SERIF} text-[11px] leading-snug text-ink`}>
+          Freeze the note at shift change
+        </p>
+      </div>
+    </div>
+  )
+}
 
 function SpineCell({
   label,
