@@ -1,17 +1,14 @@
-// The notched card from the reference layout.
+// One feature card: label, dot glyph, description, isometric figure.
 //
-// The chamfered top-right corner is two stacked clip-paths, not a border.
-// clip-path cuts through a CSS border, so the diagonal comes out unstroked
-// while the other four edges keep their line — the card looks broken at
-// exactly one corner. Drawing the outline as a filled shape underneath and
-// insetting the surface by a pixel gives a rule that follows the notch all the
-// way round.
+// Square corners and a plain rule. An earlier version chamfered the top-right
+// corner, which took two stacked clip-paths to pull off — clip-path cuts
+// through a CSS border, so the diagonal came out unstroked while the other
+// four edges kept their line. With the notch gone the whole apparatus goes
+// with it and this is a bordered div again.
 //
-// Everything else is the app's existing language: the same eyebrow the wizard
-// and the document renderer use, warm neutral tokens, no third typeface. The
+// The type is the app's existing language: the same eyebrow the wizard and the
+// document renderer use, warm neutral tokens, no third typeface. The
 // reference's monospace label was deliberately not adopted.
-
-const NOTCH = 'polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%)'
 
 type Props = {
   label: string
@@ -23,28 +20,23 @@ type Props = {
 
 export function FeatureCard({ label, body, glyph, children }: Props) {
   return (
-    <div className="bg-line p-px" style={{ clipPath: NOTCH }}>
-      <div
-        className="flex h-full flex-col bg-surface p-5"
-        style={{ clipPath: NOTCH }}
-      >
-        {/* Two lines' worth of room whether the label needs it or not.
-            Without it a one-line label pulls its description up and the four
-            cards stop reading as a row. */}
-        <div className="flex min-h-[2.9em] items-start justify-between gap-3">
-          <p className="text-[11px] font-semibold uppercase leading-[1.5] tracking-[0.2em] text-ink">
-            {label}
-          </p>
-          <DotGlyph cells={glyph} />
-        </div>
+    <div className="flex h-full flex-col border border-line bg-surface p-5">
+      {/* Two lines' worth of room whether the label needs it or not. Without
+          it a one-line label pulls its description up and the four cards stop
+          reading as a row. */}
+      <div className="flex min-h-[2.9em] items-start justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase leading-[1.5] tracking-[0.2em] text-ink">
+          {label}
+        </p>
+        <DotGlyph cells={glyph} />
+      </div>
 
-        <p className="mt-7 text-sm leading-relaxed text-ink-soft">{body}</p>
+      <p className="mt-7 text-sm leading-relaxed text-ink-soft">{body}</p>
 
-        <div className="mt-auto" />
+      <div className="mt-auto" />
 
-        <div className="mt-6 aspect-[4/3] overflow-hidden border border-line-soft bg-canvas/40">
-          {children}
-        </div>
+      <div className="mt-6 aspect-[4/3] overflow-hidden border border-line-soft bg-canvas/40">
+        {children}
       </div>
     </div>
   )
