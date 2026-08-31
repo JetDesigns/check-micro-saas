@@ -1,29 +1,33 @@
-// Isometric line figures for the feature cards.
+// Axonometric diagrams for the feature cards.
 //
-// One projection, four compositions, and each one draws the thing its card
-// claims — swap any two and the page stops making sense. That is the bar: a
-// figure here is a diagram, not decoration.
+// Three rules hold these together, and each one replaced something that read
+// as generic:
 //
-// The projection is the standard 2:1 isometric: x runs right-and-down, y runs
-// left-and-down, z is straight up. Coordinates are in grid units, which keeps
-// a composition readable as "a box at 0,0 that is two wide" instead of as a
-// wall of hand-tuned path data.
+// 1. LONG LABELS ARE HORIZONTAL, on a leader. Skewing text into the drawing
+//    plane looks technical only while the string is short — the reference does
+//    it with "88K". Run "REQUIREMENT" down a 30° slope at 6px and it stops
+//    being readable, which is a real cost for a decorative gain. Short numeric
+//    tokens stay in-plane; words get a leader line, the way a drawing does it.
 //
-// Labels sit ON the faces rather than floating over them. That is what makes
-// the reference read as drawn rather than annotated, and it costs one matrix
-// per face — derived from the projection's own partial derivatives, see
-// FaceText.
+// 2. ONE THING IS EMPHASISED per figure, tinted with `accent`. Everything at
+//    the same weight is the same as nothing being weighted: the eye has no
+//    entry point and the drawing reads as texture.
+//
+// 3. THE FORM CARRIES THE MEANING. Boxes arranged in isometric are the stock
+//    illustration cliché. A stack of equal slabs with one missing says
+//    "omitted"; lines of type that are all the same length say "machine
+//    -written". Those are drawings of the claim, not shapes beside it.
+//
+// Projection is standard 2:1 axonometric: x runs right-and-down, y runs
+// left-and-down, z is up. Coordinates are grid units.
 
-const K = 14
+const K = 17
 const COS30 = 0.866
-const ORIGIN_X = 100
-const ORIGIN_Y = 92
+const CX = 100
+const CY = 82
 
 function isoXY(x: number, y: number, z = 0): [number, number] {
-  return [
-    ORIGIN_X + (x - y) * COS30 * K,
-    ORIGIN_Y + ((x + y) * 0.5 - z) * K,
-  ]
+  return [CX + (x - y) * COS30 * K, CY + ((x + y) * 0.5 - z) * K]
 }
 
 function iso(x: number, y: number, z = 0): string {
@@ -31,157 +35,171 @@ function iso(x: number, y: number, z = 0): string {
   return `${sx.toFixed(1)},${sy.toFixed(1)}`
 }
 
-const STROKE = 'var(--color-ink-muted)'
-const LABEL = 'var(--color-ink-muted)'
+const EDGE = 'var(--color-ink-muted)'
+const FAINT = 'var(--color-ink-muted)'
 const TOP = 'var(--color-surface)'
-const LEFT = 'var(--color-line-soft)'
-const RIGHT = 'var(--color-line)'
+const SIDE_L = 'var(--color-line-soft)'
+const SIDE_R = 'var(--color-line)'
+const ACCENT = 'var(--color-accent)'
 
-// Text lying in one of the three visible planes.
-//
-// matrix(a,b,c,d,e,f) sends the glyph's own x-axis to (a,b) and its y-axis to
-// (c,d). Feed those the projection's unit vectors and the type lands in the
-// plane: ∂/∂x = (0.866, 0.5), ∂/∂y = (-0.866, 0.5), ∂/∂z = (0, -1). Columns
-// stay unit length, so fontSize is still in grid-space units.
-const FACE_MATRIX = {
-  top: (x: number, y: number) => `matrix(0.866, 0.5, -0.866, 0.5, ${x}, ${y})`,
-  left: (x: number, y: number) => `matrix(0.866, 0.5, 0, 1, ${x}, ${y})`,
-  right: (x: number, y: number) => `matrix(0.866, -0.5, 0, 1, ${x}, ${y})`,
-} as const
+// Object edges and construction lines carry different weights on purpose —
+// it is the cheapest hierarchy a line drawing has, and the previous version
+// spent it on nothing by drawing everything at 0.9.
+const W_EDGE = 0.9
+const W_GUIDE = 0.6
 
-// SVG text hangs UP from its baseline, so an anchor placed near the top of a
-// face pushes the glyphs out through the top edge. At these sizes the ascent
-// is about 0.35 grid units — anchor that far below the top at least.
-function FaceText({
-  at,
-  face = 'top',
-  size = 5,
-  children,
-}: {
-  at: [number, number, number]
-  face?: keyof typeof FACE_MATRIX
-  size?: number
-  children: string
-}) {
-  const [sx, sy] = isoXY(at[0], at[1], at[2])
-  return (
-    <text
-      transform={FACE_MATRIX[face](sx, sy)}
-      fontSize={size}
-      fill={LABEL}
-      fontWeight={600}
-      letterSpacing="0.1"
-    >
-      {children}
-    </text>
-  )
-}
-
-function Box({
-  x,
-  y,
-  z = 0,
-  w,
-  d,
-  h,
-  topFill = TOP,
-  opacity = 1,
-}: {
+type SlabProps = {
   x: number
   y: number
   z?: number
   w: number
   d: number
   h: number
-  topFill?: string
-  opacity?: number
-}) {
-  const face = (pts: string[]) => pts.join(' ')
+  accent?: boolean
+  ghost?: boolean
+}
+
+/** A solid, or its absence drawn as an outline. */
+function Slab({ x, y, z = 0, w, d, h, accent = false, ghost = false }: SlabProps) {
+  const pts = {
+    top: [
+      iso(x, y, z + h),
+      iso(x + w, y, z + h),
+      iso(x + w, y + d, z + h),
+      iso(x, y + d, z + h),
+    ].join(' '),
+    left: [
+      iso(x, y + d, z),
+      iso(x + w, y + d, z),
+      iso(x + w, y + d, z + h),
+      iso(x, y + d, z + h),
+    ].join(' '),
+    right: [
+      iso(x + w, y, z),
+      iso(x + w, y + d, z),
+      iso(x + w, y + d, z + h),
+      iso(x + w, y, z + h),
+    ].join(' '),
+  }
+
+  if (ghost) {
+    return (
+      <g
+        fill="none"
+        stroke={ACCENT}
+        strokeWidth={W_GUIDE}
+        strokeDasharray="2.4 2.2"
+        opacity="0.7"
+      >
+        <polygon points={pts.top} />
+        <polygon points={pts.left} />
+        <polygon points={pts.right} />
+      </g>
+    )
+  }
+
   return (
-    <g opacity={opacity} strokeWidth="0.9" stroke={STROKE} strokeLinejoin="round">
-      <polygon
-        points={face([
-          iso(x, y + d, z),
-          iso(x + w, y + d, z),
-          iso(x + w, y + d, z + h),
-          iso(x, y + d, z + h),
-        ])}
-        fill={LEFT}
-      />
-      <polygon
-        points={face([
-          iso(x + w, y, z),
-          iso(x + w, y + d, z),
-          iso(x + w, y + d, z + h),
-          iso(x + w, y, z + h),
-        ])}
-        fill={RIGHT}
-      />
-      <polygon
-        points={face([
-          iso(x, y, z + h),
-          iso(x + w, y, z + h),
-          iso(x + w, y + d, z + h),
-          iso(x, y + d, z + h),
-        ])}
-        fill={topFill}
-      />
+    <g stroke={EDGE} strokeWidth={W_EDGE} strokeLinejoin="round">
+      <polygon points={pts.left} fill={accent ? ACCENT : SIDE_L} opacity={accent ? 0.16 : 1} />
+      <polygon points={pts.right} fill={accent ? ACCENT : SIDE_R} opacity={accent ? 0.24 : 1} />
+      <polygon points={pts.top} fill={accent ? ACCENT : TOP} opacity={accent ? 0.1 : 1} />
+      {accent && (
+        <>
+          <polygon points={pts.left} fill="none" />
+          <polygon points={pts.right} fill="none" />
+          <polygon points={pts.top} fill="none" />
+        </>
+      )}
     </g>
   )
 }
 
-function Plate({
-  x,
-  y,
-  z,
-  w,
-  d,
-  dashed = false,
-}: {
-  x: number
-  y: number
-  z: number
-  w: number
-  d: number
-  dashed?: boolean
-}) {
+/** Dashed footprint. Gives every figure the same ground so the four align. */
+function Ground({ x, y, w, d }: { x: number; y: number; w: number; d: number }) {
   return (
     <polygon
-      points={[
-        iso(x, y, z),
-        iso(x + w, y, z),
-        iso(x + w, y + d, z),
-        iso(x, y + d, z),
-      ].join(' ')}
-      fill={dashed ? 'none' : TOP}
-      stroke={STROKE}
-      strokeWidth="0.9"
-      strokeDasharray={dashed ? '2.5 2.5' : undefined}
-      opacity={dashed ? 0.6 : 1}
+      points={[iso(x, y), iso(x + w, y), iso(x + w, y + d), iso(x, y + d)].join(' ')}
+      fill="none"
+      stroke={FAINT}
+      strokeWidth={W_GUIDE}
+      strokeDasharray="2.4 2.4"
+      opacity="0.45"
     />
   )
 }
 
-function Guide({
+/**
+ * A horizontal label on a leader, the way a drawing annotates a part.
+ *
+ * `from` is a point on the figure in grid space, `at` is where the type sits
+ * in screen space. Horizontal, because that is the whole point.
+ */
+function Callout({
   from,
-  to,
+  at,
+  children,
+  anchor = 'start',
+  size = 6,
+  emphasis = false,
 }: {
   from: [number, number, number]
-  to: [number, number, number]
+  at: [number, number]
+  children: string
+  anchor?: 'start' | 'end'
+  size?: number
+  emphasis?: boolean
 }) {
-  const [x1, y1] = isoXY(...from)
-  const [x2, y2] = isoXY(...to)
+  const [fx, fy] = isoXY(...from)
+  const [tx, ty] = at
+
   return (
-    <line
-      x1={x1}
-      y1={y1}
-      x2={x2}
-      y2={y2}
-      stroke={STROKE}
-      strokeWidth="0.7"
-      strokeDasharray="2.5 2.5"
-      opacity="0.5"
-    />
+    <g>
+      <line
+        x1={fx}
+        y1={fy}
+        x2={anchor === 'end' ? tx + 3 : tx - 3}
+        y2={ty - 2}
+        stroke={emphasis ? ACCENT : FAINT}
+        strokeWidth={W_GUIDE}
+        opacity={emphasis ? 0.8 : 0.55}
+      />
+      <circle cx={fx} cy={fy} r="1.3" fill={emphasis ? ACCENT : FAINT} opacity={emphasis ? 0.9 : 0.6} />
+      <text
+        x={tx}
+        y={ty}
+        fontSize={size}
+        textAnchor={anchor}
+        fill={emphasis ? ACCENT : FAINT}
+        fontWeight={600}
+        letterSpacing="0.55"
+      >
+        {children}
+      </text>
+    </g>
+  )
+}
+
+/** In-plane text, reserved for tokens short enough to survive the skew. */
+function TopLabel({
+  at,
+  children,
+  size = 5.4,
+}: {
+  at: [number, number, number]
+  children: string
+  size?: number
+}) {
+  const [sx, sy] = isoXY(...at)
+  return (
+    <text
+      transform={`matrix(0.866, 0.5, -0.866, 0.5, ${sx}, ${sy})`}
+      fontSize={size}
+      fill={FAINT}
+      fontWeight={600}
+      letterSpacing="0.3"
+    >
+      {children}
+    </text>
   )
 }
 
@@ -193,145 +211,174 @@ function Figure({ children }: { children: React.ReactNode }) {
   )
 }
 
-// --- 1. Shows how you think ------------------------------------------------
-// The spine itself, named. Three levels of one idea with the mapping drawn
-// between them: a finding holds up a requirement, which holds up a move.
+// --- 1. Shows how you think -----------------------------------------------
+// An exploded stack: one idea at three resolutions, threaded together. The
+// thread is the claim — the levels are tied, not merely piled — so it is the
+// element drawn in accent.
 export function IsoSpine() {
-  const levels: Array<[number, string]> = [
-    [0, 'FINDING'],
-    [2.3, 'REQUIREMENT'],
-    [4.6, 'MOVE'],
+  const levels: Array<{ z: number; label: string }> = [
+    { z: 0, label: 'FINDING' },
+    { z: 1.55, label: 'REQUIREMENT' },
+    { z: 3.1, label: 'MOVE' },
   ]
 
   return (
     <Figure>
-      {levels.map(([z]) => (
-        <Plate key={z} x={-2} y={-2} z={z} w={4} d={4} />
+      {/* Shifted right so the leader column has room. "REQUIREMENT" is the
+          longest string in the set and it ran off the left edge at x = -1.7 —
+          measured, not eyeballed. */}
+      <g transform="translate(15, 2)">
+      <Ground x={-1.6} y={-1.6} w={3.2} d={3.2} />
+
+      {/* The thread, behind the slabs so it reads as passing through them. */}
+      <line
+        x1={isoXY(0, 0, -0.5)[0]}
+        y1={isoXY(0, 0, -0.5)[1]}
+        x2={isoXY(0, 0, 3.8)[0]}
+        y2={isoXY(0, 0, 3.8)[1]}
+        stroke={ACCENT}
+        strokeWidth={W_GUIDE}
+        opacity="0.55"
+      />
+
+      {levels.map(({ z }) => (
+        <Slab key={z} x={-1.6} y={-1.6} z={z} w={3.2} d={3.2} h={0.26} />
       ))}
 
-      {/* The 1:1 mapping. Three corners tied through every level. */}
-      <Guide from={[-2, -2, 0]} to={[-2, -2, 4.6]} />
-      <Guide from={[2, -2, 0]} to={[2, -2, 4.6]} />
-      <Guide from={[2, 2, 0]} to={[2, 2, 4.6]} />
-
-      {levels.map(([z, label]) => (
-        <FaceText key={label} at={[-1.65, 0.35, z]} size={6}>
+      {levels.map(({ z, label }) => (
+        <Callout
+          key={label}
+          from={[-1.6, 1.6, z + 0.26]}
+          at={[isoXY(-1.6, 1.6, z + 0.26)[0] - 8, isoXY(-1.6, 1.6, z + 0.26)[1] + 2]}
+          anchor="end"
+          size={5.6}
+        >
           {label}
-        </FaceText>
+        </Callout>
       ))}
+      </g>
     </Figure>
   )
 }
 
 // --- 2. Finished, not postponed -------------------------------------------
-// Five steps, counted, on a base that shows how far there is to go from the
-// start. Nothing between them to climb over.
+// Five equal cards in a row with a thread running through them — a sequence,
+// not a bar chart. Equal heights matter: ascending blocks would say "more",
+// and the claim is "all five, then done".
 export function IsoSteps() {
-  const steps = ['01', '02', '03', '04', '05']
+  const xs = [-2.7, -1.35, 0, 1.35, 2.7]
 
   return (
     <Figure>
-      <Plate x={-3} y={-2.2} z={0} w={6} d={4.4} dashed />
+      <Ground x={-3.4} y={-1.3} w={6.8} d={2.6} />
 
-      {/* Two passes, and the order is the whole reason the numbers are
-          legible. Drawing each block with its own label interleaved put every
-          label under the next block's polygons — the staircase ascends toward
-          the viewer, so each step paints over the one behind it. Boxes first,
-          then every label on top. */}
-      {steps.map((n, i) => (
-        <Box key={n} x={-2.7 + i * 1.12} y={-1.1} w={0.9} d={2.2} h={1 + i * 0.45} />
+      <line
+        x1={isoXY(-3.4, 0)[0]}
+        y1={isoXY(-3.4, 0)[1]}
+        x2={isoXY(3.4, 0)[0]}
+        y2={isoXY(3.4, 0)[1]}
+        stroke={FAINT}
+        strokeWidth={W_GUIDE}
+        strokeDasharray="2.4 2.4"
+        opacity="0.5"
+      />
+
+      {xs.map((x, i) => (
+        <Slab
+          key={x}
+          x={x - 0.58}
+          y={-1}
+          w={1.16}
+          d={2}
+          h={0.34}
+          accent={i === xs.length - 1}
+        />
       ))}
-      {steps.map((n, i) => (
-        <FaceText
-          key={n}
-          at={[-2.7 + i * 1.12 + 0.18, 1.1, 1 + i * 0.45 - 0.5]}
-          face="left"
-          size={5.2}
-        >
-          {n}
-        </FaceText>
+
+      {/* Two characters survive the skew where a word would not. */}
+      {xs.map((x, i) => (
+        <TopLabel key={x} at={[x - 0.42, 0.42, 0.34]} size={5.6}>
+          {`0${i + 1}`}
+        </TopLabel>
       ))}
+
     </Figure>
   )
 }
 
 // --- 3. Nothing to walk back ----------------------------------------------
-// Three blocks that came from an answer, and one slot left as an outline.
-// That gap is the product declining to fill a block it has no number for —
-// stat_headline must contain a digit or it is dropped, not invented.
+// Four equal slots, three filled, one left as an outline. Equal footprints are
+// what make the gap unmistakable — the earlier version varied the heights and
+// the absence just looked like another shape.
 export function IsoOmitted() {
+  const slots: Array<[number, number]> = [
+    [-1.7, -1.7],
+    [0.1, -1.7],
+    [-1.7, 0.1],
+  ]
+
   return (
     <Figure>
-      <Plate x={-2.4} y={-2.4} z={0} w={4.8} d={4.8} dashed />
+      <Ground x={-2} y={-2} w={4} d={4} />
 
-      <Box x={-2.1} y={-2.1} w={1.8} d={1.8} h={1.5} />
-      <Box x={0.3} y={-2.1} w={1.8} d={1.8} h={1.05} />
-      <Box x={-2.1} y={0.3} w={1.8} d={1.8} h={0.85} />
+      {slots.map(([x, y]) => (
+        <Slab key={`${x}${y}`} x={x} y={y} w={1.6} d={1.6} h={0.95} />
+      ))}
 
-      <Plate x={0.3} y={0.3} z={0} w={1.8} d={1.8} dashed />
-      <FaceText at={[0.45, 1.15, 0]} size={5.6}>
-        OMITTED
-      </FaceText>
+      <Slab x={0.1} y={0.1} w={1.6} d={1.6} h={0.95} ghost />
 
-      {/* Drafting-style callout, the way the reference points at a value. */}
-      <line
-        x1={isoXY(2.1, 2.1, 0)[0]}
-        y1={isoXY(2.1, 2.1, 0)[1]}
-        x2={168}
-        y2={128}
-        stroke={STROKE}
-        strokeWidth="0.7"
-        strokeDasharray="2.5 2.5"
-        opacity="0.6"
-      />
-      <circle cx={isoXY(2.1, 2.1, 0)[0]} cy={isoXY(2.1, 2.1, 0)[1]} r="1.6" fill={STROKE} />
-      <text x="166" y="137" fontSize="6" fill={LABEL} textAnchor="end" letterSpacing="0.1">
-        no number given
-      </text>
+      <Callout from={[1.7, 1.7, 0]} at={[186, 138]} anchor="end" size={5.4} emphasis>
+        NO NUMBER GIVEN
+      </Callout>
     </Figure>
   )
 }
 
 // --- 4. Still sounds like you ---------------------------------------------
-// Two blocks, same footprint, different weight: the preset sits low and plain,
-// the writer's own words sit taller and carry the texture. Which one wins is
-// the whole point of the card.
+// Two pages of type seen from above. The preset's lines are all one length;
+// yours are not. Uniform sentence length is the loudest signal of machine
+// writing — AGENTS.md says so in the prompt rules — so drawing that is drawing
+// the difference, where a hatched cube only said "this one is different".
 export function IsoVoice() {
+  const preset = [1.25, 1.25, 1.25, 1.25]
+  const yours = [1.5, 0.6, 1.35, 0.85]
+
+  const page = (
+    ox: number,
+    oy: number,
+    lines: number[],
+    accent: boolean
+  ) => (
+    <g>
+      <Slab x={ox} y={oy} w={1.9} d={2.3} h={0.22} accent={accent} />
+      {lines.map((len, i) => (
+        <line
+          key={i}
+          x1={isoXY(ox + 0.24, oy + 0.42 + i * 0.5, 0.22)[0]}
+          y1={isoXY(ox + 0.24, oy + 0.42 + i * 0.5, 0.22)[1]}
+          x2={isoXY(ox + 0.24 + len, oy + 0.42 + i * 0.5, 0.22)[0]}
+          y2={isoXY(ox + 0.24 + len, oy + 0.42 + i * 0.5, 0.22)[1]}
+          stroke={accent ? ACCENT : EDGE}
+          strokeWidth={0.8}
+          opacity={accent ? 0.85 : 0.45}
+        />
+      ))}
+    </g>
+  )
+
   return (
     <Figure>
-      <defs>
-        <pattern
-          id="iso-voice-hatch"
-          width="2.6"
-          height="2.6"
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(28)"
-        >
-          <line x1="0" y1="0" x2="0" y2="2.6" stroke={STROKE} strokeWidth="0.6" />
-        </pattern>
-      </defs>
+      <Ground x={-2.5} y={-2.5} w={5} d={5} />
 
-      <Plate x={-2.9} y={-2.9} z={0} w={5.8} d={5.8} dashed />
+      {page(-2.2, 0.2, preset, false)}
+      {page(0.3, -2.3, yours, true)}
 
-      {/* Separated along (x − y), which is the screen's horizontal axis in
-          this projection. Offsetting in x alone looks like a gap in grid
-          space and still overlaps on screen. */}
-      <Box x={-2.6} y={0.2} w={2.2} d={2.2} h={0.9} />
-      <FaceText at={[-2.4, 2.4, 0.4]} face="left" size={5}>
+      <Callout from={[-2.2, 2.5, 0.22]} at={[48, 136]} anchor="end" size={5.4}>
         PRESET
-      </FaceText>
-
-      <Box
-        x={0.4}
-        y={-2.4}
-        w={2.2}
-        d={2.2}
-        h={2}
-        topFill="url(#iso-voice-hatch)"
-      />
-      <FaceText at={[0.6, -0.2, 1.5]} face="left" size={5}>
+      </Callout>
+      <Callout from={[2.2, -2.3, 0.22]} at={[188, 34]} anchor="end" size={5.4} emphasis>
         YOUR WORDS
-      </FaceText>
+      </Callout>
     </Figure>
   )
 }
