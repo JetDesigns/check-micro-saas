@@ -6,10 +6,13 @@
 Lanjut Check di ~/dev/check-microsaas.
 
 Wajib baca dulu, urut:
-1. check-revision-prompt.md (root project) — spec revisi. INI sumber
-   kebenaran untuk semua pekerjaan sekarang.
-2. AGENTS.md — arsitektur, keputusan terkunci, environment gotchas.
-3. HANDOFF.md — bagian "BELUM terverifikasi" DULU, baru "Sudah terbukti",
+1. check-revision-prompt.md (root project) — build order per fase.
+2. check-case-study-framework.md (root project) — struktur output:
+   Gate 0 evidence type, Fixed Core vs Optional Modules, placement
+   logic Results, dan daftar anti-pattern. Dua spec ini tidak saling
+   menggantikan.
+3. AGENTS.md — arsitektur, keputusan terkunci, environment gotchas.
+4. HANDOFF.md — bagian "BELUM terverifikasi" DULU, baru "Sudah terbukti",
    supaya tidak salah mengira sesuatu aman padahal belum pernah diuji.
 
 PENTING: produknya baru saja GANTI GENRE. Dulu sales collateral (case
@@ -304,7 +307,9 @@ Semuanya sudah menghasilkan kesimpulan salah, sebagian di sesi ini juga.
 
 | Jalur | Isi |
 |---|---|
-| `check-revision-prompt.md` | **Spec revisi. Sumber kebenaran untuk semua fase.** |
+| `check-revision-prompt.md` | **Build order per fase.** |
+| `check-case-study-framework.md` | **Struktur output.** Gate 0, Fixed Core + Optional Modules, placement logic Results, anti-pattern |
+| `claude-code-prompt-wizard-changes.md` | Addendum yang mendorong `approach_framework` + evidence type turunan |
 | `lib/case-study-blocks.ts` | Schema blok + 8 aturan validasi. Kontrak antara agent dan renderer |
 | `lib/fixtures/case-study-fixture.ts` | Case study buatan tangan untuk menguji renderer tanpa agent |
 | `components/case-study/CaseStudyDocument.tsx` | Perakitan halaman 7 bagian + sticky nav dari spine |
@@ -397,6 +402,26 @@ Semuanya tercatat per panggilan di `agent_runs` — itu tabelnya ada.
 berstatus `preview` dengan dokumen asli hasil pipeline. Bukan sampah uji —
 Phase 6 butuh sesuatu yang nyata untuk dirender. Lihat lewat
 `/fixture?id=47bb55c8-eee8-47c6-9214-573c57c34ab9`.
+
+**Framework output — sebagian sudah dipasang, satu bagian menunggu kredit.**
+`check-case-study-framework.md` masuk belakangan dan tiga dari empat
+perubahannya sudah jalan: field `approach_framework` di Step 3,
+`evidenceType()` sebagai logika turunan (bukan pertanyaan, bukan kolom
+tersimpan), dan penempatan Results yang bercabang mengikutinya di
+`CaseStudyDocument`.
+
+**Yang tertunda: tag Decision→Problem** (Change 3 di
+`claude-code-prompt-wizard-changes.md`). Ia inferensi semantik di dalam
+synthesis — butuh perubahan prompt, field baru di `move_section` beserta
+validator dan renderer-nya, dan **hanya bisa dibuktikan dengan menjalankan
+model**. Aturan intinya ("kalau confidence rendah, hilangkan tag; tag hilang
+lebih baik daripada tag salah") tidak punya arti sampai dijalankan pada
+transcript sungguhan. Ditunda dengan sengaja, bukan terlewat.
+
+**Anti-pattern validation** dari spec juga belum ada. Sebagiannya deterministik
+dan bisa ditulis sebagai kode tanpa kredit (Demo sebagai nav item, Credits yang
+membengkak), sebagiannya butuh penilaian model (penutup yang cuma sentimental,
+Results tanpa refleksi).
 
 ### 5. Phase 6 — editor per-blok + route baca  ⟵ MULAI DARI SINI
 
@@ -662,8 +687,12 @@ copy polish. Preparing for real customers.
 
 ## Reference files (di project root)
 
-- `check-revision-prompt.md` — **spec revisi. Sumber kebenaran untuk semua
-  pekerjaan sekarang.** Semua fase merujuk ke sini.
+- `check-revision-prompt.md` — **build order per fase.** Semua fase merujuk
+  ke sini.
+- `check-case-study-framework.md` — **struktur output.** Gate 0, Fixed Core
+  vs Optional Modules, placement logic Results, anti-pattern.
+- `claude-code-prompt-wizard-changes.md` — addendum wizard: field
+  `approach_framework` dan evidence type sebagai logika turunan.
 - `AGENTS.md` — arsitektur, keputusan terkunci, environment gotchas.
 - `README.md` — pintu depan repo; memimpin dengan status pra-rilis, karena
   "tombol wizard tidak melakukan apa-apa" adalah hal pertama yang akan dikira

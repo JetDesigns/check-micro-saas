@@ -41,12 +41,19 @@ Supabase project ref: `barsrclvvnuwjaqwecay` (ap-southeast-2).
 
 ## Locked product decisions — do not change without asking
 
-`check-revision-prompt.md` (repo root) is the spec the current build follows,
-and where a row below says a decision is Phase 2/4/6's to make, that file is
-where it gets made. **A row that points there is not an invitation to decide it
-yourself** — this table was actively misleading for a day because it kept
-describing a product that had already been deleted, which is exactly the failure
-being avoided here.
+Two specs govern, and they do not overlap. `check-revision-prompt.md` (repo
+root) holds the **build order** — where a row below says a decision is Phase
+2/4/6's to make, that file is where it gets made.
+`check-case-study-framework.md` holds the **output structure**: Gate 0
+(evidence type), the Fixed Core and Optional Modules table, the Results
+placement logic, and the anti-patterns a document must not ship with. Neither
+replaces the other; a question about *when* something gets built goes to the
+first, a question about *what the finished page contains* goes to the second.
+
+**A row below that points at either spec is not an invitation to decide it
+yourself.** This table was actively misleading for a day because it kept
+describing a product that had already been deleted, which is exactly the
+failure being avoided here.
 
 | Aspect | Decision |
 |---|---|
