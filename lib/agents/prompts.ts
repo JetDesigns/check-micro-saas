@@ -166,6 +166,18 @@ export function renderIntake(
   add('What constrained them', intake.constraints)
 
   lines.push('', '=== THE DECISIONS (these become the spine) ===')
+  if (intake.approach_framework?.trim()) {
+    add('Named approach tying them together', intake.approach_framework)
+    lines.push(
+      '  ^ The designer named this themselves. Use the name as they wrote it,',
+      '    and let it organise the approach section.'
+    )
+  } else {
+    lines.push(
+      '(The designer named no overall framework. DO NOT INVENT ONE — no coined',
+      'model name, no "I call this the X method". Write the reasoning plainly.)'
+    )
+  }
   if (intake.decisions.length === 0) {
     lines.push('(none given)')
   }

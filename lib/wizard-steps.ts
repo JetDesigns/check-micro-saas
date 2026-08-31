@@ -8,7 +8,12 @@
 // markup. Step order, what gets written to the database, and what the review
 // screen says are exactly the parts worth guarding.
 
-import { SPINE_MAX, SPINE_MIN, countWords } from '@/lib/case-study-blocks'
+import {
+  SPINE_MAX,
+  SPINE_MIN,
+  containsDigit,
+  countWords,
+} from '@/lib/case-study-blocks'
 import {
   INTAKE_FIELDS,
   OUTCOME_OPTIONS,
@@ -353,6 +358,29 @@ export function reviewNotes(
   return notes
 }
 
+/**
+ * Which shape of evidence this project has, which decides where Results sits
+ * in the finished document.
+ *
+ * Derived, never asked and never stored. Both inputs are already on the row,
+ * so persisting the answer would only create a second copy that goes stale the
+ * moment this rule changes.
+ *
+ * "A real figure" is `containsDigit` — the same test that decides whether a
+ * `stat_headline` block may exist at all (rule 6). One definition of "this is
+ * a number" for the wizard and the validator; a second one would drift.
+ *
+ * Shipping status deliberately does not enter into it. Shipped with nothing
+ * measured is still Type B: the placement question is whether there is proof
+ * to lead with, and "it launched" is not proof of anything moving.
+ */
+export type EvidenceType = 'A' | 'B'
+
+export function evidenceType(intake: Intake): EvidenceType {
+  const metrics = intake.metrics?.trim() ?? ''
+  return metrics && containsDigit(metrics) ? 'A' : 'B'
+}
+
 export function isThin(answer: string | undefined): boolean {
   const trimmed = answer?.trim() ?? ''
   if (!trimmed) return true
@@ -429,23 +457,24 @@ export function buildReview(
   const sections: ReviewSection[] = [
     section(1, textEntries(1, intake)),
     section(2, textEntries(2, intake)),
-    section(
-      3,
+    section(3, [
+      // The framework name leads the step, so it leads the summary too.
+      ...textEntries(3, intake),
       // A decision is not judged by the length of what it decided. A move
       // title is meant to be a short imperative — "Freeze the note at shift
       // change" is six words and is exactly right — so measuring it would flag
       // the best answers in the form. What makes a decision thin is having
       // nothing behind it: `why` is what becomes the finding, and without one
       // the spine has a move suspended in mid-air.
-      intake.decisions.map((d, i) => ({
+      ...intake.decisions.map((d, i) => ({
         label: `Decision ${i + 1}`,
         value: d.decided.trim(),
         anchor: decisionElementId(d.id),
         step: 3 as StepId,
         empty: d.decided.trim() === '',
         thin: d.decided.trim() === '' || isThin(d.why),
-      }))
-    ),
+      })),
+    ]),
   ]
 
   if (attachmentIds.length > 0) {

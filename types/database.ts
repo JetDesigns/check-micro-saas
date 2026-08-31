@@ -59,6 +59,11 @@ export type Intake = {
 
   // Step 3 — the decisions. The spine is derived from these, so this is the
   // load-bearing part of the whole form.
+  //
+  // `approach_framework` sits above the decision blocks because it names what
+  // ties them together, if anything does. Optional and usually absent: most
+  // projects have no named model, and a fabricated one is worse than none.
+  approach_framework?: string
   decisions: Decision[]
 
   // Step 4 — your screens

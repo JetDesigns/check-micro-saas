@@ -10,6 +10,7 @@ import {
   buildIntake,
   buildReview,
   compileBlockers,
+  evidenceType,
   reviewNotes,
   createDecision,
   emptyWizardState,
@@ -197,8 +198,11 @@ describe('review screen', () => {
       'Nurses photographed the screen every shift because it sometimes cleared itself'
 
     const decisions = buildReview(buildIntake(state)).find((s) => s.step === 3)
-    expect(decisions?.entries[0].value).toBe('Freeze the note at shift change')
-    expect(decisions?.entries[0].thin).toBe(false)
+    // By label, not by index: the framework field leads this section now, and
+    // an index would quietly start asserting about the wrong row.
+    const first = decisions?.entries.find((e) => e.label === 'Decision 1')
+    expect(first?.value).toBe('Freeze the note at shift change')
+    expect(first?.thin).toBe(false)
   })
 
   it('calls a decision short when nothing explains it, because a move with no finding leaves the spine hanging', () => {
@@ -206,8 +210,9 @@ describe('review screen', () => {
     state.decisions[0].decided = 'Freeze the note at shift change'
 
     const decisions = buildReview(buildIntake(state)).find((s) => s.step === 3)
-    expect(decisions?.entries[0].thin).toBe(true)
-    expect(decisions?.entries[0].empty).toBe(false)
+    const first = decisions?.entries.find((e) => e.label === 'Decision 1')
+    expect(first?.thin).toBe(true)
+    expect(first?.empty).toBe(false)
   })
 
   it('leaves the screens section out when there are no screens, matching the step it links to', () => {
@@ -366,5 +371,71 @@ describe('reviewNotes', () => {
         expect(note.toLowerCase()).not.toContain(word)
       }
     }
+  })
+})
+
+describe('evidenceType', () => {
+  // Decides where Results sits in the finished document, so getting it wrong
+  // reorders the whole page. Derived from two answers already on the row —
+  // never asked, never stored, so it cannot go stale against its own rule.
+  it('reads a real figure as Type A', () => {
+    const state = emptyWizardState()
+    state.text.metrics = 'Handover reading time fell from 14 minutes to 7.'
+    expect(evidenceType(buildIntake(state))).toBe('A')
+  })
+
+  it('calls an unanswered metrics field Type B', () => {
+    expect(evidenceType(buildIntake(emptyWizardState()))).toBe('B')
+  })
+
+  // The case the framework spec calls out by name: shipping is not evidence.
+  it('keeps a shipped project with no numbers at Type B, because launching is not proof', () => {
+    const state = emptyWizardState()
+    state.outcome = 'shipped'
+    expect(evidenceType(buildIntake(state))).toBe('B')
+  })
+
+  it('is not fooled by a metrics answer that contains no number at all', () => {
+    const state = emptyWizardState()
+    state.text.metrics = 'Mostly usability. It felt much better afterwards.'
+    expect(evidenceType(buildIntake(state))).toBe('B')
+  })
+
+  it('accepts a percentage as readily as a duration, since the test is a digit', () => {
+    const state = emptyWizardState()
+    state.text.metrics = 'Bounce on the search page dropped to 39%.'
+    expect(evidenceType(buildIntake(state))).toBe('A')
+  })
+
+  it('ignores whitespace, so a stray newline is not evidence', () => {
+    const state = emptyWizardState()
+    state.text.metrics = '   \n  '
+    expect(evidenceType(buildIntake(state))).toBe('B')
+  })
+})
+
+describe('approach_framework', () => {
+  // The strongest seniority signal when real, and the fastest way to sound
+  // fake when invented. Nothing may generate a value here, so the field has to
+  // be genuinely absent rather than present-and-empty.
+  it('is left out of the intake entirely when nobody named one', () => {
+    const intake = buildIntake(emptyWizardState())
+    expect('approach_framework' in intake).toBe(false)
+  })
+
+  it('is stored when it is named', () => {
+    const state = emptyWizardState()
+    state.text.approach_framework = 'Freeze, sort, split'
+    expect(buildIntake(state).approach_framework).toBe('Freeze, sort, split')
+  })
+
+  it('leads the decisions section of the review screen', () => {
+    const state = emptyWizardState()
+    state.text.approach_framework = 'Freeze, sort, split'
+    state.decisions[0].decided = 'Freeze the note at shift change'
+
+    const step3 = buildReview(buildIntake(state)).find((s) => s.step === 3)
+    expect(step3?.entries[0].value).toBe('Freeze, sort, split')
+    expect(step3?.entries[1].label).toBe('Decision 1')
   })
 })

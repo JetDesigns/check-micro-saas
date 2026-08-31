@@ -35,6 +35,16 @@ type Props = {
   doc: CaseStudy
   title: string
   /**
+   * Which shape of evidence the project has, from lib/wizard-steps.ts.
+   *
+   * 'A' (real numbers) lifts Results to position two, right after the opening:
+   * a sceptical reader wants proof before they invest in the process. 'B'
+   * leaves it at the end, where "this was the impact" only lands once the
+   * reader knows what was built. Defaults to 'B', which is what this document
+   * did before the placement became conditional.
+   */
+  evidenceType?: 'A' | 'B'
+  /**
    * imageId → URL. A plain object rather than a resolver function, because
    * this is a Client Component and a function cannot cross the boundary from
    * a Server Component — React rejects it outright. Omit it and visuals
@@ -47,7 +57,12 @@ function pick<T extends Block['type']>(blocks: Block[], type: T) {
   return blocks.filter((b): b is Extract<Block, { type: T }> => b.type === type)
 }
 
-export function CaseStudyDocument({ doc, title, imageUrls }: Props) {
+export function CaseStudyDocument({
+  doc,
+  title,
+  evidenceType = 'B',
+  imageUrls,
+}: Props) {
   const { spine, blocks } = doc
 
   const metadata = pick(blocks, 'metadata_grid')[0]
@@ -68,16 +83,43 @@ export function CaseStudyDocument({ doc, title, imageUrls }: Props) {
   const hero = looseVisuals[0]
   const supporting = looseVisuals.slice(1)
 
-  const sections = [
-    { id: 'context', label: 'Context' },
+  const resultsFirst = evidenceType === 'A'
+
+  const resultsNav = [
+    { id: 'outcome', label: 'Where it landed' },
+    ...(learnings ? [{ id: 'learnings', label: 'Learnings' }] : []),
+  ]
+  const bodyNav = [
     { id: 'findings', label: 'What we found' },
     { id: 'requirements', label: 'What it needed' },
     ...moves.map((m) => ({ id: `move-${m.spineId}`, label: m.title })),
-    { id: 'outcome', label: 'Where it landed' },
-    { id: 'learnings', label: 'Learnings' },
+  ]
+
+  // Nav follows the page. They were one hardcoded list before; the moment the
+  // order became conditional, keeping them in step stopped being automatic.
+  const sections = [
+    { id: 'context', label: 'Context' },
+    ...(resultsFirst ? [...resultsNav, ...bodyNav] : [...bodyNav, ...resultsNav]),
   ]
 
   const activeId = useActiveSection(sections.map((s) => s.id))
+
+  const results = (
+    <>
+      <section id="outcome" className="mt-20 scroll-mt-24 border-t border-line-soft pt-14">
+        <SectionHeading eyebrow="Where it landed" title="What changed" />
+        {outcome && <OutcomeStatus status={outcome.status} note={outcome.note} />}
+        {impact && <ImpactList items={impact.items} />}
+      </section>
+
+      {learnings && (
+        <section id="learnings" className="mt-20 scroll-mt-24 border-t border-line-soft pt-14">
+          <SectionHeading eyebrow="Learnings" title="What I would do differently" />
+          <Learnings paragraphs={learnings.paragraphs} />
+        </section>
+      )}
+    </>
+  )
 
   return (
     <article className="mx-auto w-full max-w-3xl px-6 pb-32 pt-12 lg:px-0">
@@ -101,6 +143,8 @@ export function CaseStudyDocument({ doc, title, imageUrls }: Props) {
         {quote && <PullQuote text={quote.text} attribution={quote.attribution} />}
         {hero && <Visual visual={hero} src={imageUrls?.[hero.imageId]} />}
       </section>
+
+      {resultsFirst && results}
 
       {/* ---- What we found ---- */}
       <section id="findings" className="mt-20 scroll-mt-24 border-t border-line-soft pt-14">
@@ -138,21 +182,16 @@ export function CaseStudyDocument({ doc, title, imageUrls }: Props) {
         <MoveSection key={move.spineId} block={move} index={i} imageUrls={imageUrls} />
       ))}
 
-      {/* ---- Where it landed ---- */}
-      <section id="outcome" className="mt-20 scroll-mt-24 border-t border-line-soft pt-14">
-        <SectionHeading eyebrow="Where it landed" title="What changed" />
-        {outcome && <OutcomeStatus status={outcome.status} note={outcome.note} />}
-        {impact && <ImpactList items={impact.items} />}
-        {supporting.map((v) => (
-          <Visual key={v.imageId} visual={v} src={imageUrls?.[v.imageId]} />
-        ))}
-      </section>
+      {!resultsFirst && results}
 
-      {/* ---- Learnings ---- */}
-      {learnings && (
-        <section id="learnings" className="mt-20 scroll-mt-24 border-t border-line-soft pt-14">
-          <SectionHeading eyebrow="Learnings" title="What I would do differently" />
-          <Learnings paragraphs={learnings.paragraphs} />
+      {/* Supporting screens stay at the end whichever way Results moves.
+          They are screens, not evidence, and hoisting them to position two
+          alongside the numbers would say otherwise. */}
+      {supporting.length > 0 && (
+        <section className="mt-20 border-t border-line-soft pt-14">
+          {supporting.map((v) => (
+            <Visual key={v.imageId} visual={v} src={imageUrls?.[v.imageId]} />
+          ))}
         </section>
       )}
     </article>

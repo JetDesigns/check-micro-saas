@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import { CaseStudyDocument } from '@/components/case-study/CaseStudyDocument'
 import { CASE_STUDY_FIXTURE, FIXTURE_TITLE } from '@/lib/fixtures/case-study-fixture'
 import { validateCaseStudy, type CaseStudy } from '@/lib/case-study-blocks'
+import { evidenceType } from '@/lib/wizard-steps'
+import type { Intake } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Renders the hand-written fixture so the layout can be judged before any
@@ -35,7 +37,7 @@ export default async function FixturePage({
   const admin = createAdminClient()
   const { data } = await admin
     .from('case_studies')
-    .select('document, headline, title')
+    .select('document, headline, title, intake')
     .eq('id', id)
     .maybeSingle()
 
@@ -43,6 +45,10 @@ export default async function FixturePage({
 
   const doc = data.document as CaseStudy
   const issues = validateCaseStudy(doc)
+
+  // Derived, not stored — see evidenceType(). Decides whether Results leads
+  // the document or closes it.
+  const evidence = data.intake ? evidenceType(data.intake as Intake) : 'B'
 
   const { data: attachments } = await admin
     .from('case_study_attachments')
@@ -62,6 +68,12 @@ export default async function FixturePage({
 
   return (
     <main className="min-h-screen bg-canvas">
+      <div className="mx-auto max-w-3xl px-6 pt-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">
+          Evidence type {evidence} — results {evidence === 'A' ? 'lead' : 'close'}
+        </p>
+      </div>
+
       {issues.length > 0 && (
         <div className="mx-auto max-w-3xl px-6 pt-8">
           <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
@@ -73,6 +85,7 @@ export default async function FixturePage({
       <CaseStudyDocument
         doc={doc}
         title={data.headline ?? data.title ?? 'Untitled'}
+        evidenceType={evidence}
         imageUrls={imageUrls}
       />
     </main>

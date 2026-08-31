@@ -211,6 +211,8 @@ export function IntakeForm({ onCreated }: Props) {
           <Step3Decisions
             decisions={decisions}
             onChange={setDecisions}
+            text={text}
+            onTextChange={setTextValue}
             isBusy={isBusy}
           />
         )}

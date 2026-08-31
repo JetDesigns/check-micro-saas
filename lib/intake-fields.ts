@@ -22,8 +22,14 @@ export type TextKey = Exclude<
   'decisions' | 'image_notes' | 'outcome_status'
 >
 
-/** Steps a registry-driven field can belong to. */
-export type FieldStep = 1 | 2 | 5
+/**
+ * Steps a registry-driven field can belong to.
+ *
+ * Step 3 joined the list for one flat field that applies to the whole step
+ * rather than to a single decision. Step 4 stays out: everything it collects
+ * is per-image.
+ */
+export type FieldStep = 1 | 2 | 3 | 5
 
 export type IntakeField = {
   key: TextKey
@@ -143,6 +149,22 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     required: true,
     rows: 3,
     step: 2,
+  },
+
+  // --- Step 3 — the decisions ---------------------------------------------
+  {
+    // The one field in this step that is not per-decision. AGENTS.md and the
+    // framework spec agree this is the strongest seniority signal when it is
+    // real — and the fastest way to sound fake when it is not, so nothing may
+    // generate a value here. Blank means the prose stays plain reasoning.
+    key: 'approach_framework',
+    label: 'Is there an overall approach or model that ties these decisions together?',
+    placeholder: 'e.g. Freeze, sort, split — the three things every handover needed',
+    helper:
+      'Optional — most projects do not have one. If yours does, it is usually the strongest part of the story.',
+    type: 'input',
+    required: false,
+    step: 3,
   },
 
   // --- Step 5 — where it landed -------------------------------------------

@@ -1,5 +1,7 @@
 'use client'
 
+import { FieldRow } from '@/components/intake/FieldRow'
+import { fieldsForStep, type TextKey } from '@/lib/intake-fields'
 import {
   DECISIONS_MAX,
   DECISIONS_MIN,
@@ -13,6 +15,8 @@ import type { Decision } from '@/types/database'
 type Props = {
   decisions: Decision[]
   onChange: (decisions: Decision[]) => void
+  text: Partial<Record<TextKey, string>>
+  onTextChange: (key: TextKey, value: string) => void
   isBusy: boolean
 }
 
@@ -24,7 +28,13 @@ type Props = {
 // Two blocks are visible from the start because the spine needs at least two
 // entries to be a spine at all. Nothing enforces that here: an empty block is
 // dropped at submit, not blocked at the door.
-export function Step3Decisions({ decisions, onChange, isBusy }: Props) {
+export function Step3Decisions({
+  decisions,
+  onChange,
+  text,
+  onTextChange,
+  isBusy,
+}: Props) {
   const update = (id: string, patch: Partial<Decision>) =>
     onChange(decisions.map((d) => (d.id === id ? { ...d, ...patch } : d)))
 
@@ -32,6 +42,20 @@ export function Step3Decisions({ decisions, onChange, isBusy }: Props) {
 
   return (
     <div id="decisions-step">
+      {/* Above the blocks, because it names what ties them together rather
+          than belonging to any one of them. */}
+      <div className="mb-8 space-y-5">
+        {fieldsForStep(3).map((field) => (
+          <FieldRow
+            key={field.key}
+            field={field}
+            value={text[field.key] ?? ''}
+            isBusy={isBusy}
+            onChange={(v) => onTextChange(field.key, v)}
+          />
+        ))}
+      </div>
+
       <div className="space-y-6">
         {decisions.map((d, i) => (
           <div
