@@ -187,11 +187,10 @@ const CAPTION = 'text-[13px] leading-snug text-[var(--studio-text-soft)]'
 /**
  * One visual asset, or a run of adjacent ones.
  *
- * A single asset keeps its caption below the outer tray. A run of two or more
- * shares one tray, each inner frame carrying its own caption directly beneath it,
- * inside the tray — which is the only way a caption can stay attached to its own
- * image once several of them are held together. The two caption positions are a
- * deliberate trade, not an oversight.
+ * The caption sits inside the tray, directly under the frame it belongs to,
+ * whether there is one asset or several. It was below the tray for a single asset
+ * and inside it for a run, which meant the same caption moved depending on what
+ * happened to sit next to it — and left two shapes here where one does the job.
  */
 function Figures({
   ids,
@@ -202,18 +201,6 @@ function Figures({
   figures: Map<string, GeneratedPage['figures'][number]>
   imageUrls: Record<string, string>
 }) {
-  if (ids.length === 1) {
-    const fig = figures.get(ids[0])
-    return (
-      <figure className="flex flex-col gap-2">
-        <div className={OUTER}>
-          <Asset id={ids[0]} fig={fig} url={imageUrls[ids[0]]} />
-        </div>
-        {fig && <figcaption className={CAPTION}>{fig.caption}</figcaption>}
-      </figure>
-    )
-  }
-
   return (
     <div className={`flex flex-col gap-5 ${OUTER}`}>
       {ids.map((id) => {
