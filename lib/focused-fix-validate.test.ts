@@ -22,7 +22,7 @@ const register = () =>
     // name the section the baseline page actually gives the most room to.
     value:
       choice === 'diagram_form'
-        ? 'omitted'
+        ? 'decision_flow'
         : choice === 'dominant_section'
           ? 'Solution'
           : 'a considered choice',
@@ -81,12 +81,27 @@ The photographs stopped within two weeks.
 - Role: Product designer
 `
 
+// The floor form, built from the fixture's own three decisions: a name of three
+// words each, in their order, with the second marked as departing — which is
+// what the fixture says of it. No sentence anywhere; that is the whole point.
+const diagram = () => ({
+  form: 'decision_flow',
+  items: [
+    { name: 'Freeze the note', deviates: false },
+    { name: 'Sort by escalation', deviates: true },
+    { name: 'Hold escalated notes', deviates: false },
+  ],
+  text_equivalent:
+    'Three decisions in the order they were taken; the second departs from a ward convention the others keep.',
+})
+
 function page(over: Record<string, unknown> = {}) {
   return {
     markdown: MARKDOWN,
     figures: [],
     variance_register: register(),
     branch: 'contribution',
+    diagram: diagram(),
     ...over,
   }
 }
@@ -546,5 +561,84 @@ describe('the specification staying off the page', () => {
     const own = 'Nurses photographed the screen before every handover, because they had learned it might not be there afterwards.'
     const md = swap('The report describes an experience.', own)
     expect(rules(page({ markdown: md }), ctx({ spec: `${SPEC} ${own}` }))).not.toContain('spec_echo')
+  })
+})
+
+describe('the visual Approach carries', () => {
+  // The pipeline used to REJECT any page whose register did not say "omitted",
+  // so a specification calling the diagram load-bearing shipped a path that
+  // could not produce one. These guard the opposite rule.
+  it('accepts the floor form built from the decisions', () => {
+    expect(rules(page())).not.toContain('diagram')
+  })
+
+  it('rejects a page with no visual at all', () => {
+    expect(rules(page({ diagram: null }))).toContain('diagram')
+  })
+
+  it('rejects a form the renderer cannot draw', () => {
+    expect(rules(page({ diagram: { ...diagram(), form: 'parallel_tracks' } }))).toContain('diagram')
+  })
+
+  it('rejects one item per decision being broken', () => {
+    const d = diagram()
+    expect(rules(page({ diagram: { ...d, items: d.items.slice(0, 2) } }))).toContain('diagram')
+  })
+
+  // An invented category is the fastest way to make a generated graphic look
+  // generated (§9.5), so a name has to be the designer's own, shortened.
+  it('rejects a name coined to tidy the set', () => {
+    const d = diagram()
+    const items = [{ ...d.items[0], name: 'Data integrity' }, ...d.items.slice(1)]
+    expect(rules(page({ diagram: { ...d, items } }))).toContain('diagram')
+  })
+
+  // The budget. The first version of this carried a sentence per item, which put
+  // the prose in a box beside the prose.
+  it('rejects a name longer than three words', () => {
+    const d = diagram()
+    const items = [{ ...d.items[0], name: 'Freeze the note at shift change' }, ...d.items.slice(1)]
+    expect(rules(page({ diagram: { ...d, items } }))).toContain('diagram')
+  })
+
+  it('rejects a name that reads as a statement', () => {
+    const d = diagram()
+    const items = [{ ...d.items[0], name: 'Note freeze, always' }, ...d.items.slice(1)]
+    expect(rules(page({ diagram: { ...d, items } }))).toContain('diagram')
+  })
+
+  // An extra key is an explanation looking for somewhere to live.
+  it('rejects an item carrying anything beyond a name and a state', () => {
+    const d = diagram()
+    const items = [{ ...d.items[0], answers: 'nurses photographed the screen' }, ...d.items.slice(1)]
+    expect(rules(page({ diagram: { ...d, items } }))).toContain('diagram')
+  })
+
+  // The designer said which one departs; the writer does not get to decide.
+  it('rejects marking a decision as departing when the answers do not say so', () => {
+    const d = diagram()
+    const items = [{ ...d.items[0], deviates: true }, ...d.items.slice(1)]
+    expect(rules(page({ diagram: { ...d, items } }))).toContain('diagram')
+  })
+
+  // §9.3: the equivalent states the relationship. Handed only the names, a
+  // reader who cannot see the diagram has the parts and not the shape.
+  it('rejects a text equivalent that only repeats the names', () => {
+    const d = diagram()
+    const text = d.items.map((i) => i.name).join('. ')
+    expect(rules(page({ diagram: { ...d, text_equivalent: text } }))).toContain('diagram')
+  })
+
+  it('rejects a register that disagrees with the diagram about the form', () => {
+    const claims = register().map((r) =>
+      r.choice === 'diagram_form' ? { ...r, value: 'omitted' } : r
+    )
+    expect(rules(page({ variance_register: claims }))).toContain('register')
+  })
+
+  it('carries the diagram onto the returned page', () => {
+    const v = validateFocusedFix(page(), ctx())
+    expect(v.page?.diagram?.items).toHaveLength(3)
+    expect(v.page?.diagram?.items[1]).toEqual({ name: 'Sort by escalation', deviates: true })
   })
 })

@@ -54,6 +54,7 @@ export function GeneratedPageView({ page, imageUrls = {} }: Props) {
         <section key={s.title ?? i} className="flex flex-col gap-4">
           <h2 className="text-[20px] leading-tight font-medium tracking-[-0.02em]">{s.title}</h2>
           {draw(s.nodes, s.title === 'Credits')}
+          {s.title === 'Approach' && page.diagram && <DecisionFlow diagram={page.diagram} />}
         </section>
       ))}
     </article>
@@ -213,6 +214,54 @@ function Figures({
         )
       })}
     </div>
+  )
+}
+
+const ROW =
+  'flex gap-3 rounded-[var(--studio-r-md)] border border-[var(--studio-border)] bg-[var(--studio-bg-primary)] p-3'
+
+/**
+ * The floor form (§9.2b): the decisions, in the designer's order, each against
+ * the pain point it answers.
+ *
+ * Drawn here rather than by the model, which is what keeps §9.3's gates true by
+ * construction. Order is position. The one that departs carries a mark. There are
+ * no fills and no legend, so the rules banning them cannot be broken.
+ *
+ * AN INDEX, NOT PROSE. Each item is a name of three words at most. The first
+ * version gave every item a sentence — the pain point it answered, the pattern it
+ * broke — which was the prose in a box beside the prose. Those belong to Solution's
+ * tie-backs, and a reader does not need them twice.
+ *
+ * The mark's words belong to this file, not to the model. A bare glyph would need
+ * a key, which §9.3 gate 1 forbids; three fixed words on the item it describes
+ * explain themselves and cannot grow into a sentence.
+ *
+ * The text equivalent is a figcaption that is visually hidden on purpose: §9.3
+ * requires one for a reader who cannot see the diagram, and gate 2 forbids a
+ * caption that carries the finding. Hidden satisfies both — it reaches the people
+ * who need it without becoming the explanation the graphic should not need.
+ */
+function DecisionFlow({ diagram }: { diagram: NonNullable<GeneratedPage['diagram']> }) {
+  return (
+    <figure className={OUTER}>
+      <ol className="flex flex-col gap-2">
+        {diagram.items.map((item, i) => (
+          <li key={i} className={`${ROW} items-center`}>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--studio-r-full)] border border-[var(--studio-border-strong)] text-[11px] text-[var(--studio-text-soft)]">
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1 text-[14px] leading-snug font-medium">{item.name}</span>
+            {item.deviates && (
+              <span className="shrink-0 rounded-[var(--studio-r-sm)] border border-[var(--studio-border-strong)] px-1.5 py-0.5 text-[11px] text-[var(--studio-text-soft)]">
+                breaks the pattern
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+      <figcaption className="sr-only">{diagram.text_equivalent}</figcaption>
+    </figure>
   )
 }
 

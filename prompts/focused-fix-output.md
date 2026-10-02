@@ -724,6 +724,16 @@ The Approach section carries a generated diagram whose job is to make **the shap
 scannable without reading prose. It is not decoration, not a summary of the page, and not a picture
 of the product. It answers one question: how was this work structured?
 
+**Every generated case study carries a visual in Approach.** This is a guarantee, not a
+preference. What makes it keepable is the floor form (§9.2b): the simplest honest visual that can
+always be built, from material every Focused Fix has. Omission narrows to the single case in §9.7
+and is, in practice, unreachable.
+
+The guarantee never licenses a guess. A relationship the material does not carry is not inferred to
+satisfy it — the floor form is taken instead. A wrong diagram is worse than the floor form, and the
+floor form is not a consolation prize: it shows the decisions as a set, which the prose can only
+deliver one block at a time.
+
 ### 9.1 The decision rule
 
 **Identify the structural relationship first. Select a form second. Never the reverse.**
@@ -731,7 +741,8 @@ of the product. It answers one question: how was this work structured?
 1. Determine the relationship the work actually has (§9.4–9.5).
 2. Check that the relationship carries a distinction worth seeing.
 3. Select the form that represents that relationship.
-4. If no relationship survives step 2 after inference and confirmation, generate nothing (§9.7).
+4. If no relationship survives step 2, fall back to the floor form (§9.2b). Generate nothing only
+   under §9.7's single threshold.
 
 Reaching for a shape because it looks like a diagram, then fitting the work into it, produces a
 graphic that misrepresents the work. This is the single most common way this feature fails.
@@ -755,6 +766,34 @@ A relationship that fits none of these is a candidate for omission, not for inve
 returns, which is a claim about the work. Do not use one for a set of peers, a set of tracks, or a
 sequence that does not return to its start.
 
+**Availability.** A form the renderer cannot draw is not available to the generator, whatever the
+material supports. Listing a form here does not make it producible, and the specification must not
+offer what nothing can render. The six forms above additionally require the confirmation step
+(§9.4), so until both exist they are specified and unavailable.
+
+### 9.2b The floor form
+
+**Decision flow.** The decisions, in the order the designer gave them, each shown against the pain
+point it answers, with any deviation named beside the item it belongs to.
+
+This is a real relationship and not a filler: the ordering is the designer's own account of the
+work, the pairing of decision to pain point is the traceability §6.3 already requires, and a
+deviation is marked where the designer said one exists. Every part of it is material the designer
+supplied in their own words.
+
+| | |
+|---|---|
+| **Applies when** | No richer relationship survives §9.1 step 2. This is the fallback, not a choice among the six |
+| **Must be encoded visually** | The order, as position. The pairing of each decision to its pain point, as adjacency. Any deviation, as a mark or a position — never as a keyed fill |
+| **Labels** | The designer's own words, shortened but never reworded into a category |
+| **Confirmation** | Not required (§9.4). It asserts nothing the designer did not write |
+
+It is **not** a summary of Solution. Solution argues one decision at a time; the floor form shows
+the set at once, in order, with the deviation visible without reading three paragraphs. If a
+generated floor form says nothing the prose does not already say in the same shape, it has failed
+the density rule in §9.3 and should be reported as a failure of this specification rather than
+kept.
+
 ### 9.3 Self-containment, density, accessibility
 
 **Self-containment.** The diagram carries its own point. If the reader needs the caption to
@@ -764,6 +803,19 @@ never written underneath.
 
 *Test:* cover the caption. If the point disappears, the graphic is decoration with an explanation
 attached. Redo it or omit it.
+
+**Four gates, phrased so they can be checked:**
+
+1. **The distinction that matters is legible from the diagram itself.** If a reader must consult a
+   legend to know what they are looking at, the diagram has failed. There are no legends.
+2. **The caption may name the diagram. It may not carry the finding.** If the caption states
+   something the diagram does not show, the diagram is incomplete — fix the diagram, not the
+   caption.
+3. **Direct labelling over keyed fills.** Where categories must be distinguished, the category name
+   sits on or beside the thing it describes.
+4. **Two fill states maximum**, and only where the two are self-evident without being named —
+   present against absent, before against after. Three or more states always requires a legend,
+   which gate 1 forbids.
 
 **Density.** The diagram must be more scannable than the prose it replaces. If it occupies more
 vertical space while carrying less information, it has not earned its place. It should carry fewer
@@ -786,7 +838,16 @@ The user is never asked to classify their own work into a named relationship.
 
 **This confirmation step is load-bearing, not an enhancement.** Without it the page publishes a
 structural claim about someone's work that they never verified. Specify it as a required step in
-the diagram flow. If confirmation cannot be shown, the diagram is not generated.
+the diagram flow. If confirmation cannot be shown, no **inferred** form is generated.
+
+**Scope: confirmation applies to inference, not to the floor form.** The floor form restates what
+the designer supplied — their decisions, in their order, each against the pain point they named for
+it. There is no structural claim in it that they have not already made in their own words, so there
+is nothing for them to verify. It is therefore generated without the preview.
+
+The consequence is exact, and the specification states it rather than implying it: **until the
+preview exists, the floor form is the only form generated.** The six forms in §9.2 remain specified
+and unavailable.
 
 ### 9.5 Input contract
 
@@ -797,8 +858,11 @@ the diagram flow. If confirmation cannot be shown, the diagram is not generated.
 | The decisions list (each: what was decided, what made you decide it, what was considered instead) | The work items and their labels, in the user's own words. Always present — two to four entries |
 | The overall approach or model field | Where filled, may name the relationship outright. Usually blank |
 | The constraints field | May reveal a dependency or a forced sequence |
-| The voice sample | May contain a process narrative stating what ran alongside what |
+| The per-decision relations: depends-on, breaks-a-pattern (with the pattern named), repeated-treatment | Ordering and dependency, exception membership and what the exception deviates from, and the one-to-many signal — stated by the designer, not inferred |
 | The per-screen notes, which map each screen to a decision | Evidence distribution across items — not a relationship in itself |
+
+*(The voice sample was listed here and no longer exists: the register sample left the wizard. It is
+removed rather than left as a gap, because a source that cannot be supplied is not a shortfall.)*
 
 **Labels come from the user's own words.** Never invent a category name to tidy a diagram; invented
 labels are the fastest way to make a generated graphic look generated.
@@ -819,22 +883,30 @@ inference is a normal result rather than an error state. A pipeline that treats 
 failure will ship a feature that never fires; one that treats it as licence to guess will ship
 §9.6's failure instead.
 
-> **Pipeline dependency — the contract is only partially satisfiable by current fields.**
-> Work items and labels are fully available from the decisions list. The relationship itself is
-> available only weakly, from free text that may not mention it. **Ordering and dependency,
-> exception membership and what each exception deviates from, and relative difficulty or weight are
-> captured by no current field.**
+> **Pipeline dependency — rechecked against what the wizard actually sends.**
+> An earlier version of this note said ordering, exception membership and weight were captured by no
+> field. Two of the three now are, and the note was stale rather than right:
 >
-> This gap is closed by the confirmation step in §9.4, not by inference — which is the concrete
-> reason that step is required rather than optional. **If the confirmation step is cut or deferred,
-> a new wizard field becomes mandatory**: one that captures ordering and exception membership
-> explicitly. Without either the confirmation step or that field, the only defensible output is
-> omission on every project.
+> | Input | Status |
+> |---|---|
+> | Work items and their labels | Available — every decision, numbered, in the designer's order |
+> | Ordering and dependency | **Available** — the depends-on relation, rendered as which decision has to be read first |
+> | Exception membership, and what it deviates from | **Available** — the breaks-a-pattern relation carries both the flag and the pattern in the designer's words |
+> | One-to-many propagation | **Available** — the repeated-treatment relation |
+> | The relationship stated outright | Weak — the approach-or-model field, usually blank by design |
+> | **Relative difficulty or weight** | **Captured by no field.** This is the only remaining gap |
 >
-> **Second dependency:** the current block schema implements exactly one diagram primitive, a cycle
-> of three to five nodes. That form is not in the vocabulary above and must not be used as a
-> substitute for the form the relationship actually calls for. Shipping the form vocabulary requires
-> schema work.
+> The weight gap blocks **parallel tracks** and nothing else: it is the one form whose visual
+> requirement is weight. That form is unavailable for a second reason anyway (§9.2 availability), so
+> the gap costs nothing today and **no new wizard field is required** to meet the guarantee. The
+> floor form needs the decisions, their order and the pain points, all three of which ship.
+>
+> **Renderer dependency.** The block schema implements exactly one diagram primitive: a cycle of
+> three to five nodes. That form is a ring, which §9.2 excludes and §12 item 23 forbids — so the one
+> form the codebase can draw is the one form this specification bans, and it is not reachable from
+> the spec path at all. The spec path renders headings, paragraphs, quotations, lists and uploaded
+> images, and nothing else. The floor form is specified to need none of that: ordered labelled rows,
+> adjacency, and a mark. Every form in §9.2 needs drawing work that does not exist.
 
 ### 9.6 Never guess
 
@@ -847,15 +919,20 @@ diagram that explains something untrue has failed worse.
 
 ### 9.7 Omission
 
-Omission is a **last resort, not a first gate**. It fires only after inference and confirmation have
-both failed to produce a relationship carrying a distinction worth seeing.
+Omission fires in **one case only**: the material contains no distinction of any kind a reader would
+benefit from seeing — a single undifferentiated piece of work with one decision.
 
-It fires when:
-- the work was linear and undifferentiated — one track, one thing after another;
-- the only available relationship is "these are the things that were done";
-- the item floor is not met (§9.5);
-- the user explicitly skipped;
-- the distinction that would make a form meaningful does not exist in the material.
+Everything that used to resolve to omission now resolves to the floor form (§9.2b). A low-confidence
+inference, an unmet item floor for the six forms, free text that states no relationship: none of
+these is an omission, because the decisions and their pain points are still there to be shown.
+
+**This threshold is, in practice, unreachable, and that is deliberate.** §3.4 requires two to four
+fix blocks and the wizard refuses a submission with fewer than two decisions, so "one decision"
+cannot occur. The case is written down because a rule with no stated threshold gets widened back by
+whoever reads it next, not because it is expected to fire.
+
+An explicit user skip remains a valid omission once the preview exists (§9.4). It does not exist
+yet, so it cannot fire either.
 
 **How Approach reads with no diagram.** The section is never omitted and never shortened to
 compensate. It carries the same structural content in prose: the items named, what distinguishes
@@ -984,7 +1061,12 @@ confirmation rather than asserting it.
 |---|---|
 | A form chosen before the relationship was identified | The form does not match any relationship in §9.2 |
 | The key distinction written in the caption instead of drawn | Fails the cover-the-caption test |
-| A graphic rendered from a low-confidence inference | Confidence gate bypassed |
+| A graphic rendered from a low-confidence inference | Confidence gate bypassed, where the floor form was the correct fallback |
+| The meaning carried by a legend | §9.3 gate 1. Cover the key: if the reader can no longer tell the categories apart, the diagram never encoded them |
+| The finding stated in the caption rather than drawn | §9.3 gate 2. The caption asserts something the graphic does not show |
+| Three or more fill states | §9.3 gate 4. Three states cannot be told apart without a key, so a key is what will be added |
+| A keyed fill where a direct label would serve | §9.3 gate 3 |
+| No visual in Approach | §9's guarantee, unless §9.7's single threshold is met |
 | A diagram published without user confirmation | Required step skipped |
 | An empty frame, placeholder or note where a diagram was not generated | §9.7 |
 | Invented labels | Labels not traceable to the user's own words |
@@ -1034,10 +1116,14 @@ Run before returning the structured output. Every item is a hard gate.
 21. No asset appears that has no decision to point at.
 
 **Diagram**
-22. Either a diagram is present, confirmed by the user, matching one of the six forms, passing the
-    cover-the-caption test, with a text equivalent — or no diagram is present and Approach carries
-    the structure in prose with no trace of the omission.
+22. A visual is present in Approach, passing the cover-the-caption test and shipping a text
+    equivalent — or omission is justified under §9.7's single threshold. An inferred form was
+    confirmed by the user; the floor form requires no confirmation.
 23. No ring or cycle form was used.
+24. No legend anywhere. No more than two fill states, and only where the two are self-evident.
+    Every category name sits on or beside the thing it describes.
+25. The diagram's labels are the designer's own words, and every item traces to something they
+    wrote. No category was coined to tidy the graphic.
 
 ---
 

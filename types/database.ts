@@ -33,6 +33,38 @@ export type GeneratedPage = {
   variance_register: { choice: string; value: string; driver: string }[]
   branch: 'metric' | 'contribution'
   /**
+   * The visual Approach carries (§9).
+   *
+   * Structured rather than drawn: the model decides what the items are and the
+   * renderer decides how they look, so §9.3's gates stay checkable in code. A
+   * model-authored SVG would be more expressive and would make "no legend, two
+   * fill states, labels traceable to the designer's words" unenforceable.
+   *
+   * `decision_flow` is the floor form (§9.2b) and currently the only one: every
+   * other form in §9.2 needs both a renderer and the confirmation preview. Null
+   * only under §9.7's single threshold, which the two-decision minimum makes
+   * unreachable in practice.
+   */
+  diagram: {
+    form: 'decision_flow'
+    items: {
+      /**
+       * The decision as a NAME, three words at most — their words, shortened,
+       * never reworded. A node carries a name, not a statement: the first
+       * version of this carried a sentence per item and was the prose in a box.
+       */
+      name: string
+      /**
+       * Whether this one departs from a pattern the others keep. A state, not a
+       * sentence — the words that render it belong to the renderer, so there is
+       * no way for an explanation to grow here.
+       */
+      deviates: boolean
+    }[]
+    /** The relationship stated in words, not a list of the names (§9.3). */
+    text_equivalent: string
+  } | null
+  /**
    * Passages the writer had to reason its way to and could not confirm from the
    * answers. Flagged rather than asserted; empty is the normal case.
    */

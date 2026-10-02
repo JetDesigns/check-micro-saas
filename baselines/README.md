@@ -35,6 +35,20 @@ longer — in all three — and the tie-backs were one syntactic frame repeated 
 | `round2-final.md` | — | **1** | After the contract learned to say the register is checked against the page. 61s, back to ~$0.09. **This is the current baseline** |
 | `round2-blank-diagnosis.md` | — | 1 | Ablation: `--blank diagnosis`. No invention — the model rebuilt the diagnosis from the decision fields and the tie-backs, which are the same facts. Evidence that `diagnosis` is substantially redundant with step 3 |
 
+## After Approach gained a visual
+
+| File | Row | Attempts | Notes |
+|---|---|---|---|
+| `round4-approach-visual.md` | — | 1 | The first page with a guaranteed visual in Approach. The markdown is unchanged in kind — the diagram lives in the envelope's `diagram` field, not in the prose — so a diff against `round2-final.md` shows only how the writing moved, which is what makes this pair worth keeping |
+
+The diagram that page carries, which the markdown does not contain:
+
+```
+1  Freeze the note
+2  Sort by escalation   (breaks the pattern)
+3  Hold escalated notes
+```
+
 ## Reading a diff against these
 
 `round2-final.md` is what a new run should be compared with. Five things the audit named,
