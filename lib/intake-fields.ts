@@ -101,7 +101,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // surface and a shape of work rather than a benefit.
     key: 'title',
     label: 'What was the project?',
-    placeholder: 'e.g. Rebuilding shift handover for a hospital ward',
+    placeholder: "e.g. Rebuilding the order screen for a pizza chain's POS",
     type: 'input',
     required: true,
     step: 1,
@@ -112,8 +112,8 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'product_and_users',
     label: "What's the product, and who uses it?",
     placeholder:
-      'e.g. A ward management system. Charge nurses and bedside nurses use it across three shifts a day.',
-    helper: "Their actual job, not 'users'.",
+      'e.g. A point-of-sale for a six-site pizza chain. Servers use it on the floor, and the kitchen reads it off a screen by the pass.',
+    helper: "Their job, not 'users'.",
     type: 'textarea',
     required: true,
     rows: 2,
@@ -122,7 +122,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'client_type', // I5
     label: 'Who was it for?',
-    placeholder: 'e.g. A regional hospital group',
+    placeholder: 'e.g. A six-site pizza chain',
     type: 'input',
     required: true,
     step: 1,
@@ -130,7 +130,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'client_name', // I6 — behind the naming toggle
     label: 'What are they called?',
-    placeholder: 'e.g. Northvale Health',
+    placeholder: 'e.g. Forno',
     type: 'input',
     required: false,
     step: 1,
@@ -143,7 +143,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // without taking the other with it.
     key: 'year',
     label: 'Year',
-    placeholder: 'e.g. 2024',
+    placeholder: 'e.g. 2025',
     type: 'input',
     required: false,
     step: 1,
@@ -152,7 +152,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'duration', // I18
     label: 'How long?',
-    placeholder: 'e.g. 9 weeks',
+    placeholder: 'e.g. 7 weeks',
     type: 'input',
     required: false,
     step: 1,
@@ -173,7 +173,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'agency', // I53
     label: 'Was there an agency in between?',
-    placeholder: 'e.g. Fieldwork Studio',
+    placeholder: 'e.g. Northside Studio',
     type: 'input',
     required: false,
     step: 1,
@@ -187,8 +187,8 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // between what was reported and what was found is what the page is built on.
     key: 'reported_problem',
     label: 'What did the client say was wrong?',
-    placeholder: 'e.g. The handover screen looks cluttered and nurses find it confusing.',
-    helper: 'However they put it — even the parts that turned out to be wrong.',
+    placeholder: 'e.g. The servers keep saying the system is slow.',
+    helper: 'In their words, even the parts that turned out to be wrong.',
     type: 'textarea',
     required: true,
     rows: 3,
@@ -200,8 +200,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'diagnosis',
     label: 'What was actually going on?',
     placeholder:
-      'e.g. The screen cleared itself on session timeout, so nurses photographed it before every handover. You could see it in the Ward Board view and in the Patient Notes column, which both reset.',
-    helper: 'And where could you see it — which screens, which controls?',
+      'e.g. Adding one item took three taps and a keyboard search, so servers had memorised the codes for the eight things people order most. On Friday nights they wrote tables on a paper pad and typed them in after the rush. You can see it on the order screen and the modifiers sheet.',
     type: 'textarea',
     required: true,
     rows: 4,
@@ -213,8 +212,8 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'cost_to_client',
     label: 'What was it costing them?',
     placeholder:
-      'e.g. Handover ran fourteen minutes against a six-minute budget, three times a day, across eleven wards.',
-    helper: 'Time, money, risk — not how it felt.',
+      "e.g. About nine orders a night went in from paper after the rush, so the kitchen saw a table's food twenty minutes after its drinks.",
+    helper: 'Time, money or risk — not how it felt.',
     type: 'textarea',
     required: true,
     rows: 3,
@@ -227,8 +226,8 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // when it is not, so nothing may generate a value here. The helper is there
     // to make leaving it blank feel normal, which it is.
     key: 'approach_framework',
-    label: 'Is there a model that ties these together?',
-    placeholder: 'e.g. Freeze, sort, split — the three things every handover needed',
+    label: 'Is there one idea behind all of them?',
+    placeholder: 'e.g. Type less during the rush, sort it out after',
     helper: "Most projects don't have one.",
     type: 'input',
     required: false,
@@ -239,8 +238,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'constraints', // I14 + I15
     label: 'What were you working around?',
     placeholder:
-      'e.g. The patient record system was off limits, so everything had to work as a layer on top of it.',
-    helper: "A deadline, a system you couldn't touch, data you didn't have.",
+      "e.g. The kitchen display system was another vendor's, so nothing could change on that side.",
     type: 'textarea',
     required: false,
     rows: 3,
@@ -251,7 +249,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'authority_split', // I17
     label: 'Did someone else own part of the call?',
     placeholder:
-      'e.g. I owned the interface. The clinical safety lead had the final call on anything touching medication fields.',
+      'e.g. I owned the order screen. The head chef had the final say on anything that changed what the kitchen sees.',
     type: 'textarea',
     required: false,
     rows: 2,
@@ -263,7 +261,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'measure', // I41
     label: 'What did you measure?',
-    placeholder: 'e.g. Time from handover start to first patient reviewed',
+    placeholder: 'e.g. Time from a server taking an order to the kitchen screen showing it',
     type: 'input',
     required: false,
     step: 5,
@@ -272,7 +270,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'baseline_value', // I42
     label: 'Before',
-    placeholder: 'e.g. 14 minutes',
+    placeholder: 'e.g. 20 minutes',
     type: 'input',
     required: false,
     step: 5,
@@ -282,7 +280,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'baseline_period', // I42
     label: 'Over what period?',
-    placeholder: 'e.g. March, four weeks',
+    placeholder: 'e.g. March, four Fridays',
     type: 'input',
     required: false,
     step: 5,
@@ -292,7 +290,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'after_value', // I44. The delta is derived from these two, never asked.
     label: 'After',
-    placeholder: 'e.g. 7 minutes',
+    placeholder: 'e.g. 2 minutes',
     type: 'input',
     required: false,
     step: 5,
@@ -302,7 +300,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'after_period', // I44
     label: 'Over what period?',
-    placeholder: 'e.g. June, four weeks',
+    placeholder: 'e.g. June, four Fridays',
     type: 'input',
     required: false,
     step: 5,
@@ -314,7 +312,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // sits inside the block rather than beside it.
     key: 'baseline_source',
     label: 'Where did the number come from?',
-    placeholder: "e.g. The ward's own shift log, exported by their ops team",
+    placeholder: "e.g. The POS's own order timestamps, pulled by their ops lead",
     type: 'input',
     required: false,
     step: 5,
@@ -323,7 +321,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'attribution_limit', // I45
     label: 'What else changed around the same time?',
-    placeholder: 'e.g. They also added two float nurses to the night rota in April.',
+    placeholder: 'e.g. They also put a second till on the floor in May.',
     type: 'textarea',
     required: false,
     rows: 2,
@@ -333,7 +331,7 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
   {
     key: 'team_change', // I39
     label: 'What changed in how the team works?',
-    placeholder: 'e.g. The photographs stopped within two weeks. Nobody was asked to stop.',
+    placeholder: 'e.g. The paper pads went in the bin in the first week. Nobody asked the servers to stop.',
     type: 'textarea',
     required: true,
     rows: 3,
@@ -344,8 +342,8 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // a tidied-up quote is not a quote.
     key: 'client_response',
     label: 'What did the client say afterwards?',
-    placeholder: '"We stopped talking about the handover screen in the ops meeting."',
-    helper: 'Their own words, not tidied up.',
+    placeholder: '"We stopped hearing about the POS in the Monday meeting."',
+    helper: 'Their words, not tidied up.',
     type: 'textarea',
     required: false,
     rows: 3,

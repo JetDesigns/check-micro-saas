@@ -57,13 +57,13 @@ export const WIZARD_COPY = {
   addCollaborator: 'Add someone',
   comingSoon: 'Coming soon',
   reviewIntro:
-    'Ready to write. A few answers are still short — fill them in now, or go ahead.',
+    'Ready to write. You can add to any of these first, or go straight ahead.',
   reviewIntroAllFilled: 'Ready to write.',
   reviewFill: 'Fill these in',
   reviewWrite: 'Write the case study',
   generate: 'Generate',
-  markerThin: 'Still short',
-  markerEmpty: 'Not answered',
+  markerThin: 'Room to add',
+  markerEmpty: 'Not answered yet',
   earlyAccess: 'Not open yet — request early access to get in first',
 
   // Drafts. The wizard keeps what has been typed across reloads, so it needs a
@@ -78,14 +78,14 @@ export const WIZARD_COPY = {
   // Stated as what the case study needs, never as a judgement about the
   // answer. The forbidden-word rule applies here like everywhere else.
   blockerOneDecision:
-    'A case study needs at least two decisions — one on its own has nothing to sit against. Add one more in step 3.',
+    'Two decisions give the story something to compare. Add one more in step 3.',
   blockerNoDecisions:
     'Step 3 is where the case study comes from. Add two decisions before writing.',
 
   noteNoScreens:
-    'No screens attached, so this will be text only. You can add them beside the problem in step 2, and beside each decision in step 3.',
+    'No screens yet, so this will be words only. You can add them beside the problem in step 2, and beside each decision in step 3.',
   noteUnlabelledScreens:
-    'Some screens have no note yet. Saying what to look at is what makes a caption point at a choice.',
+    'Some screens have no note yet. A line about what to look at goes a long way.',
 } as const
 
 // The words the spec forbids on the review screen. Two are English and three
@@ -107,15 +107,15 @@ export const DISCOURAGING_WORDS = [
 export const DECISION_FIELDS = {
   decided: {
     label: 'What did you decide?',
-    helper: 'Just one — you can add more below.',
-    placeholder: 'e.g. Freeze the note at shift change',
+    helper: '',
+    placeholder: 'e.g. Put the eight most-ordered items on the first screen',
   },
   // I23. Without this a block can only describe what exists now, which reads as
   // a changelog entry rather than a decision.
   priorBehaviour: {
     label: 'What did it do before?',
     helper: 'What someone had to do, not how it looked.',
-    placeholder: 'e.g. The note cleared on session timeout, with no warning',
+    placeholder: 'e.g. Every item took three taps and a keyboard search',
   },
   // I30. The same column asked differently when there is no before to compare
   // against, which is also what makes the ordered-mechanic shape reachable.
@@ -123,32 +123,32 @@ export const DECISION_FIELDS = {
     label: 'How does it work, step by step?',
     helper: '',
     placeholder:
-      'e.g. The nurse opens handover, taps a patient, and the note holds until someone acknowledges it',
+      'e.g. The server taps a course, it lands on the kitchen screen straight away, and the rest of the table stays open',
   },
   // I24. The move nobody writes unless they are asked for it, and the one that
   // separates a case study from a list of edits.
   consequence: {
-    label: 'What can people do now — or not have to do any more?',
+    label: 'What can people do now, or stop doing?',
     helper: '',
-    placeholder: 'e.g. Nobody photographs the screen before handover any more',
+    placeholder: 'e.g. Nobody writes orders on paper during the rush any more',
   },
   why: {
     label: 'What made you decide it?',
-    helper: 'What you saw, heard, or tested that pointed here.',
+    helper: '',
     placeholder:
-      'e.g. Nurses photographed the screen before every handover, because they had learned it might not be there afterwards.',
+      'e.g. Servers had memorised the codes for the eight items that cover most of a Friday night.',
   },
   rejected: {
     label: 'What did you consider instead?',
-    helper: 'What you turned down, and why.',
+    helper: '',
     placeholder:
-      'e.g. An autosave indicator. A reassuring spinner does not earn trust back once it is gone.',
+      'e.g. A faster search box. It still starts with a server deciding to type.',
   },
   // I32. Collapsed, because most fixes were not requested.
   clientRequest: {
     label: 'Did the client ask for this?',
     helper: '',
-    placeholder: 'e.g. "Can you make the handover screen less cluttered?"',
+    placeholder: 'e.g. "Can you make the order screen quicker?"',
   },
 } as const
 
@@ -166,16 +166,16 @@ export const RELATION_CHIPS = {
   breaksPattern: {
     label: 'Breaks a pattern the others follow',
     revealLabel: 'Which pattern?',
-    revealPlaceholder: 'e.g. Everything else opens in place; this one takes over the screen',
+    revealPlaceholder: 'e.g. Every other screen lists items the way the printed menu does',
   },
   repeatedTreatment: {
-    label: 'Same treatment repeated in many places',
+    label: 'The same change in a lot of places',
   },
   dependsOn: {
     // The reveal is phrased as the question rather than as the relationship, so
     // it needs no line underneath explaining what "depends" means here.
     label: 'Depends on another decision',
-    revealLabel: 'Which one has to be read first?',
+    revealLabel: 'Which one comes first?',
   },
 } as const
 
@@ -184,11 +184,11 @@ export const SCREEN_FIELDS = {
     label: 'What should someone notice here?',
     // Two jobs. A problem screen is evidence and has no decision to point at
     // yet; a before or after screen sits with the decision it belongs to.
-    helperEvidence: "The thing that's wrong, not the layout.",
-    helperDecision: 'The choice, not the layout.',
-    placeholderEvidence: 'e.g. The Patient Notes column is empty after the reset',
+    helperEvidence: '',
+    helperDecision: '',
+    placeholderEvidence: 'e.g. The search field is empty and the item list is still alphabetical',
     placeholderDecision:
-      'e.g. Escalated patients hold the top of the list until acknowledged',
+      'e.g. The eight items sit on the first screen, no search needed',
   },
 } as const
 
@@ -206,7 +206,7 @@ export const TOGGLE_COPY = {
   reportedVerbatim: { label: 'Those were their exact words', helper: '' },
   hasMeasurement: {
     label: 'Do you have a number?',
-    helper: 'Only if it was actually measured.',
+    helper: 'Only if you actually measured it.',
   },
 } as const
 
@@ -221,7 +221,7 @@ export const TOGGLE_COPY = {
 export const DISCLOSURE = {
   step1: 'More about who was involved',
   step2: 'How did you find out?',
-  step4: 'More about how the work was shaped',
+  step4: 'More about how you worked',
   step5: 'What the client said afterwards',
 } as const
 
@@ -242,8 +242,8 @@ export const SLOT_ENTRY_LABELS: Record<ImageSlot, string> = {
 
 export const COLLABORATOR_FIELDS = {
   legend: 'Who else worked on it?',
-  name: { label: 'Name', placeholder: 'e.g. Priya Raman' },
-  role: { label: 'Role', placeholder: 'e.g. Clinical lead' },
+  name: { label: 'Name', placeholder: 'e.g. Dani Okafor' },
+  role: { label: 'Role', placeholder: 'e.g. Operations lead' },
 } as const
 
 export const WIZARD_STEPS: ReadonlyArray<{
@@ -275,7 +275,7 @@ export const WIZARD_STEPS: ReadonlyArray<{
     id: 4,
     name: 'How it fit',
     heading: 'How the work fit together',
-    subhead: 'How do these sit against each other?',
+    subhead: 'Anything that shaped how you worked.',
   },
   {
     id: 5,

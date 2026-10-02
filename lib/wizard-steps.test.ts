@@ -578,7 +578,10 @@ describe('reviewNotes', () => {
   it('says so when there are no screens at all', () => {
     const notes = reviewNotes(buildIntake(emptyWizardState()))
     expect(notes).toHaveLength(1)
-    expect(notes[0]).toContain('text only')
+    // Against the constant, not a phrase from it: what this guards is that the
+    // note fires at all, and pinning the wording makes every copy pass a test
+    // failure.
+    expect(notes[0]).toBe(WIZARD_COPY.noteNoScreens)
   })
 
   it('says so when screens were uploaded and none was described', () => {
