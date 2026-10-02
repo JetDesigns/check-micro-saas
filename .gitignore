@@ -42,3 +42,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dry-run output from `npm run fixture -- --dry` (generated pages)
+/.dev/
+
+# Vendored agent skills. The skill body is third-party content; skills-lock.json
+# pins its source and content hash, so `npx skills experimental_install`
+# restores exactly this one.
+/.agents/
+/.claude/skills/
