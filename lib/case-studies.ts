@@ -6,12 +6,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { ensureAnonymousSession } from '@/lib/supabase/anon'
-import type {
-  CaseStudyStatus,
-  Intake,
-  ProjectType,
-  Tone,
-} from '@/types/database'
+import type { CaseStudyStatus, Intake, ProjectType, Tone } from '@/types/database'
 
 const ATTACHMENT_BUCKET = 'case-attachments'
 
@@ -22,6 +17,16 @@ const ATTACHMENT_BUCKET = 'case-attachments'
 export async function createCaseStudy(params: {
   intake: Intake
   projectType: ProjectType
+  /**
+   * Stored, and never sent to the model.
+   *
+   * The output specification fixes one flat declarative register and no rule in
+   * it reads a tone, so this cannot change what is produced. It is a sibling of
+   * `projectType` rather than a key inside `intake` on purpose: the prompt
+   * renderer walks the intake object, so a value that is not in it cannot reach
+   * the prompt by being overlooked. See the block above TONES in
+   * lib/intake-fields.ts.
+   */
   tone: Tone
 }): Promise<string> {
   const user = await ensureAnonymousSession()

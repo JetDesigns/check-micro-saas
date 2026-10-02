@@ -3,7 +3,7 @@ import { CaseStudyDocument } from '@/components/case-study/CaseStudyDocument'
 import { CASE_STUDY_FIXTURE, FIXTURE_TITLE } from '@/lib/fixtures/case-study-fixture'
 import { validateCaseStudy, type CaseStudy } from '@/lib/case-study-blocks'
 import { evidenceType } from '@/lib/wizard-steps'
-import type { Intake } from '@/types/database'
+import type { LegacyIntake } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Renders the hand-written fixture so the layout can be judged before any
@@ -48,7 +48,7 @@ export default async function FixturePage({
 
   // Derived, not stored — see evidenceType(). Decides whether Results leads
   // the document or closes it.
-  const evidence = data.intake ? evidenceType(data.intake as Intake) : 'B'
+  const evidence = data.intake ? evidenceType(data.intake as LegacyIntake) : 'B'
 
   const { data: attachments } = await admin
     .from('case_study_attachments')

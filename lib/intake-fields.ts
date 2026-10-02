@@ -1,4 +1,4 @@
-// The intake form: five steps and a review screen, plus two selectors.
+// The intake form: five steps and a review screen.
 //
 // Framing note: these questions ask the designer to account for their own
 // decisions, because the reader of the output is someone deciding whether to
@@ -9,225 +9,402 @@
 // `key` matches a property on the `Intake` type and is stored inside
 // `case_studies.intake`. Renaming a key orphans existing rows.
 //
-// Only steps 1, 2 and 5 live here. Step 3 (the repeated decision unit) and
-// step 4 (one block per uploaded screen) are arrays of objects, which a flat
-// key/label registry cannot express — they have their own components and their
-// copy lives in lib/wizard-steps.ts.
+// EVERY FIELD CITES ITS INPUT ID from prompts/focused-fix-inputs.md § B, which
+// names the rule in prompts/focused-fix-output.md that consumes it. A field with
+// no consumer is a field the designer answers for nothing.
+//
+// THE COPY IS WRITTEN TO BE SPOKEN. Labels are questions someone would actually
+// ask; a helper appears only where the answer would otherwise be wrong, and most
+// fields have none. Placeholders are examples, never instructions. Nothing here
+// mentions rules, sections, or what the generator needs — the person is talking
+// about their project, not feeding a system.
+//
+// None of this copy reaches the model. `lib/agents/prompts.ts` imports nothing
+// from this file and writes its own strings; that separation is deliberate and
+// load-bearing (AGENTS.md § Intake labels are part of the prompt), and it is
+// what makes a wording pass safe.
+//
+// Only the flat, one-string-per-answer fields live here. The repeated units —
+// decisions, screens, collaborators, the relation chips — are arrays of objects,
+// which a flat key/label registry cannot express. Their copy is in
+// lib/wizard-steps.ts.
 
-import type { Intake, OutcomeStatus, ProjectType, Tone } from '@/types/database'
-
-/** Intake keys that are a single string the user types. */
-export type TextKey = Exclude<
-  keyof Intake,
-  'decisions' | 'image_notes' | 'outcome_status'
->
+import type { Intake, OutcomeStatus, Provenance, ProjectType, Tone } from '@/types/database'
 
 /**
- * Steps a registry-driven field can belong to.
+ * Intake keys that are a single string the user types.
  *
- * Step 3 joined the list for one flat field that applies to the whole step
- * rather than to a single decision. Step 4 stays out: everything it collects
- * is per-image.
+ * `diagnosis_provenance` and `outcome_status` hold strings too, but they are
+ * picked from a fixed list rather than typed. They are excluded by name because
+ * a mapped type cannot tell them apart: a union of string literals extends
+ * `string`, so the condition below admits them and every assignment into the
+ * registry then has to satisfy the literal union as well.
  */
-export type FieldStep = 1 | 2 | 3 | 5
+export type TextKey = Exclude<
+  {
+    [K in keyof Intake]-?: NonNullable<Intake[K]> extends string ? K : never
+  }[keyof Intake],
+  'diagnosis_provenance' | 'outcome_status'
+>
+
+/** Steps a registry-driven field can belong to. */
+export type FieldStep = 1 | 2 | 3 | 4 | 5
+
+/**
+ * The boolean answers that reveal other fields.
+ *
+ * A revealed field is still in the registry when it is hidden — the review
+ * screen and the prompt renderer both walk the registry, and a field that
+ * vanished from it when a toggle was off would be invisible to them in a way
+ * "the user left it blank" is not.
+ */
+export type ToggleKey = 'client_may_be_named' | 'reported_verbatim' | 'has_measurement'
 
 export type IntakeField = {
   key: TextKey
   label: string
   placeholder: string
+  /** At most one line, and only where the answer would otherwise be wrong. */
   helper?: string
   type: 'input' | 'textarea'
   /**
-   * Drives the "optional" tag and the review screen's neutral marker — and
-   * nothing else. It has not gated navigation since the wizard stopped
-   * blocking "next" (check-revision-prompt.md § Phase 2). Marking a field
-   * required is a statement about what the case study needs, not a lock.
+   * Drives the "optional" tag beside the label — and nothing else. Read in one
+   * place, `components/studio/FieldGroup.tsx`. It has not gated navigation since
+   * the wizard stopped blocking "next" (check-revision-prompt.md § Phase 2), and
+   * the review screen's thin marker is computed from the answer's length, not
+   * from this. Marking a field required is a statement about what the case study
+   * needs, not a lock.
    */
   required: boolean
   rows?: number
   step: FieldStep
+  /** Renders at half width beside the next field. Year/duration, before/after. */
+  half?: boolean
+  /** Hidden until this toggle is on. */
+  revealedBy?: ToggleKey
+  /**
+   * Behind the step's disclosure link rather than on screen when the step opens.
+   *
+   * For optional answers most projects will not have. Nothing is removed — a
+   * collapsed field is in the schema, in the review screen and in the prompt
+   * exactly as before, and is submitted if filled. This only decides what a
+   * person is looking at when they arrive.
+   */
+  collapsed?: boolean
 }
 
 export const INTAKE_FIELDS: readonly IntakeField[] = [
-  // --- Step 1 — setup -----------------------------------------------------
+  // --- Step 1 — about the project -----------------------------------------
   {
+    // I52 (+ I3 partial). The subtitle is built from this, and a subtitle that
+    // would fit any redesign of anything has failed — so the example names a
+    // surface and a shape of work rather than a benefit.
     key: 'title',
-    label: 'What did you work on?',
+    label: 'What was the project?',
     placeholder: 'e.g. Rebuilding shift handover for a hospital ward',
-    helper: 'Short. One sentence, no setup.',
     type: 'input',
     required: true,
     step: 1,
   },
   {
-    key: 'client_type',
+    // I1 + I2. The helper earns its place: left to themselves people write
+    // "users", and that is the one specific nothing downstream can recover.
+    key: 'product_and_users',
+    label: "What's the product, and who uses it?",
+    placeholder:
+      'e.g. A ward management system. Charge nurses and bedside nurses use it across three shifts a day.',
+    helper: "Their actual job, not 'users'.",
+    type: 'textarea',
+    required: true,
+    rows: 2,
+    step: 1,
+  },
+  {
+    key: 'client_type', // I5
     label: 'Who was it for?',
     placeholder: 'e.g. A regional hospital group',
-    // This one is printed on the page, in the metadata grid under the title.
-    helper: 'Their industry + rough size. No names needed — this one shows.',
     type: 'input',
     required: true,
     step: 1,
   },
   {
-    key: 'year_duration',
-    label: 'Year & duration',
-    placeholder: 'e.g. 2024 · 9 weeks',
-    helper: 'Both in one line. Rough is fine.',
+    key: 'client_name', // I6 — behind the naming toggle
+    label: 'What are they called?',
+    placeholder: 'e.g. Northvale Health',
     type: 'input',
     required: false,
     step: 1,
+    revealedBy: 'client_may_be_named',
   },
   {
+    // I19. Split from the old fused `year_duration`, whose placeholder was
+    // literally "2024 · 9 weeks" — a metadata string joined by a middle dot,
+    // which is a template tell. Two values also mean an empty one can be dropped
+    // without taking the other with it.
+    key: 'year',
+    label: 'Year',
+    placeholder: 'e.g. 2024',
+    type: 'input',
+    required: false,
+    step: 1,
+    half: true,
+  },
+  {
+    key: 'duration', // I18
+    label: 'How long?',
+    placeholder: 'e.g. 9 weeks',
+    type: 'input',
+    required: false,
+    step: 1,
+    half: true,
+  },
+  {
+    // I4. Optional by the owner's decision. The spec lists the designer's role
+    // among both Overview's and Credits' required content, so leaving it blank
+    // costs the page real content — but it was always possible to leave blank,
+    // since nothing here gates anything.
     key: 'role',
-    label: 'Your role',
-    placeholder: 'e.g. Product Designer',
-    helper: 'What you were called on this project.',
+    label: 'What was your role?',
+    placeholder: 'e.g. Product designer',
     type: 'input',
     required: false,
     step: 1,
   },
   {
-    key: 'team_credit',
-    label: 'Team / credit',
-    placeholder: 'e.g. One engineer, one clinical lead',
-    helper: 'Who else was on it. Naming them reads as confidence, not dilution.',
+    key: 'agency', // I53
+    label: 'Was there an agency in between?',
+    placeholder: 'e.g. Fieldwork Studio',
     type: 'input',
     required: false,
     step: 1,
-  },
-  {
-    // The only field that is about HOW the writing should sound rather than
-    // what happened. Five tone presets are a guess at a register; this is the
-    // writer's actual register, which is the only thing that can make the
-    // output sound like them. The label is written to tell the model that too
-    // — labels have been rendered into the prompt before, so this one has a
-    // job beyond the form.
-    key: 'voice_sample',
-    label: 'In your own words, how would you explain this project out loud?',
-    placeholder:
-      "e.g. Honestly the screen wasn't the problem, the handover was. Nobody trusted it to still be there, so they photographed it. We fixed the trust part first and the rest got easier.",
-    helper:
-      "Optional — but it's what makes the writing sound like you instead of like a template. Three or four sentences, however you'd actually say it.",
-    type: 'textarea',
-    required: false,
-    rows: 3,
-    step: 1,
+    collapsed: true,
   },
 
-  // --- Step 2 — the problem -----------------------------------------------
+  // --- Step 2 — what you walked into --------------------------------------
   {
-    key: 'problem',
-    label: 'What was wrong before?',
+    // I7. The helper is the whole point of the question: people translate the
+    // complaint into their own vocabulary before writing it down, and the gap
+    // between what was reported and what was found is what the page is built on.
+    key: 'reported_problem',
+    label: 'What did the client say was wrong?',
+    placeholder: 'e.g. The handover screen looks cluttered and nurses find it confusing.',
+    helper: 'However they put it — even the parts that turned out to be wrong.',
+    type: 'textarea',
+    required: true,
+    rows: 3,
+    step: 2,
+  },
+  {
+    // I8 + I9. One answer carrying both, because the evidence is what cashes the
+    // diagnosis out — an abstraction here is indistinguishable from a guess.
+    key: 'diagnosis',
+    label: 'What was actually going on?',
     placeholder:
-      'e.g. The handover screen cleared itself sometimes, so nurses photographed it before every shift change.',
-    helper: 'A specific example or number beats a vague description.',
+      'e.g. The screen cleared itself on session timeout, so nurses photographed it before every handover. You could see it in the Ward Board view and in the Patient Notes column, which both reset.',
+    helper: 'And where could you see it — which screens, which controls?',
     type: 'textarea',
     required: true,
     rows: 4,
     step: 2,
   },
   {
-    key: 'why_it_mattered',
-    label: 'Why did it matter?',
+    // I11. Without the helper this comes back as frustration, which never leaves
+    // the symptom.
+    key: 'cost_to_client',
+    label: 'What was it costing them?',
     placeholder:
-      'e.g. Handover ran 14 minutes against a 6-minute budget, and the photo on someone’s phone had become the real record.',
-    helper: 'What was at risk if it stayed broken.',
-    type: 'textarea',
-    required: true,
-    rows: 3,
-    step: 2,
-  },
-  {
-    key: 'constraints',
-    label: 'What constrained you?',
-    placeholder:
-      'e.g. The patient record system was off limits, so everything had to work as a layer on top of it.',
-    helper:
-      "A deadline, a system you couldn't touch, data you didn't have. Anything that changed the shape of the solution.",
+      'e.g. Handover ran fourteen minutes against a six-minute budget, three times a day, across eleven wards.',
+    helper: 'Time, money, risk — not how it felt.',
     type: 'textarea',
     required: true,
     rows: 3,
     step: 2,
   },
 
-  // --- Step 3 — the decisions ---------------------------------------------
+  // --- Step 4 — how the work fit together ---------------------------------
   {
-    // The one field in this step that is not per-decision. AGENTS.md and the
-    // framework spec agree this is the strongest seniority signal when it is
-    // real — and the fastest way to sound fake when it is not, so nothing may
-    // generate a value here. Blank means the prose stays plain reasoning.
+    // I13. The strongest seniority signal when it is real and the fastest tell
+    // when it is not, so nothing may generate a value here. The helper is there
+    // to make leaving it blank feel normal, which it is.
     key: 'approach_framework',
-    label: 'Is there an overall approach or model that ties these decisions together?',
+    label: 'Is there a model that ties these together?',
     placeholder: 'e.g. Freeze, sort, split — the three things every handover needed',
-    helper:
-      'Optional — most projects do not have one. If yours does, it is usually the strongest part of the story.',
+    helper: "Most projects don't have one.",
     type: 'input',
     required: false,
-    step: 3,
+    step: 4,
+    collapsed: true,
+  },
+  {
+    key: 'constraints', // I14 + I15
+    label: 'What were you working around?',
+    placeholder:
+      'e.g. The patient record system was off limits, so everything had to work as a layer on top of it.',
+    helper: "A deadline, a system you couldn't touch, data you didn't have.",
+    type: 'textarea',
+    required: false,
+    rows: 3,
+    step: 4,
+    collapsed: true,
+  },
+  {
+    key: 'authority_split', // I17
+    label: 'Did someone else own part of the call?',
+    placeholder:
+      'e.g. I owned the interface. The clinical safety lead had the final call on anything touching medication fields.',
+    type: 'textarea',
+    required: false,
+    rows: 2,
+    step: 4,
+    collapsed: true,
   },
 
   // --- Step 5 — where it landed -------------------------------------------
   {
-    key: 'metrics',
-    label: 'Numbers that moved?',
-    placeholder: 'e.g. Handover reading time fell from 14 minutes to 7.',
-    helper: 'Real numbers only. Blank is better than a guess.',
+    key: 'measure', // I41
+    label: 'What did you measure?',
+    placeholder: 'e.g. Time from handover start to first patient reviewed',
+    type: 'input',
+    required: false,
+    step: 5,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'baseline_value', // I42
+    label: 'Before',
+    placeholder: 'e.g. 14 minutes',
+    type: 'input',
+    required: false,
+    step: 5,
+    half: true,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'baseline_period', // I42
+    label: 'Over what period?',
+    placeholder: 'e.g. March, four weeks',
+    type: 'input',
+    required: false,
+    step: 5,
+    half: true,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'after_value', // I44. The delta is derived from these two, never asked.
+    label: 'After',
+    placeholder: 'e.g. 7 minutes',
+    type: 'input',
+    required: false,
+    step: 5,
+    half: true,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'after_period', // I44
+    label: 'Over what period?',
+    placeholder: 'e.g. June, four weeks',
+    type: 'input',
+    required: false,
+    step: 5,
+    half: true,
+    revealedBy: 'has_measurement',
+  },
+  {
+    // I43. Without a source the number cannot be used at all, which is why it
+    // sits inside the block rather than beside it.
+    key: 'baseline_source',
+    label: 'Where did the number come from?',
+    placeholder: "e.g. The ward's own shift log, exported by their ops team",
+    type: 'input',
+    required: false,
+    step: 5,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'attribution_limit', // I45
+    label: 'What else changed around the same time?',
+    placeholder: 'e.g. They also added two float nurses to the night rota in April.',
     type: 'textarea',
     required: false,
+    rows: 2,
+    step: 5,
+    revealedBy: 'has_measurement',
+  },
+  {
+    key: 'team_change', // I39
+    label: 'What changed in how the team works?',
+    placeholder: 'e.g. The photographs stopped within two weeks. Nobody was asked to stop.',
+    type: 'textarea',
+    required: true,
     rows: 3,
     step: 5,
   },
   {
-    key: 'what_changed',
-    label: 'What changed for the team or client?',
-    placeholder:
-      'e.g. The photographs stopped within two weeks. Nobody was asked to stop.',
-    helper: 'What people did differently afterwards.',
+    // I36 (+ I37). The helper exists because the instinct is to paraphrase, and
+    // a tidied-up quote is not a quote.
+    key: 'client_response',
+    label: 'What did the client say afterwards?',
+    placeholder: '"We stopped talking about the handover screen in the ops meeting."',
+    helper: 'Their own words, not tidied up.',
     type: 'textarea',
     required: false,
     rows: 3,
     step: 5,
-  },
-  {
-    key: 'do_differently',
-    label: 'What would you do differently?',
-    placeholder:
-      'e.g. I would have sat through a night handover earlier — the day shift told a much tidier story than the ward actually had.',
-    helper: 'The part a reviewer trusts most, because nobody fakes it.',
-    type: 'textarea',
-    required: false,
-    rows: 3,
-    step: 5,
+    collapsed: true,
   },
 ] as const
 
-export const PROJECT_TYPES: ReadonlyArray<{
+// ---------------------------------------------------------------------------
+// Selectors
+// ---------------------------------------------------------------------------
+
+export type ProjectTypeOption = {
   value: ProjectType
   label: string
   description: string
-}> = [
+  /** Visible, unselectable, and labelled. See below. */
+  comingSoon?: boolean
+}
+
+// Two cards, not three. `advisory` is still in the ProjectType union and still
+// passes the CHECK constraint from migration 0003 — it is out of the SELECTOR,
+// not out of the schema, so no existing row is orphaned.
+//
+// Build-from-nothing stays visible on purpose. Its spec does not exist yet, and
+// hiding it would let someone pick "focused fix" for a project that is not one —
+// which produces a page arguing from a prior state that never existed. Visible
+// and refused is the honest state.
+export const PROJECT_TYPES: readonly ProjectTypeOption[] = [
   {
     value: 'focused_fix',
     label: 'Focused fix',
-    description: 'You improved one specific thing that was going wrong.',
+    description: 'A product already existed. You repaired parts of it.',
   },
   {
     value: 'zero_to_one',
-    label: 'Built from nothing',
+    label: 'Build from nothing',
     description: "You made something that didn't exist before.",
-  },
-  {
-    value: 'advisory',
-    label: 'Strategy & advisory',
-    description: 'The value was in the thinking, not only the deliverable.',
+    comingSoon: true,
   },
 ] as const
 
-// Still five. The spec collapses these to Direct / Warm / Analytical, but
-// `analytical` is not in the CHECK constraint on case_studies.tone (migration
-// 0003), so the collapse needs a migration and was deliberately deferred out
-// of the wizard restructure. See AGENTS.md § Tone + project type.
+/**
+ * Tone presets.
+ *
+ * RE-ADDED BY THE OWNER, AND NON-FUNCTIONAL. The output specification fixes one
+ * flat declarative register for every page, and no rule in it reads a tone — so
+ * the selection is stored and never sent to the model. `createCaseStudy` writes
+ * it to `case_studies.tone`, which is a column rather than a key inside
+ * `intake`: the prompt renderer walks the intake, so keeping tone out of that
+ * object is what makes "never sent" structural instead of a promise somebody has
+ * to remember.
+ *
+ * This says nothing either way about the register-sample question the input
+ * manifest leaves open, and no output rule is added on its account.
+ *
+ * Not labelled as non-functional in the UI — that is a deliberate choice, and
+ * this comment is where it is recorded.
+ */
 export const TONES: ReadonlyArray<{ value: Tone; label: string }> = [
   { value: 'professional', label: 'Professional' },
   { value: 'direct', label: 'Direct' },
@@ -246,12 +423,100 @@ export const OUTCOME_OPTIONS: ReadonlyArray<{
   { value: 'handed_off', label: 'Handed off' },
 ] as const
 
+// I12. Written as answers to the question rather than as categories, because
+// that is how someone would say it out loud. "The client told me" is on the list
+// because it is a real answer, not a failure.
+export const PROVENANCE_OPTIONS: ReadonlyArray<{
+  value: Provenance
+  label: string
+}> = [
+  { value: 'audit', label: 'I went through the product' },
+  { value: 'user_research', label: 'I talked to the people using it' },
+  { value: 'analytics', label: 'The analytics' },
+  { value: 'testing', label: 'Testing' },
+  { value: 'client_told_me', label: 'The client told me' },
+] as const
+
 export const DEFAULT_PROJECT_TYPE: ProjectType = 'focused_fix'
 export const DEFAULT_TONE: Tone = 'professional'
 
+// ---------------------------------------------------------------------------
+// Uploads
+// ---------------------------------------------------------------------------
+//
+// ONE constant for the cap, because uploads are no longer one step. They sit
+// beside the problem in step 2 and beside each decision in step 3, and every one
+// of those slots counts against the same total — a per-slot cap would let nine
+// slots hold twelve files each.
+//
+// The bucket enforces size and MIME independently (migration 0002); this is the
+// client half, and it is deliberately narrower. WEBP was accepted before and is
+// not now: the assets here are screenshots, and two accepted formats is one
+// fewer thing for the vision pass to choke on.
+export const MAX_ATTACHMENTS = 12
+export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+export const ACCEPTED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png'] as const
+export const ACCEPTED_ATTACHMENT_HINT = 'JPG, PNG'
+
+// ---------------------------------------------------------------------------
+
+/** Every field on a step, revealed or not, collapsed or not. */
 export function fieldsForStep(step: FieldStep): IntakeField[] {
   return INTAKE_FIELDS.filter((f) => f.step === step)
 }
+
+/**
+ * Fields whose toggle is on, or which have no toggle.
+ *
+ * Reveal only — a collapsed field is still visible to this, because the review
+ * screen has to show every answer the person gave regardless of which
+ * disclosure it was typed into.
+ */
+export function visibleFields(
+  fields: readonly IntakeField[],
+  toggles: Partial<Record<ToggleKey, boolean>>
+): IntakeField[] {
+  return fields.filter((f) => !f.revealedBy || toggles[f.revealedBy] === true)
+}
+
+/** What a step shows on arrival, and what waits behind its disclosure link. */
+export function partitionByDisclosure(fields: readonly IntakeField[]): {
+  open: IntakeField[]
+  collapsed: IntakeField[]
+} {
+  return {
+    open: fields.filter((f) => !f.collapsed),
+    collapsed: fields.filter((f) => f.collapsed),
+  }
+}
+
+/**
+ * Whether any of these fields has an answer.
+ *
+ * What a disclosure asks before deciding to start open: a link that is closed
+ * over a filled-in answer reads as a lost answer.
+ */
+export function anyAnswered(
+  text: Partial<Record<TextKey, string>>,
+  fields: readonly IntakeField[]
+): boolean {
+  return fields.some((f) => (text[f.key] ?? '').trim() !== '')
+}
+
+export function fieldsRevealedBy(toggle: ToggleKey): IntakeField[] {
+  return INTAKE_FIELDS.filter((f) => f.revealedBy === toggle)
+}
+
+/**
+ * The seven components the metric branch requires.
+ *
+ * Derived from the registry rather than listed again, so a field added to the
+ * metric block cannot be missed by the branch gate that reads it — which is the
+ * class of drift that produced the digit-detection bug in the first place.
+ */
+export const MEASUREMENT_KEYS: readonly TextKey[] = fieldsRevealedBy('has_measurement').map(
+  (f) => f.key
+)
 
 /** DOM id for a field, shared by the input and the review screen's jump links. */
 export function fieldElementId(key: TextKey): string {

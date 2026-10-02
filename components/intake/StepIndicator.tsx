@@ -4,16 +4,20 @@ import { stepOrder, stepPosition, type StepId } from '@/lib/wizard-steps'
 
 type Props = {
   current: StepId
-  hasImages: boolean
 }
 
 // Three states, not two. The old indicator had a done pill and a current pill
 // and nothing else, which works for two steps and falls apart at five: a
 // future step needs to look different from a finished one, or the bar reads
 // as progress you have already made.
-export function StepIndicator({ current, hasImages }: Props) {
-  const steps = stepOrder(hasImages).filter((s) => s !== 'review')
-  const { index, total } = stepPosition(current, hasImages)
+//
+// It no longer takes `hasImages`. The old step 4 asked about uploaded screens
+// and dropped out of the walk when there were none, so the count had to be
+// computed rather than counted; uploads sit beside what they show now and every
+// step is always in the order.
+export function StepIndicator({ current }: Props) {
+  const steps = stepOrder().filter((s) => s !== 'review')
+  const { index, total } = stepPosition(current)
   const onReview = current === 'review'
 
   return (

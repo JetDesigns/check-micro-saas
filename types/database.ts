@@ -15,6 +15,58 @@ import type { PainFrequency, PriceWillingness } from '@/lib/waitlist'
 // and deferring costs nothing; the replacement shape lives in
 // lib/case-study-blocks.ts. See check-revision-prompt.md.
 
+/**
+ * What the Focused Fix path writes to `case_studies.generated` (migration 0015).
+ *
+ * A different shape from `document`, which holds the {spine, blocks} object the
+ * legacy pipeline produces. The two run side by side behind a dev flag, so this
+ * is a second column rather than a reinterpretation of the first.
+ *
+ * `caption` and `alt` are separate strings because they are two different jobs
+ * and must not be collapsed into one. `[[figure:<imageId>]]` markers in the
+ * markdown are where each figure sits.
+ */
+export type GeneratedPage = {
+  markdown: string
+  figures: { imageId: string; caption: string; alt: string }[]
+  /** One entry per page-level choice, each citing the fact that drove it. */
+  variance_register: { choice: string; value: string; driver: string }[]
+  branch: 'metric' | 'contribution'
+  /**
+   * Passages the writer had to reason its way to and could not confirm from the
+   * answers. Flagged rather than asserted; empty is the normal case.
+   */
+  needs_confirmation?: string[]
+  /**
+   * How this page was made. Stored beside it because the ablation runs compare
+   * pages, and a comparison is only readable if each page says which model wrote
+   * it, how many attempts it took, and what the code checks still had to say.
+   */
+  meta?: GeneratedMeta
+}
+
+export type GeneratedMeta = {
+  model: string
+  attempts: number
+  /** Non-blocking findings from validateFocusedFix, kept so they are not lost. */
+  warnings: string[]
+  durationMs: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  /**
+   * One line per attempt that was thrown away, in order.
+   *
+   * A rejected attempt used to vanish the moment a later one succeeded, which is
+   * how a run whose first attempt was truncated came to look like a clean run
+   * that merely took two tries. What a page cost to produce is part of reading it.
+   */
+  attemptLog: string[]
+  /** Field paths blanked for this run, when it was an ablation. Empty otherwise. */
+  blanked: string[]
+}
+
 export type CaseStudyStatus = 'draft' | 'preview' | 'paid' | 'complete'
 export type PaymentStatus = 'pending' | 'succeeded' | 'failed'
 export type ReviewRole = 'user' | 'agent'
@@ -27,71 +79,169 @@ export type Tone =
   | 'data_driven'
   | 'warm'
 
+
 // The whole intake form, stored as one jsonb column. Submitted in a single
 // shot, so per-field rows buy nothing.
 //
-// EVERY TEXT FIELD IS OPTIONAL, deliberately. The wizard never blocks "next"
+// EVERY ANSWER IS OPTIONAL, deliberately. The wizard never blocks "next"
 // (check-revision-prompt.md § Phase 2), so any answer can be empty when the
 // row is written. The previous version of this type marked five fields
 // required and the submit path reached them through `as unknown as Intake` —
 // a cast that produced an object missing its own required properties without
 // a word of complaint from anyone. Optional here is the truth.
 //
-// `title` and `client_type` must keep their key names: lib/case-studies.ts
-// reads both by name to fill their own columns on case_studies.
+// `title` and `client_type` MUST keep their key names: lib/case-studies.ts
+// reads both by name to fill their own columns on case_studies, and renaming
+// either one orphans every existing row.
+//
+// THE TRAILING IDS ARE LOAD-BEARING. Each one names the input this field
+// supplies in prompts/focused-fix-inputs.md § B, which in turn names the rule
+// in prompts/focused-fix-output.md that consumes it. A field with no id is a
+// field no rule reads — section 2 of the manifest calls those orphans, and
+// three of them (tone, the register sample, "what would you do differently")
+// were removed in this rebuild rather than carried. Do not add a field here
+// without an id to put beside it.
 export type Intake = {
-  // Step 1 — setup
-  title?: string
-  client_type?: string
-  /** Feeds the metadata grid. e.g. "2024 · 9 weeks". */
-  year_duration?: string
-  role?: string
-  team_credit?: string
-  // Not a project fact — a sample of how the designer actually talks, used to
-  // anchor the prose style. The prompt is explicit that its CONTENT must never
-  // be treated as something that happened.
-  voice_sample?: string
+  /**
+   * 2 = the shape below. Absent means a row written before the rebuild, which
+   * carries `LegacyIntake`. /api/compile routes on this, and that routing is
+   * not cosmetic: a v1 row handed to the spec prompt would be missing eleven
+   * of its required inputs, and a prompt that lists what it did not get is an
+   * invitation to supply it (§10.1).
+   */
+  schema_version?: 2
 
-  // Step 2 — the problem
-  problem?: string
-  why_it_mattered?: string
-  constraints?: string
+  // --- Step 1 — about the project -----------------------------------------
+  title?: string                 // I52 (+ I3 partial) — the engagement in one line
+  product_and_users?: string     // I1, I2 — what it is, who uses it by occupation
+  client_type?: string           // I5 — industry and rough size
+  /**
+   * I6. The one fact only the user holds, which is why the spec's appendix
+   * resolves anonymisation as an explicit user choice rather than a default
+   * the generator picks. Absent means no — never name the client, anywhere on
+   * the page, in a caption, or in Credits.
+   */
+  client_may_be_named?: boolean
+  client_name?: string           // I6 — only meaningful with the toggle on
+  year?: string                  // I19  ┐ split from the old fused `year_duration`, so
+  duration?: string              // I18  ┘ §3.2's "only fields with a real value" reaches each
+  role?: string                  // I4 — required by §4.1 and §4.6
+  collaborators?: Collaborator[] // I54 — roles, not just names, or Credits cannot be built
+  agency?: string                // I53 — the third party in a three-party engagement
 
-  // Step 3 — the decisions. The spine is derived from these, so this is the
-  // load-bearing part of the whole form.
-  //
-  // `approach_framework` sits above the decision blocks because it names what
-  // ties them together, if anything does. Optional and usually absent: most
-  // projects have no named model, and a fabricated one is worse than none.
-  approach_framework?: string
+  // --- Step 2 — what you walked into --------------------------------------
+  reported_problem?: string      // I7 — in the reporter's own framing (§5.3)
+  /**
+   * I31. Marks `reported_problem` as the client's exact words, which is what
+   * §8.5 needs before it may quote anything and what opens two of the five
+   * page-opening options in §6.4c. Absent means an attributed report — rung 1
+   * of §10.3's ladder — and a quotation is never reconstructed from it.
+   */
+  reported_verbatim?: boolean
+  diagnosis?: string             // I8 + I9 — what it actually was, and where it showed
+  diagnosis_provenance?: Provenance // I12 — feeds the provenance line (§4.2)
+  cost_to_client?: string        // I11 — the stakes, in what they already spend or risk
+
+  // --- Step 3 — the decisions ---------------------------------------------
   decisions: Decision[]
 
-  // Step 4 — your screens
+  // --- Step 4 — how the work fit together ---------------------------------
+  approach_framework?: string    // I13 — only where the designer named one themselves
+  constraints?: string           // I14 + I15 — what changed the shape of the solution
+  authority_split?: string       // I17 — only where a split genuinely shaped the work
+
+  // --- Step 5 — where it landed -------------------------------------------
+  /** I40. Metadata only. §10.5 bars it from ever becoming Outcome's claim. */
+  outcome_status?: OutcomeStatus
+  /**
+   * Whether a measurement exists at all. The seven fields below are what
+   * `evidenceBranch` reads; this toggle only decides whether to ask for them.
+   * Routing on a digit instead is the defect section A of the manifest
+   * describes — see lib/wizard-steps.ts.
+   */
+  has_measurement?: boolean
+  measure?: string               // I41 — what was measured
+  baseline_value?: string        // I42 ┐ before
+  baseline_period?: string       // I42 ┘
+  baseline_source?: string       // I43 — required, not optional: no source, no number (§7.3)
+  after_value?: string           // I44 ┐ after. The delta is derived, never asked
+  after_period?: string          // I44 ┘
+  attribution_limit?: string     // I45 — the only guard on borrowed causality
+  team_change?: string           // I39 — what the team can now do, or no longer has to
+  client_response?: string       // I36 (+ I37) — their words, after delivery
+
+  // --- Screens, flat across every slot ------------------------------------
   image_notes: ImageNote[]
 
-  // Step 5 — where it landed
-  outcome_status?: OutcomeStatus
-  metrics?: string
-  what_changed?: string
-  do_differently?: string
+  /**
+   * I25 — which pain point each fix answers.
+   *
+   * Written by the review screen, not by a step. §6.3 requires this per fix
+   * block and refuses a section-level substitute, and the manifest proposed a
+   * picker column to collect it. A picker asks the designer to classify their
+   * own work, so the pipeline infers the mapping from step 2 and step 3 and
+   * the user confirms or edits it — the same infer/propose/confirm shape §9.4
+   * specifies for the diagram, and for the same reason: nothing about someone's
+   * work gets published on a claim they never saw.
+   */
+  tiebacks?: Tieback[]
 }
 
+export type Collaborator = { name: string; role: string }
+
+export type Tieback = { decisionId: string; painPoint: string }
+
+/** I12. How the diagnosis was reached — the cheapest credibility on the page. */
+export type Provenance =
+  | 'audit'
+  | 'user_research'
+  | 'analytics'
+  | 'testing'
+  | 'client_told_me'
+
 // One decision unit. The wizard asks for decisions because people can recall
-// them; it never asks for "requirements", which nobody can. All three levels
-// of the spine come out of this shape downstream (Phase 4):
+// them; it never asks for "requirements", which nobody can.
 //
-//   decided  → move            (what you designed)
-//   why      → finding         (what you learned)
-//   rejected → move_section.tradeoff.rejected, which is what justifies the
-//              requirement — the level nobody can state directly
-//
-// See lib/case-study-blocks.ts for the far end of that mapping.
+// `prior_behaviour` and `consequence` are two fields on purpose. Merging them
+// would repeat the fusion the manifest criticises in the old problem field,
+// where the report, the diagnosis and the evidence shared one answer and the
+// answer supplied whichever the user thought of first. A field that asks for
+// two facts gets one, and the one it loses here is justification move 4 —
+// which is the whole difference between a case study and a changelog (§6.1).
 export type Decision = {
-  /** Stable across edits and reorders; becomes SpineEntry.id. */
+  /** Stable across edits and reorders. Ties a fix block to its tie-back. */
   id: string
-  decided: string
-  why: string
-  rejected?: string
+  decided: string                // I20 — the decision itself, one line
+  /**
+   * I26. When true, `prior_behaviour` holds the ordered beats of how the thing
+   * works (I30) instead of what it used to do, and the Before screen slot is
+   * not offered — there is nothing to show. Drives §6.2's first selection rule.
+   */
+  no_prior_version?: boolean
+  prior_behaviour?: string       // I23, or I30's walkthrough when the toggle is on
+  consequence?: string           // I24 — what someone no longer has to do
+  why: string                    // I21 — what made them decide it
+  rejected?: string              // I22 — the option they turned down
+  client_request?: string        // I32 — their words, where a request prompted this fix
+  relations?: DecisionRelations
+}
+
+/**
+ * I27, I28, I29 — how this decision sits against the others.
+ *
+ * Three independent members, not an enum: a fix can break the pattern, repeat
+ * across many places, and depend on another one at the same time. There is no
+ * "none" option because the absence of all three IS none. Between them they
+ * decide which shape §6.2 selects for the block, and they are the only input
+ * that could mark exceptions in a diagram — which is why the manifest gives
+ * the diagram no question of its own.
+ */
+export type DecisionRelations = {
+  /** The pattern the rest of the work follows, named. Set only when it applies. */
+  breaks_pattern?: string
+  repeated_treatment?: boolean
+  /** Another Decision.id. Moves that fix earlier only where §4.4 requires it. */
+  depends_on?: string
 }
 
 // What one uploaded screen is doing in the case study. `orderIndex` is the
@@ -99,15 +249,73 @@ export type Decision = {
 // index, so position at submit time is what ties a note to its row. Notes are
 // carried by attachment id inside the wizard and only flattened to indices at
 // submit, so removing a screen mid-flow cannot shift notes onto the wrong one.
+//
+// The old `shows` string is gone. It held either a Decision.id or one of two
+// fixed slot names, and the user picked it from a dropdown. Slot position now
+// carries both the state and the decision link, which is what let the dropdown
+// go — and `state` is what §6.2's asset veto and §8.6's after-only caption rule
+// were missing entirely (I35).
 export type ImageNote = {
   orderIndex: number
-  /** A Decision.id, or one of the two fixed slots. */
+  /**
+   * Where the screen was uploaded. 'problem' screens are §5.4 exhibits and
+   * belong to no decision; 'before' and 'after' belong to the decision named
+   * below. The two carry different caption jobs — see the output contract.
+   */
+  slot: ImageSlot
+  /** A Decision.id. Absent, and only absent, for slot 'problem'. */
+  decisionId?: string
+  notice?: string                // I34 — what someone should notice here
+}
+
+export type ImageSlot = 'problem' | 'before' | 'after'
+
+// ---------------------------------------------------------------------------
+// The pre-rebuild shape
+// ---------------------------------------------------------------------------
+//
+// Rows written before schema_version 2 carry this instead. Nothing writes it
+// any more and the wizard cannot produce it, but two things still read it: the
+// legacy pipeline behind the dev flag, and any re-compile of an old row.
+//
+// It is a separate type rather than a pile of optional keys on Intake because
+// the two shapes disagree about what the same question means — `problem` fused
+// the report, the diagnosis and the evidence into one answer, and `metrics`
+// fused six components into one. Typing them as alternatives is what stops a
+// v1 answer being read as if it were a v2 one.
+export type LegacyIntake = {
+  title?: string
+  client_type?: string
+  year_duration?: string
+  role?: string
+  team_credit?: string
+  voice_sample?: string
+  problem?: string
+  why_it_mattered?: string
+  constraints?: string
+  approach_framework?: string
+  decisions: Decision[]
+  image_notes: LegacyImageNote[]
+  outcome_status?: OutcomeStatus
+  metrics?: string
+  what_changed?: string
+  do_differently?: string
+}
+
+export type LegacyImageNote = {
+  orderIndex: number
+  /** A Decision.id, or one of the two fixed slots that no longer exist. */
   shows: string
   notice?: string
 }
 
-export const IMAGE_SLOT_HERO = 'hero'
-export const IMAGE_SLOT_SUPPORTING = 'supporting'
+/** What comes off `case_studies.intake`, before anything has narrowed it. */
+export type StoredIntake = Intake | LegacyIntake
+
+/** The narrowing. One place, so nothing has to re-derive the rule. */
+export function isFocusedFixIntake(intake: StoredIntake): intake is Intake {
+  return (intake as Intake).schema_version === 2
+}
 
 export type OutcomeStatus =
   | 'shipped'
@@ -176,9 +384,10 @@ export type Database = {
           client_type: string | null
           project_type: ProjectType | null
           tone: Tone | null
-          intake: Intake | null
+          intake: StoredIntake | null
           compiled_narrative: unknown | null
           document: CaseStudy | null
+          generated: GeneratedPage | null
           created_at: string
           updated_at: string
         }
@@ -193,9 +402,10 @@ export type Database = {
           client_type?: string | null
           project_type?: ProjectType | null
           tone?: Tone | null
-          intake?: Intake | null
+          intake?: StoredIntake | null
           compiled_narrative?: unknown | null
           document?: CaseStudy | null
+          generated?: GeneratedPage | null
           created_at?: string
           updated_at?: string
         }
@@ -210,9 +420,10 @@ export type Database = {
           client_type?: string | null
           project_type?: ProjectType | null
           tone?: Tone | null
-          intake?: Intake | null
+          intake?: StoredIntake | null
           compiled_narrative?: unknown | null
           document?: CaseStudy | null
+          generated?: GeneratedPage | null
           created_at?: string
           updated_at?: string
         }
@@ -354,6 +565,8 @@ export type Database = {
           model: string
           attempt: number
           input_tokens: number
+          cache_read_input_tokens: number
+          cache_creation_input_tokens: number
           output_tokens: number
           duration_ms: number
           ok: boolean
@@ -367,6 +580,8 @@ export type Database = {
           model: string
           attempt?: number
           input_tokens?: number
+          cache_read_input_tokens?: number
+          cache_creation_input_tokens?: number
           output_tokens?: number
           duration_ms?: number
           ok?: boolean
@@ -380,6 +595,8 @@ export type Database = {
           model?: string
           attempt?: number
           input_tokens?: number
+          cache_read_input_tokens?: number
+          cache_creation_input_tokens?: number
           output_tokens?: number
           duration_ms?: number
           ok?: boolean

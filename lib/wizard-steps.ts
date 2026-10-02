@@ -8,67 +8,84 @@
 // markup. Step order, what gets written to the database, and what the review
 // screen says are exactly the parts worth guarding.
 
-import {
-  SPINE_MAX,
-  SPINE_MIN,
-  containsDigit,
-  countWords,
-} from '@/lib/case-study-blocks'
+import { SPINE_MAX, SPINE_MIN, containsDigit, countWords } from '@/lib/case-study-blocks'
 import {
   INTAKE_FIELDS,
+  MEASUREMENT_KEYS,
   OUTCOME_OPTIONS,
+  PROVENANCE_OPTIONS,
   fieldElementId,
   fieldsForStep,
+  visibleFields,
   type FieldStep,
+  type IntakeField,
   type TextKey,
+  type ToggleKey,
 } from '@/lib/intake-fields'
-import type { Decision, ImageNote, Intake, OutcomeStatus } from '@/types/database'
+import type {
+  Collaborator,
+  Decision,
+  ImageNote,
+  ImageSlot,
+  Intake,
+  OutcomeStatus,
+  Provenance,
+  StoredIntake,
+} from '@/types/database'
+import { isFocusedFixIntake } from '@/types/database'
 
 export type StepId = 1 | 2 | 3 | 4 | 5 | 'review'
 
-// Derived from the schema, not restated. One spine entry comes from one
-// decision, so the wizard's limits and the block schema's limits are the same
-// numbers by necessity — writing 2 and 4 here again would let the schema
-// change without the wizard noticing, and the mismatch would only surface as
-// a failed compile four minutes and one vision pass later.
+// Derived from the schema, not restated. One fix block comes from one
+// decision, so the wizard's limits and the spec's limits are the same numbers
+// by necessity — and the spec's appendix (Q1) chose 2–4 deliberately to match
+// this constant, so that the specification and the validator cannot drift.
 export const DECISIONS_MIN = SPINE_MIN
 export const DECISIONS_MAX = SPINE_MAX
 
 // Under this, an answer gets a neutral marker on the review screen. It is
-// deliberately crude — a word count, nothing more. Phase 3's probing threshold
-// is a different instrument for a different moment (it fires while you type,
-// and it reads the answer for generic phrasing); do not merge the two.
+// deliberately crude — a word count, nothing more.
 export const THIN_WORD_COUNT = 8
 
 // One place for the copy the spec pins down, so the "never say this" rule can
-// be tested rather than trusted. check-revision-prompt.md § Phase 2 and
-// § Copy rules.
+// be tested rather than trusted.
 export const WIZARD_COPY = {
-  opening:
-    "I'll ask a few things about your project. Answer what you can — you can always come back.",
-  step3Intro: 'Two or three decisions is enough. Depth beats coverage here.',
+  opening: 'A few quick things, then we get into the story.',
+  step3Intro: 'Two or three is plenty — go deep rather than wide.',
   addDecision: 'Add another decision',
   removeDecision: 'Remove',
+  addCollaborator: 'Add someone',
+  comingSoon: 'Coming soon',
   reviewIntro:
-    'Your case study is ready to write. These parts are still short — fill them in now, or go ahead and generate.',
-  reviewIntroAllFilled: 'Your case study is ready to write.',
+    'Ready to write. A few answers are still short — fill them in now, or go ahead.',
+  reviewIntroAllFilled: 'Ready to write.',
   reviewFill: 'Fill these in',
   reviewWrite: 'Write the case study',
+  generate: 'Generate',
   markerThin: 'Still short',
   markerEmpty: 'Not answered',
   earlyAccess: 'Not open yet — request early access to get in first',
 
-  // Stated as what the structure needs, never as a judgement about the
+  // Drafts. The wizard keeps what has been typed across reloads, so it needs a
+  // way to let go of it that is not "reload and hope".
+  startOver: 'Start over',
+  startOverConfirm: 'Clear everything you have typed so far?',
+  savedHeading: 'Written',
+  savedBody: 'Your answers are saved, and so is the page.',
+  openPage: 'Open the page',
+  backToAnswers: 'Back to my answers',
+
+  // Stated as what the case study needs, never as a judgement about the
   // answer. The forbidden-word rule applies here like everywhere else.
   blockerOneDecision:
-    'A case study is built from at least two decisions — the structure maps each one to what you learned and what you designed. Add one more in step 3.',
+    'A case study needs at least two decisions — one on its own has nothing to sit against. Add one more in step 3.',
   blockerNoDecisions:
-    'Step 3 is where the case study comes from. Add at least two decisions before writing.',
+    'Step 3 is where the case study comes from. Add two decisions before writing.',
 
   noteNoScreens:
-    'No screens attached, so the case study will be text only. You can add up to six in step 1 — reviewers look at the work as well as the reasoning.',
+    'No screens attached, so this will be text only. You can add them beside the problem in step 2, and beside each decision in step 3.',
   noteUnlabelledScreens:
-    'Your screens have no notes yet. Step 4 asks what each one shows, and that is what makes a caption point at a decision instead of describing the layout.',
+    'Some screens have no note yet. Saying what to look at is what makes a caption point at a choice.',
 } as const
 
 // The words the spec forbids on the review screen. Two are English and three
@@ -83,15 +100,37 @@ export const DISCOURAGING_WORDS = [
   'weak',
 ] as const
 
-// Step 3 and step 4 are arrays of objects rather than flat keys, so their
-// fields cannot live in the intake registry. Their copy lives here instead of
-// inside the components, so the "never discourage" rule below can be tested
-// over it like everything else.
+// Step 3 is an array of objects rather than flat keys, so its fields cannot
+// live in the intake registry. Their copy lives here instead of inside the
+// components, so the "never discourage" rule above can be tested over it like
+// everything else.
 export const DECISION_FIELDS = {
   decided: {
     label: 'What did you decide?',
-    helper: "One decision. e.g. 'Put the filters in a persistent sidebar.'",
+    helper: 'Just one — you can add more below.',
     placeholder: 'e.g. Freeze the note at shift change',
+  },
+  // I23. Without this a block can only describe what exists now, which reads as
+  // a changelog entry rather than a decision.
+  priorBehaviour: {
+    label: 'What did it do before?',
+    helper: 'What someone had to do, not how it looked.',
+    placeholder: 'e.g. The note cleared on session timeout, with no warning',
+  },
+  // I30. The same column asked differently when there is no before to compare
+  // against, which is also what makes the ordered-mechanic shape reachable.
+  walkthrough: {
+    label: 'How does it work, step by step?',
+    helper: '',
+    placeholder:
+      'e.g. The nurse opens handover, taps a patient, and the note holds until someone acknowledges it',
+  },
+  // I24. The move nobody writes unless they are asked for it, and the one that
+  // separates a case study from a list of edits.
+  consequence: {
+    label: 'What can people do now — or not have to do any more?',
+    helper: '',
+    placeholder: 'e.g. Nobody photographs the screen before handover any more',
   },
   why: {
     label: 'What made you decide it?',
@@ -101,29 +140,111 @@ export const DECISION_FIELDS = {
   },
   rejected: {
     label: 'What did you consider instead?',
-    helper:
-      'The option you rejected — and why. This is usually the most interesting part.',
+    helper: 'What you turned down, and why.',
     placeholder:
       'e.g. An autosave indicator. A reassuring spinner does not earn trust back once it is gone.',
+  },
+  // I32. Collapsed, because most fixes were not requested.
+  clientRequest: {
+    label: 'Did the client ask for this?',
+    helper: '',
+    placeholder: 'e.g. "Can you make the handover screen less cluttered?"',
+  },
+} as const
+
+export const DECISION_TOGGLE = {
+  noPriorVersion: {
+    label: "This didn't exist before",
+    helper: '',
+  },
+} as const
+
+// I27, I28, I29. Three independent chips, asked once per decision on step 4
+// where the whole set is visible at once — which is the only place the
+// question "against the others" can honestly be answered.
+export const RELATION_CHIPS = {
+  breaksPattern: {
+    label: 'Breaks a pattern the others follow',
+    revealLabel: 'Which pattern?',
+    revealPlaceholder: 'e.g. Everything else opens in place; this one takes over the screen',
+  },
+  repeatedTreatment: {
+    label: 'Same treatment repeated in many places',
+  },
+  dependsOn: {
+    // The reveal is phrased as the question rather than as the relationship, so
+    // it needs no line underneath explaining what "depends" means here.
+    label: 'Depends on another decision',
+    revealLabel: 'Which one has to be read first?',
   },
 } as const
 
 export const SCREEN_FIELDS = {
-  shows: {
-    label: 'Which decision does this show?',
-    unset: 'Pick one',
-  },
   notice: {
     label: 'What should someone notice here?',
-    helper: 'Point at the choice, not the layout.',
-    placeholder: 'e.g. Escalated patients hold the top of the list until acknowledged',
+    // Two jobs. A problem screen is evidence and has no decision to point at
+    // yet; a before or after screen sits with the decision it belongs to.
+    helperEvidence: "The thing that's wrong, not the layout.",
+    helperDecision: 'The choice, not the layout.',
+    placeholderEvidence: 'e.g. The Patient Notes column is empty after the reset',
+    placeholderDecision:
+      'e.g. Escalated patients hold the top of the list until acknowledged',
   },
 } as const
 
-export const IMAGE_SLOT_LABELS: Record<string, string> = {
-  hero: 'Overview / hero',
-  supporting: 'Supporting',
+/**
+ * The four toggles, and the disclosure links.
+ *
+ * They live here rather than inline in the components for one reason: the
+ * discouraging-word test walks this module, and copy written inside a component
+ * is copy the test cannot see. Every meta-explanation that used to sit beside
+ * these — what the page would do with the answer, what it costs to leave one
+ * blank — was written inline, and none of it was ever checked.
+ */
+export const TOGGLE_COPY = {
+  clientMayBeNamed: { label: "It's fine to name the client", helper: '' },
+  reportedVerbatim: { label: 'Those were their exact words', helper: '' },
+  hasMeasurement: {
+    label: 'Do you have a number?',
+    helper: 'Only if it was actually measured.',
+  },
+} as const
+
+/**
+ * One quiet link per step, opening the answers most projects will not have.
+ *
+ * A link names the topic where what it opens is a question of its own — "More
+ * about who was involved" leads to "Who else worked on it?", rather than asking
+ * it twice a click apart. Where the disclosure holds a single question, the link
+ * is that question and becomes its heading on expand (step 2).
+ */
+export const DISCLOSURE = {
+  step1: 'More about who was involved',
+  step2: 'How did you find out?',
+  step4: 'More about how the work was shaped',
+  step5: 'What the client said afterwards',
+} as const
+
+// Two labels per slot, because they sit in two places and one phrase cannot do
+// both jobs: the uploader heads a group of screens, the review screen names one.
+// "Screens showing the problem 1" was the first attempt at sharing them.
+export const SLOT_LABELS: Record<ImageSlot, string> = {
+  problem: 'Screens showing the problem',
+  before: 'Before',
+  after: 'After',
 }
+
+export const SLOT_ENTRY_LABELS: Record<ImageSlot, string> = {
+  problem: 'Problem screen',
+  before: 'Before',
+  after: 'After',
+}
+
+export const COLLABORATOR_FIELDS = {
+  legend: 'Who else worked on it?',
+  name: { label: 'Name', placeholder: 'e.g. Priya Raman' },
+  role: { label: 'Role', placeholder: 'e.g. Clinical lead' },
+} as const
 
 export const WIZARD_STEPS: ReadonlyArray<{
   id: StepId
@@ -134,8 +255,8 @@ export const WIZARD_STEPS: ReadonlyArray<{
 }> = [
   {
     id: 1,
-    name: 'Setup',
-    heading: 'Quick setup',
+    name: 'The project',
+    heading: 'About the project',
     subhead: WIZARD_COPY.opening,
   },
   {
@@ -152,15 +273,15 @@ export const WIZARD_STEPS: ReadonlyArray<{
   },
   {
     id: 4,
-    name: 'Your screens',
-    heading: 'Your screens',
-    subhead: 'Say what each one shows, so the captions point at a choice.',
+    name: 'How it fit',
+    heading: 'How the work fit together',
+    subhead: 'How do these sit against each other?',
   },
   {
     id: 5,
     name: 'Where it landed',
     heading: 'Where it landed',
-    subhead: 'However it ended. Handed off and never shipped is still a story.',
+    subhead: 'However it ended. Handed off or shipped is still a story.',
   },
   {
     id: 'review',
@@ -180,37 +301,33 @@ export function stepMeta(id: StepId) {
 // Navigation
 // ---------------------------------------------------------------------------
 //
-// Step 4 asks what each uploaded screen shows. With no uploads it has nothing
-// to ask, and an empty step reads as a bug, so it drops out of the order
-// entirely — including on the way back, which is the direction that is easy to
-// get wrong.
+// Five steps, every time. The old step 4 asked what each uploaded screen
+// showed and dropped out of the order when nothing had been uploaded, because
+// an empty step reads as a bug. Uploads now sit beside the thing they show, so
+// there is no step left whose entire content is conditional: the new step 4
+// asks how the decisions relate, and there are always at least two of those.
 
-export function stepOrder(hasImages: boolean): StepId[] {
-  return hasImages
-    ? [1, 2, 3, 4, 5, 'review']
-    : [1, 2, 3, 5, 'review']
+export function stepOrder(): StepId[] {
+  return [1, 2, 3, 4, 5, 'review']
 }
 
-export function nextStep(current: StepId, hasImages: boolean): StepId {
-  const order = stepOrder(hasImages)
+export function nextStep(current: StepId): StepId {
+  const order = stepOrder()
   const i = order.indexOf(current)
   if (i === -1 || i === order.length - 1) return current
   return order[i + 1]
 }
 
-export function prevStep(current: StepId, hasImages: boolean): StepId {
-  const order = stepOrder(hasImages)
+export function prevStep(current: StepId): StepId {
+  const order = stepOrder()
   const i = order.indexOf(current)
   if (i <= 0) return current
   return order[i - 1]
 }
 
-/** Position for the indicator: 1-based, and stable when step 4 is skipped. */
-export function stepPosition(
-  current: StepId,
-  hasImages: boolean
-): { index: number; total: number } {
-  const order: StepId[] = stepOrder(hasImages).filter((s) => s !== 'review')
+/** Position for the indicator: 1-based. */
+export function stepPosition(current: StepId): { index: number; total: number } {
+  const order: StepId[] = stepOrder().filter((s) => s !== 'review')
   const i = order.indexOf(current)
   return { index: i === -1 ? order.length : i, total: order.length }
 }
@@ -219,78 +336,193 @@ export function stepPosition(
 // Building the intake
 // ---------------------------------------------------------------------------
 
-export type WizardState = {
-  text: Partial<Record<TextKey, string>>
-  decisions: Decision[]
-  /** In final order. Index here becomes case_study_attachments.order_index. */
-  attachmentIds: string[]
-  /** Keyed by attachment id, not by position — see ImageNote in types/database.ts. */
-  imageNotes: Record<string, { shows: string; notice: string }>
-  outcome: OutcomeStatus | null
+/**
+ * A picked file, its slot, and what it shows.
+ *
+ * The id exists because the note and the slot have to survive a removal:
+ * identity used to be positional, and removing the second screen after
+ * annotating the third slid every note onto the wrong image. The database id
+ * would do, but it is not generated until upload, which happens after the whole
+ * form is submitted.
+ *
+ * The note now travels ON the attachment rather than in a map keyed by its id.
+ * That is what the move to per-slot uploads bought: a file is picked into the
+ * slot that explains it, so there is no second structure to keep in step.
+ */
+export type Attachment = {
+  id: string
+  file: File
+  slot: ImageSlot
+  /** A Decision.id. Set for 'before' and 'after', absent for 'problem'. */
+  decisionId?: string
+  notice: string
 }
 
+export type WizardState = {
+  text: Partial<Record<TextKey, string>>
+  toggles: Partial<Record<ToggleKey, boolean>>
+  decisions: Decision[]
+  collaborators: Collaborator[]
+  provenance: Provenance | null
+  outcome: OutcomeStatus | null
+  /** In final order. Index here becomes case_study_attachments.order_index. */
+  attachments: Attachment[]
+}
+
+// NOTE ON TONE. It is deliberately NOT on WizardState and NOT in `Intake`.
+// `createCaseStudy` takes it beside `projectType` and writes it to the
+// `case_studies.tone` column, so it never enters the object the prompt renderer
+// walks. That is what keeps "stored, never sent" true by construction rather
+// than by anyone remembering — see the block above TONES in lib/intake-fields.ts.
+
+// NOTE ON TONE. It is deliberately NOT on WizardState and NOT in `Intake`.
+// `createCaseStudy` takes it beside `projectType` and writes it to the
+// `case_studies.tone` column, so it never enters the object the prompt renderer
+// walks. That is what keeps "stored, never sent" true by construction rather
+// than by anyone remembering — see the block above TONES in lib/intake-fields.ts.
+
 export function createDecision(): Decision {
-  return { id: crypto.randomUUID(), decided: '', why: '', rejected: '' }
+  return { id: crypto.randomUUID(), decided: '', why: '' }
 }
 
 export function emptyWizardState(): WizardState {
   return {
     text: {},
+    toggles: {},
     decisions: Array.from({ length: DECISIONS_MIN }, createDecision),
-    attachmentIds: [],
-    imageNotes: {},
+    collaborators: [],
+    provenance: null,
     outcome: null,
+    attachments: [],
   }
 }
 
 /**
  * The one writer of the shape that lands in `case_studies.intake`.
  *
- * Replaces a cast (`as unknown as Intake`) that claimed required properties
- * existed while filtering them out one line above. Everything optional is
- * omitted rather than stored as '', so "never answered" stays distinguishable
- * from "answered with nothing" for whoever reads this in Phase 4.
+ * Everything optional is omitted rather than stored as '' or false, so "never
+ * answered" stays distinguishable from "answered with nothing" — which is the
+ * distinction the prompt renderer depends on to leave a question out rather
+ * than print it blank, and a blank prompt is an invitation to fill it (§10.1).
  */
 export function buildIntake(state: WizardState): Intake {
-  const intake: Intake = { decisions: [], image_notes: [] }
+  const intake: Intake = { schema_version: 2, decisions: [], image_notes: [] }
 
   for (const field of INTAKE_FIELDS) {
+    // A revealed field whose toggle is off was never asked. Storing whatever
+    // was typed before the toggle was turned back off would put an answer on
+    // the row that the form is not currently showing anyone.
+    if (field.revealedBy && state.toggles[field.revealedBy] !== true) continue
     const value = state.text[field.key]?.trim()
     if (value) intake[field.key] = value
   }
 
+  for (const toggle of ['client_may_be_named', 'reported_verbatim', 'has_measurement'] as const) {
+    if (state.toggles[toggle]) intake[toggle] = true
+  }
+
+  if (state.provenance) intake.diagnosis_provenance = state.provenance
+  if (state.outcome) intake.outcome_status = state.outcome
+
+  const collaborators = state.collaborators
+    .map((c) => ({ name: c.name.trim(), role: c.role.trim() }))
+    .filter((c) => c.name || c.role)
+  if (collaborators.length > 0) intake.collaborators = collaborators
+
   intake.decisions = state.decisions
-    .map((d) => ({
-      id: d.id,
-      decided: d.decided.trim(),
-      why: d.why.trim(),
-      rejected: d.rejected?.trim() ?? '',
-    }))
     // A block the user never typed into is not a decision. Two visible blocks
-    // is an invitation, not a promise of two spine entries.
-    .filter((d) => d.decided || d.why || d.rejected)
+    // is an invitation, not a promise of two fix blocks.
+    .filter((d) => decisionHasContent(d))
     .map((d) => {
-      const kept: Decision = { id: d.id, decided: d.decided, why: d.why }
-      if (d.rejected) kept.rejected = d.rejected
+      const kept: Decision = {
+        id: d.id,
+        decided: d.decided.trim(),
+        why: d.why.trim(),
+      }
+      if (d.no_prior_version) kept.no_prior_version = true
+      const prior = d.prior_behaviour?.trim()
+      if (prior) kept.prior_behaviour = prior
+      const consequence = d.consequence?.trim()
+      if (consequence) kept.consequence = consequence
+      const rejected = d.rejected?.trim()
+      if (rejected) kept.rejected = rejected
+      const request = d.client_request?.trim()
+      if (request) kept.client_request = request
+
+      const relations: NonNullable<Decision['relations']> = {}
+      const pattern = d.relations?.breaks_pattern?.trim()
+      if (pattern) relations.breaks_pattern = pattern
+      if (d.relations?.repeated_treatment) relations.repeated_treatment = true
+      if (d.relations?.depends_on) relations.depends_on = d.relations.depends_on
+      if (Object.keys(relations).length > 0) kept.relations = relations
+
       return kept
     })
 
-  intake.image_notes = state.attachmentIds
-    .map((id, orderIndex): ImageNote | null => {
-      const note = state.imageNotes[id]
-      if (!note) return null
-      const shows = note.shows.trim()
-      const notice = note.notice.trim()
-      if (!shows && !notice) return null
-      const built: ImageNote = { orderIndex, shows }
-      if (notice) built.notice = notice
-      return built
-    })
-    .filter((n): n is ImageNote => n !== null)
+  const liveDecisionIds = new Set(intake.decisions.map((d) => d.id))
 
-  if (state.outcome) intake.outcome_status = state.outcome
+  intake.image_notes = state.attachments.map((a, orderIndex): ImageNote => {
+    const note: ImageNote = { orderIndex, slot: a.slot }
+    // A screen whose decision was deleted keeps its file and loses its link.
+    // Dropping the note instead would leave an uploaded image with nothing
+    // said about it, which §8.7 answers by dropping the ASSET — a call for the
+    // generator to make against the whole set, not for this function.
+    if (a.decisionId && liveDecisionIds.has(a.decisionId)) {
+      note.decisionId = a.decisionId
+    }
+    const notice = a.notice.trim()
+    if (notice) note.notice = notice
+    return note
+  })
 
   return intake
+}
+
+function decisionHasContent(d: Decision): boolean {
+  return Boolean(
+    d.decided.trim() ||
+      d.why.trim() ||
+      d.prior_behaviour?.trim() ||
+      d.consequence?.trim() ||
+      d.rejected?.trim() ||
+      d.client_request?.trim()
+  )
+}
+
+/**
+ * Blank named inputs at generation time, without touching the stored row.
+ *
+ * Dev-only ablation tooling: the point is to ask what the output loses when a
+ * field is missing, which only means anything if the same row can be run
+ * repeatedly with different fields removed. Paths are `key`,
+ * `decisions[].key` to clear a column across every decision, `decisions[2].key`
+ * for one, or `image_notes` for the lot.
+ */
+export function blankInputs(intake: Intake, paths: readonly string[]): Intake {
+  const next: Intake = {
+    ...intake,
+    decisions: intake.decisions.map((d) => ({ ...d })),
+    image_notes: intake.image_notes.map((n) => ({ ...n })),
+  }
+
+  for (const path of paths) {
+    const perDecision = /^decisions\[(\d*)\]\.(\w+)$/.exec(path)
+    if (perDecision) {
+      const [, index, key] = perDecision
+      next.decisions.forEach((d, i) => {
+        if (index !== '' && Number(index) !== i) return
+        delete (d as Record<string, unknown>)[key]
+      })
+      continue
+    }
+    if (path === 'image_notes') {
+      next.image_notes = []
+      continue
+    }
+    delete (next as Record<string, unknown>)[path]
+  }
+
+  return next
 }
 
 // ---------------------------------------------------------------------------
@@ -302,10 +534,9 @@ export function buildIntake(state: WizardState): Intake {
  *
  * This is NOT the "never block next" rule being walked back. Navigation stays
  * unblocked all the way to the review screen. This is about not letting
- * someone buy a guaranteed failure: the block schema requires a spine of
- * DECISIONS_MIN–DECISIONS_MAX entries and the wizard derives one per
- * decision, so a single decision cannot produce a legal document no matter how
- * good the writing is.
+ * someone buy a guaranteed failure: §3.4 requires between two and four fix
+ * blocks and the wizard derives one per decision, so a single decision cannot
+ * produce a legal document no matter how good the writing is.
  *
  * Found the hard way. Someone submitted with one decision; synthesis emitted
  * one spine entry, validation rejected it, and the retry then pressured the
@@ -316,7 +547,7 @@ export function buildIntake(state: WizardState): Intake {
  *
  * Better to say it in the review screen, in advance, for free.
  */
-export function compileBlockers(intake: Intake): string[] {
+export function compileBlockers(intake: { decisions: Decision[] }): string[] {
   const blockers: string[] = []
   const decisions = intake.decisions.filter((d) => d.decided.trim())
 
@@ -336,22 +567,16 @@ export function compileBlockers(intake: Intake): string[] {
  *
  * The first one exists because someone lost six uploads to a page reload and
  * only found out by reading a finished case study with no pictures in it.
- * Step 4 removes itself when there are no screens — correct, an empty step
- * reads as a bug — but that left nothing anywhere in the wizard mentioning
- * images, so their absence was invisible right up to the output.
  */
-export function reviewNotes(
-  intake: Intake,
-  attachmentIds: string[] = []
-): string[] {
+export function reviewNotes(intake: Intake): string[] {
   const notes: string[] = []
 
-  if (attachmentIds.length === 0) {
+  if (intake.image_notes.length === 0) {
     notes.push(WIZARD_COPY.noteNoScreens)
-  } else if (intake.image_notes.length === 0) {
-    // Uploaded, but step 4 was walked straight past. The captions will be
+  } else if (intake.image_notes.every((n) => !n.notice)) {
+    // Uploaded, and nothing said about any of them. The captions would be
     // guessed from the vision pass alone, which is exactly the "describes the
-    // UI" failure the caption rule exists to prevent.
+    // UI" failure §8.6 exists to prevent.
     notes.push(WIZARD_COPY.noteUnlabelledScreens)
   }
 
@@ -359,26 +584,105 @@ export function reviewNotes(
 }
 
 /**
- * Which shape of evidence this project has, which decides where Results sits
- * in the finished document.
+ * Which branch this project is on: whether it can carry a measurement, or has to
+ * make its case without one.
  *
- * Derived, never asked and never stored. Both inputs are already on the row,
- * so persisting the answer would only create a second copy that goes stale the
+ * THE RULE IS COMPLETENESS, NOT THE PRESENCE OF A DIGIT. This used to answer "the
+ * metrics field contains a digit anywhere", which routed a project into the
+ * metric branch on the strength of a date, a version number or a count of
+ * screens. That branch then requires six things — the measure, its baseline
+ * value, the period it covers, where the number came from, the after value and
+ * what else changed — and the free-text field never collected any of them. The
+ * page ended up in the stricter branch with none of the material the branch
+ * exists to handle, and because an absence is never narrated on the page, the
+ * failure was silent.
+ *
+ * All seven must be present, and the two value fields must actually hold a
+ * number. `has_measurement` off, or any component missing, is the contribution
+ * branch: a partly-measured project does not get a half-built metric page, it
+ * gets the contribution page (see `mixedFigure` for the one figure that can still
+ * appear).
+ *
+ * Derived, never asked and never stored. Every input is already on the row, so
+ * persisting the answer would only create a second copy that goes stale the
  * moment this rule changes.
  *
- * "A real figure" is `containsDigit` — the same test that decides whether a
- * `stat_headline` block may exist at all (rule 6). One definition of "this is
- * a number" for the wizard and the validator; a second one would drift.
- *
  * Shipping status deliberately does not enter into it. Shipped with nothing
- * measured is still Type B: the placement question is whether there is proof
- * to lead with, and "it launched" is not proof of anything moving.
+ * measured is still the contribution branch: "it launched" is not evidence that
+ * anything moved.
+ */
+export type EvidenceBranch = 'metric' | 'contribution'
+
+export function evidenceBranch(intake: StoredIntake): EvidenceBranch {
+  // A row written before the rebuild collected one free-text answer, none of the
+  // seven components. By the same rule it cannot be on the metric branch: a
+  // person who says there are numbers but cannot name the measure, the baseline,
+  // the window and the source is on the contribution branch.
+  if (!isFocusedFixIntake(intake)) return 'contribution'
+  if (!intake.has_measurement) return 'contribution'
+
+  const complete = MEASUREMENT_KEYS.every((key) => (intake[key] ?? '').trim() !== '')
+  if (!complete) return 'contribution'
+
+  // The digit check survives, but as a check that the two fields meant to hold a
+  // value do — not as the gate. Same definition of "a number" the stat-headline
+  // rule uses.
+  return containsDigit(intake.baseline_value ?? '') && containsDigit(intake.after_value ?? '')
+    ? 'metric'
+    : 'contribution'
+}
+
+export type MixedFigure = {
+  measure: string
+  value: string
+  period?: string
+  source: string
+}
+
+/**
+ * The single figure a partly-measured project may still state.
+ *
+ * A weak or partial number is handled as the contribution branch carrying ONE
+ * figure with its source inline — never as a headline, never in the metadata
+ * strip, because one unreliable number in a prominent position discredits
+ * everything around it. Without a source there is no figure at all: a number
+ * whose source cannot be named invites a reader to check something that cannot be
+ * checked.
+ *
+ * Null on the metric branch (the full block handles it), and null when there is
+ * nothing usable.
+ */
+export function mixedFigure(intake: Intake): MixedFigure | null {
+  if (evidenceBranch(intake) === 'metric') return null
+  if (!intake.has_measurement) return null
+
+  const measure = (intake.measure ?? '').trim()
+  const source = (intake.baseline_source ?? '').trim()
+  if (!measure || !source) return null
+
+  const after = (intake.after_value ?? '').trim()
+  const before = (intake.baseline_value ?? '').trim()
+  const value = after || before
+  if (!value || !containsDigit(value)) return null
+
+  const period = (after ? intake.after_period : intake.baseline_period)?.trim()
+  return { measure, value, ...(period ? { period } : {}), source }
+}
+
+/**
+ * The letters the legacy renderer still speaks.
+ *
+ * CaseStudyDocument's `evidenceType` prop takes 'A' | 'B' and decides whether the
+ * results lead the page or close it. The output specification calls contribution
+ * evidence "Branch A" and hard metrics "Branch B"; this code has always returned
+ * 'A' for hard metrics. The two conventions are inverted (§7.1 records it), so
+ * the words are used everywhere new and the letters stop here, at the one
+ * consumer that still takes them.
  */
 export type EvidenceType = 'A' | 'B'
 
-export function evidenceType(intake: Intake): EvidenceType {
-  const metrics = intake.metrics?.trim() ?? ''
-  return metrics && containsDigit(metrics) ? 'A' : 'B'
+export function evidenceType(intake: StoredIntake): EvidenceType {
+  return evidenceBranch(intake) === 'metric' ? 'A' : 'B'
 }
 
 export function isThin(answer: string | undefined): boolean {
@@ -398,6 +702,15 @@ export type ReviewEntry = {
 }
 
 export type ReviewSection = {
+  /**
+   * Identity, separate from `step`.
+   *
+   * They used to be the same value, and the screens section broke that: it
+   * sends its Edit links to step 2 or step 3 depending on the slot, so it
+   * carries step 2 and collided with the step-2 section — two React children
+   * with the same key, which is unsupported and silently drops one.
+   */
+  id: string
   step: StepId
   heading: string
   entries: ReviewEntry[]
@@ -409,8 +722,8 @@ export function decisionElementId(decisionId: string): string {
   return `decision-${decisionId}-decided`
 }
 
-export function imageNoteElementId(attachmentId: string): string {
-  return `image-${attachmentId}-notice`
+export function screenElementId(attachmentId: string): string {
+  return `screen-${attachmentId}-notice`
 }
 
 function entry(
@@ -430,11 +743,9 @@ function entry(
   }
 }
 
-function section(
-  step: StepId,
-  entries: ReviewEntry[]
-): ReviewSection {
+function section(step: StepId, entries: ReviewEntry[]): ReviewSection {
   return {
+    id: `step-${String(step)}`,
     step,
     heading: stepMeta(step).heading,
     entries,
@@ -445,27 +756,55 @@ function section(
 }
 
 function textEntries(step: FieldStep, intake: Intake): ReviewEntry[] {
-  return fieldsForStep(step).map((f) =>
+  const fields: IntakeField[] = visibleFields(fieldsForStep(step), intake)
+  return fields.map((f) =>
     entry(f.label, intake[f.key], fieldElementId(f.key), step)
   )
 }
 
 export function buildReview(
   intake: Intake,
-  attachmentIds: string[] = []
+  attachments: readonly Attachment[] = []
 ): ReviewSection[] {
+  const collaborators = (intake.collaborators ?? [])
+    .map((c) => [c.name, c.role].filter(Boolean).join(' — '))
+    .join(', ')
+
+  const provenance = PROVENANCE_OPTIONS.find(
+    (p) => p.value === intake.diagnosis_provenance
+  )
+
   const sections: ReviewSection[] = [
-    section(1, textEntries(1, intake)),
-    section(2, textEntries(2, intake)),
+    section(1, [
+      ...textEntries(1, intake),
+      // A credits line is a claim about real people, so an empty one is worth
+      // seeing on this screen rather than discovering as an absence later.
+      {
+        label: 'Who else worked on this',
+        value: collaborators,
+        anchor: 'collaborators',
+        step: 1 as StepId,
+        empty: collaborators === '',
+        // Two names is a complete answer however few words it is.
+        thin: collaborators === '',
+      },
+    ]),
+    section(2, [
+      ...textEntries(2, intake),
+      {
+        label: 'How you found out',
+        value: provenance?.label ?? '',
+        anchor: 'intake-diagnosis_provenance',
+        step: 2 as StepId,
+        empty: !provenance,
+        thin: !provenance,
+      },
+    ]),
     section(3, [
-      // The framework name leads the step, so it leads the summary too.
-      ...textEntries(3, intake),
-      // A decision is not judged by the length of what it decided. A move
-      // title is meant to be a short imperative — "Freeze the note at shift
-      // change" is six words and is exactly right — so measuring it would flag
-      // the best answers in the form. What makes a decision thin is having
-      // nothing behind it: `why` is what becomes the finding, and without one
-      // the spine has a move suspended in mid-air.
+      // A decision is not judged by the length of what it decided — a fix
+      // block title is meant to be short. What makes a decision thin is having
+      // nothing behind it: `why` is the reason the block has to pass §6.1's
+      // three tests with, and without one the fix is suspended in mid-air.
       ...intake.decisions.map((d, i) => ({
         label: `Decision ${i + 1}`,
         value: d.decided.trim(),
@@ -475,23 +814,24 @@ export function buildReview(
         thin: d.decided.trim() === '' || isThin(d.why),
       })),
     ]),
+    section(4, textEntries(4, intake)),
   ]
 
-  if (attachmentIds.length > 0) {
-    sections.push(
-      section(
-        4,
-        attachmentIds.map((id, i) => {
-          const note = intake.image_notes.find((n) => n.orderIndex === i)
-          return entry(
-            `Screen ${i + 1}`,
-            note?.notice,
-            imageNoteElementId(id),
-            4
-          )
-        })
-      )
-    )
+  if (attachments.length > 0) {
+    sections.push({
+      id: 'screens',
+      step: 2,
+      heading: 'Your screens',
+      entries: attachments.map((a, i) =>
+        entry(
+          `${SLOT_ENTRY_LABELS[a.slot]} ${i + 1}`,
+          intake.image_notes.find((n) => n.orderIndex === i)?.notice,
+          screenElementId(a.id),
+          a.slot === 'problem' ? 2 : 3
+        )
+      ),
+      thin: false,
+    })
   }
 
   const outcome = OUTCOME_OPTIONS.find((o) => o.value === intake.outcome_status)

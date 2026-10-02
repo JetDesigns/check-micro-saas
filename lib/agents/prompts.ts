@@ -15,9 +15,8 @@ import {
   SPINE_MAX,
   SPINE_MIN,
 } from '@/lib/case-study-blocks'
-import { OUTCOME_OPTIONS } from '@/lib/intake-fields'
 import type { CaseStudy } from '@/lib/case-study-blocks'
-import type { Intake, ProjectType, Tone } from '@/types/database'
+import type { LegacyIntake, ProjectType, Tone } from '@/types/database'
 
 // ---------------------------------------------------------------------------
 // Register
@@ -129,12 +128,31 @@ If a part of the story is thin, stay short and honest. Do not pad with invented 
 // Rendering the intake into prompt text
 // ---------------------------------------------------------------------------
 
-const OUTCOME_LABELS = Object.fromEntries(
-  OUTCOME_OPTIONS.map((o) => [o.value, o.label])
-) as Record<string, string>
+/**
+ * The shipping status in words, for the prompt.
+ *
+ * These used to be derived from the wizard's own `OUTCOME_OPTIONS` labels,
+ * which quietly made UI copy part of the prompt — the exact trap AGENTS.md
+ * records against the deleted `buildPrompt`, where renaming a field's label
+ * rewrote what the model was told that field meant, with no code change at all.
+ * A pass over the wizard's wording should never be able to edit this. Four
+ * strings, owned here.
+ */
+const OUTCOME_LABELS: Record<string, string> = {
+  shipped: 'Shipped',
+  proof_of_concept: 'Proof of concept',
+  not_launched: 'Not launched',
+  handed_off: 'Handed off',
+}
 
 /**
  * The wizard's answers as text for the model.
+ *
+ * LEGACY. Reads `LegacyIntake` — the pre-rebuild shape, where the report, the
+ * diagnosis and the evidence shared one `problem` answer and six measurement
+ * components shared one `metrics` answer. The wizard cannot produce that shape
+ * any more; this renderer exists for rows written before the rebuild and for
+ * the dev flag that generates from the old prompt for comparison.
  *
  * Unanswered fields are omitted entirely rather than rendered as an empty
  * label. A list of blank prompts invites the model to fill them in, which is
@@ -142,7 +160,7 @@ const OUTCOME_LABELS = Object.fromEntries(
  * Phase 2 stopped blocking "next", blank fields are ordinary rather than rare.
  */
 export function renderIntake(
-  intake: Intake,
+  intake: LegacyIntake,
   projectType: ProjectType,
   tone: Tone
 ): string {

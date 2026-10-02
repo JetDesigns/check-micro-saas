@@ -6,6 +6,7 @@ import {
   DEFAULT_PROJECT_TYPE,
   DEFAULT_TONE,
   type TextKey,
+  type ToggleKey,
 } from '@/lib/intake-fields'
 import {
   WIZARD_COPY,
@@ -17,20 +18,22 @@ import {
   nextStep,
   prevStep,
   stepMeta,
+  type Attachment,
   type StepId,
+  type WizardState,
 } from '@/lib/wizard-steps'
 import type {
+  Collaborator,
   Decision,
   OutcomeStatus,
   ProjectType,
-  Tone,
+  Provenance,
 } from '@/types/database'
-import type { Attachment } from '@/components/wizard/AttachmentStep'
 import { StepIndicator } from '@/components/intake/StepIndicator'
 import { Step1Setup } from '@/components/intake/steps/Step1Setup'
 import { Step2Problem } from '@/components/intake/steps/Step2Problem'
 import { Step3Decisions } from '@/components/intake/steps/Step3Decisions'
-import { Step4Screens, type ScreenNote } from '@/components/intake/steps/Step4Screens'
+import { Step4Structure } from '@/components/intake/steps/Step4Structure'
 import { Step5Outcome } from '@/components/intake/steps/Step5Outcome'
 import { ReviewScreen } from '@/components/intake/steps/ReviewScreen'
 
@@ -54,40 +57,39 @@ type Props = {
 export function IntakeForm({ onCreated }: Props) {
   const [step, setStep] = useState<StepId>(1)
   const [text, setText] = useState<Partial<Record<TextKey, string>>>({})
-  // Lazy, so the two starting decision blocks get their ids once rather than
+  const [toggles, setToggles] = useState<Partial<Record<ToggleKey, boolean>>>({})
+  // Lazy, so the two starting decision cards get their ids once rather than
   // on every render.
   const [decisions, setDecisions] = useState<Decision[]>(
     () => emptyWizardState().decisions
   )
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [imageNotes, setImageNotes] = useState<Record<string, ScreenNote>>({})
   const [projectType, setProjectType] = useState<ProjectType>(DEFAULT_PROJECT_TYPE)
-  const [tone, setTone] = useState<Tone>(DEFAULT_TONE)
+  const [provenance, setProvenance] = useState<Provenance | null>(null)
   const [outcome, setOutcome] = useState<OutcomeStatus | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const formRef = useRef<HTMLFormElement>(null)
-  const hasImages = attachments.length > 0
   const meta = stepMeta(step)
 
-  const state = {
+  const state: WizardState = {
     text,
+    toggles,
     decisions,
-    attachmentIds: attachments.map((a) => a.id),
-    imageNotes,
+    collaborators,
+    provenance,
     outcome,
+    attachments,
   }
 
   const setTextValue = (key: TextKey, value: string) =>
     setText((prev) => ({ ...prev, [key]: value }))
 
-  const setNote = (id: string, patch: Partial<ScreenNote>) =>
-    setImageNotes((prev) => {
-      const current = prev[id] ?? { shows: '', notice: '' }
-      return { ...prev, [id]: { ...current, ...patch } }
-    })
+  const setToggleValue = (key: ToggleKey, value: boolean) =>
+    setToggles((prev) => ({ ...prev, [key]: value }))
 
   // Scrolls the form itself rather than the window. On lg the wizard sits
   // inside an overflow-y-auto column, so window.scrollTo — what this used to
@@ -130,10 +132,6 @@ export function IntakeForm({ onCreated }: Props) {
     // person generate". Compiling spends our own Anthropic credit, not the
     // visitor's money, so it is safe to leave open while nothing is deployed.
     //
-    // BEFORE DEPLOYING, decide whether to re-gate. Anonymous auth means every
-    // visitor is a user, and rate_limit_compile allows each of them 10
-    // compiles a day — that is the only remaining backstop on a public URL.
-    //
     // The guard below closes implicit submission: one form wraps every step,
     // and a form with exactly one text input submits on Enter. Several steps
     // here have exactly one.
@@ -146,12 +144,18 @@ export function IntakeForm({ onCreated }: Props) {
     setIsBusy(true)
     setError(null)
     try {
+      // The legacy form has no tone selector — it was removed from here when the
+      // studio took over the wizard. The default keeps the column satisfied;
+      // nothing reads it either way.
       const id = await createCaseStudy({
         intake: buildIntake(state),
         projectType,
-        tone,
+        tone: DEFAULT_TONE,
       })
       if (attachments.length > 0) {
+        // Same array, same order: buildIntake numbered image_notes from these
+        // indices, and uploadAttachments writes order_index from them too.
+        // They are the join, so they cannot be built from two different lists.
         await uploadAttachments({
           caseStudyId: id,
           files: attachments.map((a) => a.file),
@@ -168,6 +172,9 @@ export function IntakeForm({ onCreated }: Props) {
     }
   }
 
+  const intake = buildIntake(state)
+  const blockers = compileBlockers(intake)
+
   return (
     <form
       ref={formRef}
@@ -175,28 +182,26 @@ export function IntakeForm({ onCreated }: Props) {
       noValidate
       className="rounded-3xl border border-white/70 bg-surface/95 p-6 shadow-[0_1px_2px_rgba(23,23,23,0.05),0_12px_32px_-8px_rgba(23,23,23,0.16),0_32px_80px_-20px_rgba(74,59,41,0.24)] backdrop-blur-sm sm:p-8"
     >
-      <StepIndicator current={step} hasImages={hasImages} />
+      <StepIndicator current={step} />
 
       <h2 className="mt-3 text-xl font-medium leading-snug text-ink sm:text-2xl">
         {meta.heading}
       </h2>
       {meta.subhead && (
-        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-          {meta.subhead}
-        </p>
+        <p className="mt-2 text-sm leading-relaxed text-ink-soft">{meta.subhead}</p>
       )}
 
       <div className="mt-6">
         {step === 1 && (
           <Step1Setup
-            attachments={attachments}
-            onAttachmentsChange={setAttachments}
             projectType={projectType}
             onProjectTypeChange={setProjectType}
-            tone={tone}
-            onToneChange={setTone}
             text={text}
             onTextChange={setTextValue}
+            toggles={toggles}
+            onToggleChange={setToggleValue}
+            collaborators={collaborators}
+            onCollaboratorsChange={setCollaborators}
             isBusy={isBusy}
           />
         )}
@@ -204,6 +209,12 @@ export function IntakeForm({ onCreated }: Props) {
           <Step2Problem
             text={text}
             onTextChange={setTextValue}
+            toggles={toggles}
+            onToggleChange={setToggleValue}
+            provenance={provenance}
+            onProvenanceChange={setProvenance}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
             isBusy={isBusy}
           />
         )}
@@ -211,17 +222,17 @@ export function IntakeForm({ onCreated }: Props) {
           <Step3Decisions
             decisions={decisions}
             onChange={setDecisions}
-            text={text}
-            onTextChange={setTextValue}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
             isBusy={isBusy}
           />
         )}
         {step === 4 && (
-          <Step4Screens
-            attachments={attachments}
+          <Step4Structure
             decisions={decisions}
-            notes={imageNotes}
-            onNoteChange={setNote}
+            onChange={setDecisions}
+            text={text}
+            onTextChange={setTextValue}
             isBusy={isBusy}
           />
         )}
@@ -231,20 +242,16 @@ export function IntakeForm({ onCreated }: Props) {
             onOutcomeChange={setOutcome}
             text={text}
             onTextChange={setTextValue}
+            toggles={toggles}
+            onToggleChange={setToggleValue}
             isBusy={isBusy}
           />
         )}
         {step === 'review' && (
           <ReviewScreen
-            sections={buildReview(
-              buildIntake(state),
-              attachments.map((a) => a.id)
-            )}
-            blockers={compileBlockers(buildIntake(state))}
-            notes={reviewNotes(
-              buildIntake(state),
-              attachments.map((a) => a.id)
-            )}
+            sections={buildReview(intake, attachments)}
+            blockers={blockers}
+            notes={reviewNotes(intake)}
             onJump={jumpTo}
           />
         )}
@@ -258,7 +265,7 @@ export function IntakeForm({ onCreated }: Props) {
         ) : (
           <button
             type="button"
-            onClick={() => goTo(prevStep(step, hasImages))}
+            onClick={() => goTo(prevStep(step))}
             disabled={isBusy}
             className="text-sm font-medium text-ink-soft underline-offset-4 transition-colors hover:text-ink hover:underline disabled:cursor-not-allowed disabled:opacity-40 sm:self-center"
           >
@@ -282,11 +289,11 @@ export function IntakeForm({ onCreated }: Props) {
             key="write"
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={isBusy || compileBlockers(buildIntake(state)).length > 0}
+            disabled={isBusy || blockers.length > 0}
             className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
           >
             {isBusy
-              ? hasImages
+              ? attachments.length > 0
                 ? 'Uploading…'
                 : 'Working…'
               : WIZARD_COPY.reviewWrite}
@@ -295,11 +302,11 @@ export function IntakeForm({ onCreated }: Props) {
           <button
             key="next"
             type="button"
-            onClick={() => goTo(nextStep(step, hasImages))}
+            onClick={() => goTo(nextStep(step))}
             disabled={isBusy}
             className="rounded-xl bg-ink px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-ink sm:px-7"
           >
-            Next
+            {step === 5 ? WIZARD_COPY.generate : 'Next'}
           </button>
         )}
       </footer>

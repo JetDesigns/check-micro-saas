@@ -47,7 +47,7 @@ export function ReviewScreen({ sections, blockers, notes, onJump }: Props) {
 
       <div className="mt-6 space-y-5">
         {sections.map((section) => (
-          <section key={String(section.step)}>
+          <section key={section.id}>
             <h3 className="text-[11px] font-semibold uppercase tracking-wider text-accent">
               {section.heading}
             </h3>

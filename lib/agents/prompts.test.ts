@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { PROJECT_TYPE_BRIEFS, TONE_BRIEFS, renderIntake } from './prompts'
-import { TONES, PROJECT_TYPES } from '../intake-fields'
-import type { Intake } from '@/types/database'
+import type { LegacyIntake, Tone } from '@/types/database'
 
+// LEGACY. renderIntake reads the pre-rebuild intake shape, which the wizard no
+// longer produces — it survives for rows written before the rebuild and for the
+// dev flag that generates from the old prompt for comparison. The tests that
+// asserted the tone selector and the register sample went with the fields:
+// §8.1 fixes one register and no rule reads a tone, so the wizard stopped
+// asking for either.
+//
 // renderIntake is the whole of what the writing model knows about the project.
 // Two properties matter more than the wording:
 //
@@ -13,7 +19,7 @@ import type { Intake } from '@/types/database'
 //   - The spine ids must survive into the prompt, because the document is
 //     required to reuse them and the validator checks that it did.
 
-function intake(over: Partial<Intake> = {}): Intake {
+function intake(over: Partial<LegacyIntake> = {}): LegacyIntake {
   return {
     title: 'Rebuilding shift handover for a hospital ward',
     problem: 'The screen cleared itself and nurses photographed it.',
@@ -43,17 +49,6 @@ describe('renderIntake', () => {
     expect(text).toContain('spine id: dec-one')
   })
 
-  it('quarantines the voice sample as style, never as something that happened', () => {
-    const text = renderIntake(
-      intake({ voice_sample: 'Honestly the screen was never the problem.' }),
-      'focused_fix',
-      'warm'
-    )
-    expect(text).toContain('STYLE anchor only')
-    expect(text).toContain('Nothing in it is a project fact')
-    expect(text).toContain('OVERRIDES the tone preset')
-  })
-
   it('says so plainly when there are no decisions, rather than leaving a blank section', () => {
     const text = renderIntake(intake({ decisions: [] }), 'advisory', 'warm')
     expect(text).toContain('(none given)')
@@ -68,10 +63,19 @@ describe('renderIntake', () => {
 describe('briefs', () => {
   // A tone with no brief does nothing at all: before these existed the model
   // received the bare token `data_driven` and all five tones produced
-  // near-identical prose. This is the check that a new option cannot be added
-  // to the wizard without one.
-  it('gives every tone in the wizard a brief with a DO, an AVOID and a sample', () => {
-    for (const { value } of TONES) {
+  // near-identical prose. The wizard no longer offers tones, so this now
+  // guards the legacy path — every value a pre-rebuild row can carry in
+  // `case_studies.tone` still has to arrive as a spelled-out brief.
+  const STORED_TONES: Tone[] = [
+    'professional',
+    'direct',
+    'confident',
+    'data_driven',
+    'warm',
+  ]
+
+  it('gives every stored tone a brief with a DO, an AVOID and a sample', () => {
+    for (const value of STORED_TONES) {
       const brief = TONE_BRIEFS[value]
       expect(brief, `tone ${value}`).toBeTruthy()
       expect(brief, `tone ${value}`).toContain('DO:')
@@ -80,8 +84,8 @@ describe('briefs', () => {
     }
   })
 
-  it('gives every project type in the wizard a brief', () => {
-    for (const { value } of PROJECT_TYPES) {
+  it('gives every project type a brief, including the two the selector no longer offers', () => {
+    for (const value of ['focused_fix', 'zero_to_one', 'advisory'] as const) {
       expect(PROJECT_TYPE_BRIEFS[value], `project type ${value}`).toBeTruthy()
     }
   })
