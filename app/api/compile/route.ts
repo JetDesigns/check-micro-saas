@@ -17,8 +17,12 @@
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runPipeline, type PipelineImage } from '@/lib/agents/pipeline'
-import { compileBlockers } from '@/lib/wizard-steps'
-import type { Intake, ProjectType, Tone } from '@/types/database'
+import { GenerationFailed, runFocusedFixPipeline } from '@/lib/agents/focused-fix-pipeline'
+import { isStructuringAlias, type StructuringAlias } from '@/lib/agents/client'
+import { pageTitle } from '@/lib/markdown-lite'
+import { blankInputs, compileBlockers } from '@/lib/wizard-steps'
+import { isFocusedFixIntake } from '@/types/database'
+import type { LegacyIntake, ProjectType, StoredIntake, Tone } from '@/types/database'
 
 export const runtime = 'nodejs'
 
@@ -33,7 +37,9 @@ const ALLOWED_MEDIA = ['image/jpeg', 'image/png', 'image/webp'] as const
 type AllowedMedia = (typeof ALLOWED_MEDIA)[number]
 
 export async function POST(req: Request) {
-  const caseStudyId = extractCaseStudyId(await req.json().catch(() => null))
+  const body = await req.json().catch(() => null)
+  const caseStudyId = extractCaseStudyId(body)
+  const dev = devOptions(body)
   if (!caseStudyId) {
     return Response.json({ error: 'bad_request' }, { status: 400 })
   }
@@ -100,7 +106,9 @@ export async function POST(req: Request) {
     // legal document would otherwise burn a vision pass over six images and
     // three opus calls before the validator said so — and the retry in
     // between would push the model to invent the decision that is missing.
-    const blockers = compileBlockers(row.intake as Intake)
+    const intake = row.intake as StoredIntake
+
+    const blockers = compileBlockers(intake)
     if (blockers.length > 0) {
       await admin
         .from('case_studies')
@@ -112,11 +120,54 @@ export async function POST(req: Request) {
       )
     }
 
+    // Routing on the stored shape, not on a flag. A row written by the rebuilt
+    // wizard carries inputs the legacy prompt has no section for, and a row
+    // written before it is missing inputs the specification requires — and a
+    // prompt that lists what it did not get is an invitation to supply it
+    // (§10.1). So a v2 intake is written from the specification, and only a v1
+    // intake goes through the legacy prompt.
+    if (isFocusedFixIntake(intake)) {
+      const images = await loadImages(admin, caseStudyId)
+
+      // Ablation: blank named inputs in memory, for this run only. The stored
+      // intake is never written back, so one row can be regenerated repeatedly
+      // with different fields removed.
+      const runIntake = dev.blank.length > 0 ? blankInputs(intake, dev.blank) : intake
+
+      const result = await runFocusedFixPipeline({
+        caseStudyId,
+        intake: runIntake,
+        images,
+        model: dev.model,
+        blanked: dev.blank,
+      })
+
+      const { error: writeError } = await admin
+        .from('case_studies')
+        .update({
+          generated: result.page,
+          headline: pageTitle(result.page.markdown) ?? intake.title ?? null,
+          status: 'preview',
+          compile_claimed_at: null,
+        })
+        .eq('id', caseStudyId)
+
+      if (writeError) throw writeError
+
+      if (result.page.meta && result.page.meta.warnings.length > 0) {
+        console.warn(
+          `[/api/compile] ${caseStudyId} written with ${result.page.meta.warnings.length} warning(s):`,
+          result.page.meta.warnings
+        )
+      }
+      return Response.json({ ok: true, attempts: result.attempts, path: 'focused_fix' })
+    }
+
     const images = await loadImages(admin, caseStudyId)
 
     const result = await runPipeline({
       caseStudyId,
-      intake: row.intake as Intake,
+      intake: intake as LegacyIntake,
       projectType: (row.project_type ?? 'focused_fix') as ProjectType,
       tone: (row.tone ?? 'professional') as Tone,
       images,
@@ -154,8 +205,19 @@ export async function POST(req: Request) {
       .eq('id', caseStudyId)
 
     console.error('[/api/compile] failed:', err)
+    if (err instanceof GenerationFailed) {
+      console.error('[/api/compile] last reply that failed validation:\n', err.lastReply.slice(0, 4000))
+    }
     return Response.json(
-      { error: 'compile_failed', message: readableFailure(err) },
+      {
+        error: 'compile_failed',
+        message: readableFailure(err),
+        // The reasons, outside production only. They name exactly which rule the
+        // page broke, which is the difference between "try again" and a fix.
+        ...(process.env.NODE_ENV !== 'production' && err instanceof GenerationFailed
+          ? { issues: err.issues }
+          : {}),
+      },
       { status: 502 }
     )
   }
@@ -179,6 +241,9 @@ function readableFailure(err: unknown): string {
   }
   if (raw.includes('ANTHROPIC_API_KEY')) {
     return 'No Anthropic API key is configured on the server.'
+  }
+  if (raw.startsWith('Generation failed after')) {
+    return 'The page came back unusable three times running. Your answers are saved — try again, and if it keeps happening the reasons are in the server log.'
   }
   if (raw.startsWith('Synthesis failed after')) {
     return 'The case study came back unusable three times running. Your answers are still here — try again, and if it keeps happening the prompt needs a look.'
@@ -220,6 +285,24 @@ async function loadImages(
   }
 
   return images
+}
+
+/**
+ * Request fields that only exist outside production.
+ *
+ * Choosing the model, blanking an input, and (later) turning the gate on are all
+ * ways to spend money or to see behaviour the product does not expose, and a
+ * public route must not offer them. In production every one of these is ignored
+ * whatever the caller sends.
+ */
+function devOptions(body: unknown): { model?: StructuringAlias; blank: string[] } {
+  if (process.env.NODE_ENV === 'production') return { blank: [] }
+  if (typeof body !== 'object' || body === null) return { blank: [] }
+  const b = body as { model?: unknown; blank?: unknown }
+  return {
+    ...(isStructuringAlias(b.model) ? { model: b.model } : {}),
+    blank: Array.isArray(b.blank) ? b.blank.filter((x): x is string => typeof x === 'string') : [],
+  }
 }
 
 function extractCaseStudyId(body: unknown): string | null {

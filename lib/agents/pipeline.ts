@@ -14,8 +14,14 @@ import {
   buildSynthesisUser,
   renderIntake,
 } from '@/lib/agents/prompts'
-import type { Intake, ProjectType, Tone } from '@/types/database'
+import type { LegacyIntake, ProjectType, Tone } from '@/types/database'
 
+// LEGACY PIPELINE. It writes the `{spine, blocks}` document from the old
+// prompt, against `LegacyIntake`. Kept whole rather than migrated: the dev flag
+// generates from it on the same input so the spec's output can be compared
+// against what the product produced before, and every row written before the
+// rebuild still compiles through it.
+//
 // Separate calls, deliberately. Merging visual grounding into the writing call
 // is what produces invented claims: a model asked to describe a screen and
 // argue for a designer in one breath will describe screens it wishes it had
@@ -52,7 +58,7 @@ type SynthesisPayload = CaseStudy & { headline?: string }
 
 export async function runPipeline(params: {
   caseStudyId: string
-  intake: Intake
+  intake: LegacyIntake
   projectType: ProjectType
   tone: Tone
   images: PipelineImage[]
@@ -150,8 +156,11 @@ export async function runPipeline(params: {
   )
 }
 
-async function runExtraction(
-  caseStudyId: string,
+// Exported for the Focused Fix path, which reuses the vision pass unchanged — it
+// is the source of alt text there, and has no quarrel with the spec. `caseStudyId`
+// is null for a dry run, which has no row to log against.
+export async function runExtraction(
+  caseStudyId: string | null,
   images: PipelineImage[]
 ): Promise<string | null> {
   // One batched call for every image, not one call per image. Cheaper, and it
@@ -230,6 +239,6 @@ function describeIssue(issue: ValidationIssue): string {
   return `${issue.rule}: ${issue.message}`
 }
 
-function fallbackHeadline(intake: Intake): string {
+function fallbackHeadline(intake: LegacyIntake): string {
   return intake.title?.trim() || 'Untitled case study'
 }
