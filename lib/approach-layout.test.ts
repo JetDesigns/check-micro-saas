@@ -3,6 +3,7 @@ import {
   orderOverlayCaption,
   orderOverlayRows,
   columnHeight,
+  decisionSetCaption,
   rowCentre,
   sequenceCaption,
   sequenceConnectors,
@@ -10,6 +11,7 @@ import {
   setExceptionOrder,
 } from './approach-layout'
 import type {
+  DecisionSetDiagram,
   OrderOverlayDiagram,
   SequenceCollapseDiagram,
   SetExceptionDiagram,
@@ -233,5 +235,42 @@ describe('sequence caption', () => {
     expect(sequenceCaption(sequence({ reason: 'the card screen was the provider\'s' }))).toBe(
       "6 steps became 4 — Review order and Confirm email were removed because the card screen was the provider's."
     )
+  })
+})
+
+describe('floor form caption', () => {
+  const floor = (over: Partial<DecisionSetDiagram> = {}): DecisionSetDiagram => ({
+    template: 'decision-set',
+    decisions: [
+      { label: 'Freeze the note at shift change', kind: 'change' },
+      { label: 'Sort by escalation, not by room', kind: 'change' },
+      { label: 'Hold escalated notes until acknowledged', kind: 'new' },
+    ],
+    new_count: 1,
+    reason: null,
+    text_equivalent: '',
+    ...over,
+  })
+
+  it('names how many decisions built something that was not there', () => {
+    expect(decisionSetCaption(floor())).toBe(
+      '3 decisions, one of them building something that was not there before.'
+    )
+  })
+
+  // A set with no exception has no rule to break. Saying so beats implying one.
+  it('claims no exception where the designer marked none', () => {
+    const none = floor({
+      decisions: floor().decisions.map((d) => ({ ...d, kind: 'change' as const })),
+      new_count: 0,
+    })
+    expect(decisionSetCaption(none)).toBe(
+      '3 decisions, each a change to something that already existed.'
+    )
+    expect(decisionSetCaption(none)).not.toContain('not there')
+  })
+
+  it('reads as a plural when more than one was built', () => {
+    expect(decisionSetCaption(floor({ new_count: 2 }))).toContain('2 of them building')
   })
 })

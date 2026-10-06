@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.6 · Scope: the `focused fix` project category only.
+Version 1.7 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -18,6 +18,12 @@ Kept** and its `finding` now **comes from a wizard field**; §6's selection **ga
 contract before choosing among the survivors** rather than gating only the winner; and
 new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
 renderer alongside item 3.
+
+**Changed in 1.7**, on the owner's instruction and against a decision recorded the other way:
+**every page now carries a visual**. §5.4 adds a floor form over the decisions themselves, last in
+§6's order, and §9 is amended in the operative prompt to match — the writer still produces no
+diagram and still writes Approach to stand alone, but the specification no longer claims the system
+has no fallback. The argument against the guarantee is kept at §5.4 rather than removed.
 
 **Changed in 1.6**, from building `sequence-collapse`: it is **no longer deferred** — it has
 a contract, gates, a wizard branch and a renderer, so all three templates are live. §5.2's
@@ -64,8 +70,12 @@ reader draws the conclusion about the designer themselves.
 - All explanation lives in the caption, below the canvas.
 - Every word on the canvas is a noun that exists in the user's product.
 - One diagram per Approach section. Never two.
-- No diagram is better than a weak diagram. Approach always renders, with
-  or without one.
+- ~~No diagram is better than a weak diagram.~~ **Reversed in 1.7, by the
+  owner, knowing this line was the argument against it.** A floor form now
+  catches whatever the three templates drop, so every page carries a visual.
+  What that costs is written out at §5.4 and in the banner above
+  `gateDecisionSet`. Approach still renders either way, and still reads the
+  same either way: the writer is never told which happened.
 
 ---
 
@@ -113,8 +123,12 @@ Shape of data cannot.
 | `sequence-collapse` | an ordered list, shortened | vertical length |
 | `order-overlay` | an ordered list, categorised | vertical order |
 
-Three covers roughly 85% of focused-fix projects. The remaining 15%
-render as text. That is the designed outcome, not a gap to close.
+Three covers roughly 85% of focused-fix projects. The remaining 15% used to
+render as text, and §5.4's floor form now catches them instead — so the number
+that matters is no longer coverage but **how often the floor is what fires**.
+It is the one form that cannot distinguish two unrelated projects, so every
+point of real coverage the three templates win is a point it does not have to
+cover badly.
 
 ---
 
@@ -411,6 +425,59 @@ Pluralise correctly. With a reason: `… were removed because {reason}.`
 
 ---
 
+### 5.4 `decision-set` — the floor form
+
+**Unit** one decision the designer made
+**Proves** nothing the prose does not already say. It exists to satisfy a
+guarantee, not to carry a claim.
+
+**Fires when** none of the three above did. Never otherwise: it is last in §6's
+order, and a test pins that each of the three still wins when it fires.
+
+**Data contract**
+```
+decisions[]  label  string  the decision, in the designer's own words
+             kind   enum    change | new
+new_count    number         how many built something that was not there
+```
+`kind` is `new` where the designer ticked "this didn't exist before" on that
+decision, and `change` otherwise. Nothing else is read.
+
+**Gates** 2 to 4 decisions, which `compileBlockers` already guarantees before a
+page is written at all. It cannot fail on a page that exists.
+
+**Encoding** A column, not a grid: these labels are the designer's own decision
+sentences and a 120px grid mark would show four words of one. Two fills, with
+the exceptions in `exception` and the word "New" beside them. No legend.
+
+**Caption** With exceptions: `{n} decisions, {m} of them building something
+that was not there before.` Without any: `{n} decisions, each a change to
+something that already existed.` — a set with no exception has no rule to
+break, so the caption says so rather than implying one.
+
+> **This was deleted once, and is back on an explicit instruction.** A
+> guaranteed visual existed for four days and was withdrawn because the floor
+> form that met it drew a near-identical picture for two unrelated projects.
+> Every project has two to four decisions and the same handful of fields about
+> them, so anything derived from that set is the same shape every time and only
+> the words inside change. That is what §9.1's "There is no fallback form" was
+> protecting.
+>
+> It is reinstated anyway, by the owner, knowing the above. Two mitigations,
+> which are the most the data allows. It **fires rarely now**: when the
+> guarantee was first withdrawn one template existed, three do now, and this
+> only catches a project whose chosen branch failed its gates. And it **claims
+> only what is there**: the relationship is §9.2's peer set with exceptions
+> over decisions rather than parts, which is a row of the vocabulary rather
+> than a new form, and where no decision built something new it says so.
+>
+> What it still cannot do is differ between two projects that made the same
+> number of decisions of the same kinds. Nothing in the intake would make it
+> so, and inventing a difference is the one thing this system exists to
+> prevent. Recorded, not designed around.
+
+---
+
 ### 5.3 `order-overlay`
 
 **Unit** section of one page
@@ -548,7 +615,7 @@ all three contracts from the same answers and applies a fixed rule.
              a contract that fails any gate is out
 4  select    exactly one survives   -> that one
              more than one survives -> B, then A, then C
-             none survives          -> text only, stop
+             none survives          -> the floor form (§5.4)
 5  render    renderer draws the contract; the medium follows the geometry
              (HTML/CSS for boxes in a grid, SVG where lines are drawn)
 6  verify    swap test on the caption

@@ -1,4 +1,5 @@
 import {
+  isDecisionSet,
   isOrderOverlay,
   isSetException,
   type ApproachDiagram as Contract,
@@ -7,6 +8,7 @@ import {
   MARK_HEIGHT,
   ROW_PITCH,
   columnHeight,
+  decisionSetCaption,
   orderOverlayCaption,
   orderOverlayRows,
   sequenceCaption,
@@ -69,6 +71,7 @@ export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
   if (!diagram) return null
 
   if (isOrderOverlay(diagram)) return <OrderOverlay diagram={diagram} />
+  if (isDecisionSet(diagram)) return <DecisionSet diagram={diagram} />
   if (!isSetException(diagram)) return <SequenceCollapse diagram={diagram} />
 
   const marks = setExceptionOrder(diagram.items)
@@ -258,6 +261,50 @@ function SequenceCollapse({
 
       <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
         {sequenceCaption(diagram)}
+      </figcaption>
+    </figure>
+  )
+}
+
+/**
+ * The decisions themselves, with the ones that built something marked.
+ *
+ * The floor form. It draws only when none of the three real templates fired,
+ * and what it costs is written out above `gateDecisionSet` in
+ * lib/approach-diagram.ts rather than here.
+ *
+ * A column rather than set-exception's grid, for a plain reason: these labels
+ * are the designer's own decision sentences — "Freeze the note at shift
+ * change" — and a 120px grid mark would show four words of one. The column
+ * gives each its own line and truncates what will not fit.
+ *
+ * Two fills AND a word, which §9 allows together: the fill shows the
+ * exceptions as one mass, and the word is what names them, so no key is needed
+ * (§9.3 gates 3 and 4).
+ */
+function DecisionSet({ diagram }: { diagram: Extract<Contract, { template: 'decision-set' }> }) {
+  return (
+    <figure className={FRAME} aria-label={diagram.text_equivalent}>
+      <div className="flex w-full max-w-[400px] flex-col gap-3" aria-hidden>
+        {diagram.decisions.map((d) => (
+          <div key={d.label} className="flex w-full items-center gap-3">
+            <div
+              title={d.label}
+              className={`${MARK} min-w-0 flex-1 ${
+                d.kind === 'new' ? EXCEPTION_MARK : DEFAULT_MARK
+              }`}
+            >
+              <span className="overflow-hidden text-ellipsis">{d.label}</span>
+            </div>
+            <span className="w-14 shrink-0 text-[12px] leading-[1.2] tracking-[-0.12px] text-[var(--studio-text-soft)]">
+              {d.kind === 'new' ? 'New' : ''}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
+        {decisionSetCaption(diagram)}
       </figcaption>
     </figure>
   )

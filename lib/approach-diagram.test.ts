@@ -4,6 +4,7 @@ import {
   gateOrderOverlay,
   gateSequenceCollapse,
   gateSetException,
+  isDecisionSet,
   isOrderOverlay,
   isSequenceCollapse,
   isSetException,
@@ -319,11 +320,12 @@ describe('building sequence-collapse from the intake', () => {
     expect(built.before).toHaveLength(6)
   })
 
-  it('is null when the flow lost too little, rather than raising anything', () => {
+  it('drops out when the flow lost too little, rather than raising anything', () => {
     const thin = flowIntake({
       flow_steps_ordered: FLOW.map((x) => (x.label === 'Sign up' ? x : { label: x.label })),
     })
-    expect(buildApproachDiagram(thin)).toBeNull()
+    const built = buildApproachDiagram(thin)
+    expect(built && isDecisionSet(built)).toBe(true)
   })
 })
 
@@ -368,14 +370,19 @@ describe('building set-exception from the intake', () => {
     expect(labels).not.toContain('Medication chart')
   })
 
-  it('is null when nothing was marked', () => {
-    expect(buildApproachDiagram(intake({ product_areas_worked: [] }))).toBeNull()
+  // Droppable, not retryable — which is still the point of these two. What
+  // changed is where a dropped template lands: the floor form catches it now
+  // instead of the page going without. Asserting the floor is what proves
+  // set-exception itself dropped out.
+  it('drops out when nothing was marked', () => {
+    const built = buildApproachDiagram(intake({ product_areas_worked: [] }))
+    expect(built && isDecisionSet(built)).toBe(true)
   })
 
-  // Droppable, not retryable. A project below the gate simply has no diagram.
-  it('is null when the set is too small, rather than raising anything', () => {
+  it('drops out when the set is too small, rather than raising anything', () => {
     const thin = intake({ product_areas_worked: ['Orders', 'Menu'], product_areas_new: ['Menu'] })
-    expect(buildApproachDiagram(thin)).toBeNull()
+    const built = buildApproachDiagram(thin)
+    expect(built && isDecisionSet(built)).toBe(true)
   })
 
   it('never invents a reason', () => {
@@ -418,7 +425,8 @@ describe('building order-overlay from the intake', () => {
   })
 
   it('takes the finding from the answer and never invents one', () => {
-    expect(buildApproachDiagram(pageIntake({ page_pattern: '  ' }))).toBeNull()
+    const blank = buildApproachDiagram(pageIntake({ page_pattern: '  ' }))
+    expect(blank && isDecisionSet(blank)).toBe(true)
     expect(asOrderOverlay(buildApproachDiagram(pageIntake())).finding).toBe(
       'everything cut sat in the middle of the page'
     )
@@ -430,13 +438,14 @@ describe('building order-overlay from the intake', () => {
     expect(text).toContain('the middle of the page')
   })
 
-  it('is null when the page has too few sections, rather than raising anything', () => {
+  it('drops out when the page has too few sections, rather than raising anything', () => {
     const thin = pageIntake({ page_sections_ordered: PAGE.slice(0, 4) })
-    expect(buildApproachDiagram(thin)).toBeNull()
+    const built = buildApproachDiagram(thin)
+    expect(built && isDecisionSet(built)).toBe(true)
   })
 })
 
-describe('choosing between the two', () => {
+describe('choosing between the four', () => {
   // §6's fixed order is B, then A, then C.
   it('prefers sequence-collapse over everything else', () => {
     const all = flowIntake({
@@ -469,12 +478,32 @@ describe('choosing between the two', () => {
     expect(asOrderOverlay(buildApproachDiagram(failing)).template).toBe('order-overlay')
   })
 
-  it('is null when neither passes, with no fallback form', () => {
+  // REVERSED, ON THE OWNER'S INSTRUCTION. This asserted null and "no fallback
+  // form" until the guarantee was reinstated. The argument against it is in
+  // lib/approach-diagram.ts above `gateDecisionSet` and is still the better
+  // argument; what is tested here is only that the instruction was carried out.
+  it('falls to the floor form when none of the three passes', () => {
     const neither = pageIntake({
       product_areas_worked: ['Orders', 'Menu'],
       product_areas_new: ['Menu'],
       page_sections_ordered: PAGE.slice(0, 3),
     })
-    expect(buildApproachDiagram(neither)).toBeNull()
+    const built = buildApproachDiagram(neither)
+    expect(built && isDecisionSet(built)).toBe(true)
+  })
+
+  // The floor form is LAST. A project whose real template fired must never see
+  // it, or the guarantee would have cost the three templates their purpose.
+  it.each([
+    ['set-exception', () => intake()],
+    ['order-overlay', () => pageIntake()],
+    ['sequence-collapse', () => flowIntake()],
+  ])('never reaches for the floor when %s fired', (template, build) => {
+    expect(buildApproachDiagram(build())?.template).toBe(template)
+  })
+
+  // What is left of null, and `compileBlockers` refuses to write such a page.
+  it('is null only for a page with no decisions at all', () => {
+    expect(buildApproachDiagram(pageIntake({ page_sections_ordered: [], decisions: [] }))).toBeNull()
   })
 })

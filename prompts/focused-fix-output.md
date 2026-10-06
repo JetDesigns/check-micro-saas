@@ -744,14 +744,15 @@ and its absence is invisible: no placeholder, no empty frame, no apology.
 1. Determine the relationship the work actually has (§9.4–9.5).
 2. Check that the relationship carries a distinction worth seeing.
 3. Select the form that represents that relationship.
-4. If no relationship survives step 2, generate nothing (§9.7). There is no fallback form.
+4. If no relationship survives step 2, generate nothing (§9.7). **You have no fallback form** —
+   never reach for a shape because the section would otherwise look bare.
 
 Reaching for a shape because it looks like a diagram, then fitting the work into it, produces a
 graphic that misrepresents the work. This is the single most common way this feature fails.
 
 ### 9.2 Vocabulary of forms
 
-Six forms. Each carries one relationship and each has a condition. There is no seventh.
+Eight forms. Each carries one relationship and each has a condition. There is no ninth.
 
 | Relationship | Form | Applies when | Must be encoded visually |
 |---|---|---|---|
@@ -761,6 +762,8 @@ Six forms. Each carries one relationship and each has a condition. There is no s
 | Peer set with exceptions | Cluster or grid with exceptions marked | Several comparable items where a few behave differently | Which items are the exceptions — by fill, outline or position. This is the entire point of the form |
 | Before/after system | The same item set in two states | The work changed the relationships between existing parts without adding parts | The difference between the states, usually in the connections, since the items are constant |
 | Scope boundary | Nested containment | What was inside the engagement against what was adjacent to it | The boundary, and what sits on each side |
+| Ordered list, categorised | A column in its real order, with what happened to each beside it | The parts are sections of one page whose order is fixed, and the designer sorted them into groups | Where each group falls down the order. The claim is positional, so sorting or grouping the rows destroys it |
+| Sequence shortened | Two columns, the second shorter, joined across | One continuous flow that people walk got shorter | How much came out — as the difference in column length and the slant of the joins, never as a count |
 
 A relationship that fits none of these is a candidate for omission, not for inventing a form.
 
@@ -772,13 +775,20 @@ sequence that does not return to its start.
 Listing a form here does not make it producible, and the specification must not offer what nothing
 can render.
 
-**One form is available: peer set with exceptions**, realised as the product-area map and specified
-in full in `APPROACH-VISUAL-PRD.md`, which is this section's technical appendix. Its unit is a part
-of the product — an area, a screen, a component — named by the designer, with the parts that had no
-precedent marked. The other five remain specified and unavailable: they need both a renderer and
-the confirmation step in §9.4.
+**Three forms are available**, each specified in full in `APPROACH-VISUAL-PRD.md`, which is this
+section's technical appendix:
 
-**It is drawn as a grid, not a ring**, which is where the PRD's own encoding was amended. A ring
+- **Peer set with exceptions**, as the product-area map. Its unit is a part of the product — an
+  area, a screen, a component — named by the designer, with the parts that had no precedent marked.
+- **Ordered list, categorised**, as the page overlay. Its unit is a section of one page, in the
+  page's real order, with what happened to each.
+- **Sequence shortened**, as the flow collapse. Its unit is a step of one flow people walk, with
+  the steps that are gone marked.
+
+The other five remain specified and unavailable: they need both a renderer and the confirmation
+step in §9.4.
+
+**The peer set is drawn as a grid, not a ring**, which is where the PRD's own encoding was amended. A ring
 asserts that each item leads to the next and returns. The reference this form was derived from
 drew one, and the analysis records it as a defect for exactly that reason.
 
@@ -914,18 +924,18 @@ diagram that explains something untrue has failed worse.
 
 ### 9.7 Omission
 
-Omission is the **ordinary outcome**, not a failure state. It fires whenever the material does not
-support the available form: fewer than four parts worked on, more than eight, none marked as having
-no precedent, or more than half of them marked.
+**You produce no diagram, on every page, without exception.** That is not a failure state and it is
+not conditional on anything you can see — it is simply not your output. Whether a visual is built
+afterwards, from the answers the designer gave, is decided by code you are not part of and are told
+nothing about.
 
-That last bound is the form's whole argument rather than a tuning knob — when half the set is
-exceptional the set has no rule left to break, and the picture claims nothing.
+**A gate that fails removes a diagram and nothing else.** It is never an error, never a retry, and
+never a note to the writer: the page is finished either way, and the page is complete. The precedent
+is the same one the headline figure follows — omitted rather than filled in.
 
-**A gate that fails removes the diagram and nothing else.** It is never an error, never a retry,
-and never a note to the writer: the page is finished without it, and the page is complete. The
-precedent is the same one the headline figure follows — omitted rather than filled in.
-
-**How Approach reads with no diagram.** The section is never omitted and never shortened to
+**How Approach reads, and it reads the same way every time.** You never learn whether a visual was
+attached, so Approach is written to stand on its own in every case — which is also what keeps it
+readable for anyone the picture never reaches. The section is never omitted and never shortened to
 compensate. It carries the same structural content in prose: the items named, what distinguishes
 them, and any ordering or exception stated plainly. There is no placeholder, no empty frame, no
 caption without a graphic, and **no sentence acknowledging that a diagram was not generated**. The
@@ -1108,9 +1118,9 @@ Run before returning the structured output. Every item is a hard gate.
 21. No asset appears that has no decision to point at.
 
 **Diagram**
-22. Either a diagram is present, passing the cover-the-caption test and shipping a text equivalent,
-    or none is and Approach carries the structure in prose with no trace of the omission. Absence is
-    an ordinary outcome and is never an error.
+22. You produced no diagram, and Approach carries the structure in prose with no trace of the
+    omission. That is the only passing state on your side; what is drawn afterwards is not yours
+    and is never an error. Rules 23 to 25 are what binds whatever is drawn.
 23. No ring or cycle form was used.
 24. No legend anywhere. No more than two fill states, and only where the two are self-evident.
     Every category name sits on or beside the thing it describes.

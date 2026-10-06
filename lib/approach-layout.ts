@@ -15,6 +15,7 @@
 // sequence-collapse's connectors — and that is where it will be used.
 
 import type {
+  DecisionSetDiagram,
   OrderOverlayDiagram,
   SequenceCollapseDiagram,
   SetExceptionDiagram,
@@ -199,4 +200,28 @@ export function sequenceCaption(d: SequenceCollapseDiagram): string {
   const head = `${d.before.length} steps became ${d.after.length} — ${listOf(removed)} ${verb} removed`
   // Stated by the designer or absent. Never inferred (PRD §8).
   return d.reason ? `${head} because ${d.reason}.` : `${head} entirely.`
+}
+
+// ---------------------------------------------------------------------------
+// decision-set — the floor form
+// ---------------------------------------------------------------------------
+
+/**
+ * The caption, and it says only what the decisions support.
+ *
+ * Where nothing was built new there is no exception, and the caption says that
+ * rather than implying one — a set with no exception has no rule to break, and
+ * a caption that pretended otherwise would be the fabrication the floor form is
+ * already closest to.
+ */
+export function decisionSetCaption(d: DecisionSetDiagram): string {
+  const n = d.decisions.length
+  if (d.new_count === 0) {
+    return `${n} decisions, each a change to something that already existed.`
+  }
+  const built =
+    d.new_count === 1
+      ? 'one of them building something that was not there before'
+      : `${d.new_count} of them building something that was not there before`
+  return `${n} decisions, ${built}.`
 }

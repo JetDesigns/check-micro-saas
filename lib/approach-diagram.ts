@@ -87,10 +87,20 @@ export type SequenceCollapseDiagram = DiagramTail & {
   after: string[]
 }
 
+/** One decision, and whether it made something or changed something. */
+export type DecisionMark = { label: string; kind: 'change' | 'new' }
+
+export type DecisionSetDiagram = DiagramTail & {
+  template: 'decision-set'
+  decisions: DecisionMark[]
+  new_count: number
+}
+
 export type ApproachDiagram =
   | SetExceptionDiagram
   | OrderOverlayDiagram
   | SequenceCollapseDiagram
+  | DecisionSetDiagram
 
 // Guards rather than comparisons at the call site: an optional chain never
 // narrows a union, so `page.diagram?.items` does not compile and reaching for a
@@ -102,10 +112,19 @@ export const isOrderOverlay = (d: ApproachDiagram): d is OrderOverlayDiagram =>
   d.template === 'order-overlay'
 export const isSequenceCollapse = (d: ApproachDiagram): d is SequenceCollapseDiagram =>
   d.template === 'sequence-collapse'
+export const isDecisionSet = (d: ApproachDiagram): d is DecisionSetDiagram =>
+  d.template === 'decision-set'
 
 // PRD §5.1 — set-exception's gates.
 export const SET_MIN = 4
 export const SET_MAX = 8
+
+// The floor form's bounds. Not a gate in the sense the other three have one:
+// `compileBlockers` already refuses to write a page with fewer than two
+// decisions, and the wizard caps them at four, so this cannot fail on a page
+// that exists. It is stated so a hand-built intake cannot slip past it.
+export const DECISION_FLOOR_MIN = 2
+export const DECISION_FLOOR_MAX = 4
 
 // PRD §5.2 — sequence-collapse's gates.
 export const STEP_MIN = 4
@@ -229,6 +248,91 @@ export function gateSetException(c: SetExceptionDiagram): string[] {
   }
 
   return failed
+}
+
+// ---------------------------------------------------------------------------
+// decision-set — the floor form
+// ---------------------------------------------------------------------------
+//
+// THIS EXISTS BECAUSE THE OWNER ASKED FOR A GUARANTEE, AGAINST A DECISION THEY
+// HAD MADE THE OTHER WAY, KNOWING WHY. The record matters more than the code
+// here, so it is written out rather than summarised.
+//
+// A guaranteed visual existed once before, for four days, and was withdrawn:
+// the floor form that met it drew a near-identical picture for two unrelated
+// projects. Every project has two to four decisions and the same handful of
+// fields about them, so anything derived from that set is the same shape every
+// time — only the words inside change. That is what §9.1's "There is no
+// fallback form" was protecting, and reinstating one brings the failure back.
+//
+// It is reinstated anyway, on an explicit instruction, with two mitigations
+// that are the most the data allows:
+//
+//   1. IT FIRES RARELY NOW. When the guarantee was first withdrawn one template
+//      existed. Three do now, each with its own branch of step 4, so this only
+//      catches a project whose chosen branch failed its gates — three product
+//      areas instead of four, a flow that lost one step. The weakness is real
+//      and it is reached far less often than it was.
+//   2. IT CLAIMS ONLY WHAT IS THERE. The relationship is §9.2's peer set with
+//      exceptions, over decisions rather than parts, which is a row of the
+//      vocabulary rather than a new form. Where no decision built something
+//      new there is no exception, so it says so in the caption instead of
+//      implying one.
+//
+// What it still cannot do is be different between two projects that made the
+// same number of decisions of the same kinds. Nothing in the intake would make
+// it so, and inventing a difference is the one thing this system exists to
+// prevent. Recorded, not designed around.
+
+export function gateDecisionSet(c: DecisionSetDiagram): string[] {
+  const failed: string[] = []
+
+  if (c.decisions.length < DECISION_FLOOR_MIN || c.decisions.length > DECISION_FLOOR_MAX) {
+    failed.push(
+      `there are ${c.decisions.length} decisions; the page holds ${DECISION_FLOOR_MIN} to ${DECISION_FLOOR_MAX}`
+    )
+  }
+  if (c.new_count !== c.decisions.filter((d) => d.kind === 'new').length) {
+    failed.push(`new_count says ${c.new_count} and the decisions disagree`)
+  }
+  for (const d of c.decisions) {
+    if (d.label.trim() === '') failed.push('a decision has no label')
+  }
+
+  return failed
+}
+
+/**
+ * The floor form, built from the decisions themselves.
+ *
+ * `no_prior_version` is the only per-decision fact that distinguishes one from
+ * another without reading its prose, and the designer stated it. A decision
+ * with no earlier version built something; everything else changed something.
+ *
+ * No process-word guard. These are the designer's own decision sentences, not
+ * a list of nouns they might have filled with phases, and a decision reading
+ * "Discovery" would already have failed the page long before this.
+ */
+function buildDecisionSet(intake: Intake): DecisionSetDiagram | null {
+  const decisions: DecisionMark[] = intake.decisions
+    .filter((d) => d.decided.trim() !== '')
+    .map((d) => ({ label: d.decided.trim(), kind: d.no_prior_version ? 'new' : 'change' }))
+  if (decisions.length === 0) return null
+
+  const newOnes = decisions.filter((d) => d.kind === 'new')
+  const contract: DecisionSetDiagram = {
+    template: 'decision-set',
+    decisions,
+    new_count: newOnes.length,
+    reason: null,
+    text_equivalent:
+      `${decisions.length} decisions were made: ${decisions.map((d) => d.label).join('; ')}.` +
+      (newOnes.length === 0
+        ? ' Each changed something that already existed.'
+        : ` ${newOnes.map((d) => d.label).join('; ')} built something that was not there before.`),
+  }
+
+  return gateDecisionSet(contract).length === 0 ? contract : null
 }
 
 // ---------------------------------------------------------------------------
@@ -519,10 +623,18 @@ function buildOrderOverlay(intake: Intake): OrderOverlayDiagram | null {
 /**
  * The diagram this project supports, or null.
  *
- * Null is an ordinary outcome and the common one: a project that renders no
- * diagram renders Approach as prose with no trace of the absence (§9.7). There
- * is no fallback form and no placeholder — the floor form that guaranteed one
- * was deleted for drawing a near-identical picture for two unrelated projects.
+ * NULL IS NOW ALMOST UNREACHABLE, and that is a reversal. A floor form was
+ * deleted for drawing a near-identical picture for two unrelated projects, and
+ * the guarantee it met went with it; both are back, on an explicit instruction
+ * from the owner. The argument against is written out above `gateDecisionSet`
+ * rather than summarised, because it is still the better argument.
+ *
+ * What is left of null: a page with no decisions at all, which `compileBlockers`
+ * refuses to write before it reaches here. In practice every page gets one.
+ *
+ * The writer is told none of this. It still produces no diagram, still writes
+ * Approach to stand on its own, and still never learns whether anything was
+ * attached afterwards (§9.7).
  *
  * EVERY contract is filled and EVERY one is gated, and §6's fixed priority —
  * sequence-collapse, then set-exception, then order-overlay — picks among
@@ -543,5 +655,7 @@ export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
   const sequence = buildSequenceCollapse(intake)
   const set = buildSetException(intake)
   const overlay = buildOrderOverlay(intake)
-  return sequence ?? set ?? overlay
+  // Last, and only when none of the three fired. See the banner above
+  // `gateDecisionSet` for what it costs and why it is here anyway.
+  return sequence ?? set ?? overlay ?? buildDecisionSet(intake)
 }
