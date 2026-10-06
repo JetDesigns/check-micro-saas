@@ -14,10 +14,7 @@ describe('the hand-written fixture', () => {
 
   it('exercises the cases worth testing a layout against', () => {
     const types = CASE_STUDY_FIXTURE.blocks.map((b) => b.type)
-    // A cycle diagram is only legal at spine length 3–4, so the fixture has to
-    // be long enough to render one at all.
     expect(CASE_STUDY_FIXTURE.spine.length).toBe(3)
-    expect(types).toContain('cycle_diagram')
     expect(types).toContain('stat_headline')
     expect(types).toContain('pullquote')
     // Every move carries a trade-off; that block is the most likely to break a

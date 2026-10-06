@@ -109,17 +109,6 @@ export const CASE_STUDY_FIXTURE: CaseStudy = {
       ],
     },
     {
-      type: 'cycle_diagram',
-      caption:
-        'Each shift receives the frozen note, verifies it at the bedside, acts, and records into the next one. The loop only closes if the note persists.',
-      nodes: [
-        { label: 'Receive', sublabel: 'Frozen at shift change' },
-        { label: 'Verify', sublabel: 'Checked at the bedside' },
-        { label: 'Act', sublabel: 'Escalations first' },
-        { label: 'Record', sublabel: 'Writes the next note' },
-      ],
-    },
-    {
       type: 'move_section',
       spineId: 'freeze',
       eyebrow: 'MOVE 1 — PERSISTENCE',

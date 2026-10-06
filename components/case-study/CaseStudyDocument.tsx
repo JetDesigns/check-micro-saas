@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import type { Block, CaseStudy } from '@/lib/case-study-blocks'
 import {
-  CycleDiagram,
   ImpactList,
   Learnings,
   MetadataGrid,
@@ -69,7 +68,6 @@ export function CaseStudyDocument({
   const stat = pick(blocks, 'stat_headline')[0]
   const quote = pick(blocks, 'pullquote')[0]
   const requirements = pick(blocks, 'requirement_cards')[0]
-  const cycle = pick(blocks, 'cycle_diagram')[0]
   const outcome = pick(blocks, 'outcome_status')[0]
   const impact = pick(blocks, 'impact_list')[0]
   const learnings = pick(blocks, 'learnings')[0]
@@ -171,12 +169,6 @@ export function CaseStudyDocument({
       )}
 
       {/* ---- The approach ---- */}
-      {cycle && (
-        <section className="mt-20 border-t border-line-soft pt-14">
-          <SectionHeading eyebrow="The approach" title="How the loop closes" />
-          <CycleDiagram nodes={cycle.nodes} caption={cycle.caption} />
-        </section>
-      )}
 
       {moves.map((move, i) => (
         <MoveSection key={move.spineId} block={move} index={i} imageUrls={imageUrls} />

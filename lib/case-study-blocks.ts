@@ -55,11 +55,6 @@ export type Block =
       visuals: AnnotatedVisual[]
     }
   | AnnotatedVisual
-  | {
-      type: 'cycle_diagram'
-      nodes: { label: string; sublabel: string }[]
-      caption: string
-    }
   | { type: 'impact_list'; items: { title: string; body: string }[] }
   | {
       type: 'outcome_status'
@@ -82,8 +77,6 @@ export const SPINE_MAX = 4
 export const PROSE_MAX_PARAGRAPHS = 3
 export const PROSE_MAX_WORDS_PER_PARAGRAPH = 60
 export const MOVE_BODY_MAX_PARAGRAPHS = 2
-export const CYCLE_NODES_MIN = 3
-export const CYCLE_NODES_MAX = 5
 export const METADATA_ITEMS_MIN = 4
 export const METADATA_ITEMS_MAX = 6
 
@@ -289,30 +282,6 @@ export function validateCaseStudy(
         add('image_known', `annotated_visual references unknown image "${id}"`)
       }
     }
-  }
-
-  // 8 — a forced cycle diagram looks worse than none, so it is allowed only
-  // where it can actually be true: a spine long enough to form a loop.
-  const cycles = blocks.filter(
-    (b): b is Extract<Block, { type: 'cycle_diagram' }> => b.type === 'cycle_diagram'
-  )
-  for (const cycle of cycles) {
-    if (spine.length < 3) {
-      add(
-        'cycle_requires_long_spine',
-        `cycle_diagram present with a ${spine.length}-entry spine; only allowed at 3 or 4`
-      )
-    }
-    const nodeCount = arr(cycle.nodes).length
-    if (nodeCount < CYCLE_NODES_MIN || nodeCount > CYCLE_NODES_MAX) {
-      add(
-        'cycle_node_count',
-        `cycle_diagram has ${nodeCount} nodes; must be ${CYCLE_NODES_MIN}–${CYCLE_NODES_MAX}`
-      )
-    }
-  }
-  if (cycles.length > 1) {
-    add('cycle_single', `${cycles.length} cycle_diagram blocks; at most one`)
   }
 
   // Metadata grid size, from the wizard's four short fields plus optionals.

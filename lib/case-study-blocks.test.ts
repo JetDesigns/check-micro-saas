@@ -238,55 +238,6 @@ describe('rule 7 — every uploaded image placed exactly once, captioned', () =>
   })
 })
 
-describe('rule 8 — the cycle diagram is earned, not decorative', () => {
-  it('rejects a cycle on a two-entry spine', () => {
-    const doc = validDoc()
-    doc.blocks.push({
-      type: 'cycle_diagram',
-      nodes: [
-        { label: 'One', sublabel: 'a' },
-        { label: 'Two', sublabel: 'b' },
-        { label: 'Three', sublabel: 'c' },
-      ],
-      caption: 'A loop.',
-    })
-    expect(rules(doc)).toContain('cycle_requires_long_spine')
-  })
-
-  it('allows one on a three-entry spine', () => {
-    const doc = validDoc()
-    doc.spine.push({ id: 's3', finding: 'f', requirement: 'r', move: 'm' })
-    doc.blocks.push({
-      type: 'move_section',
-      spineId: 's3',
-      eyebrow: 'MOVE 3',
-      title: 'Close the loop',
-      body: ['Third.'],
-      visuals: [],
-    })
-    doc.blocks.push({
-      type: 'cycle_diagram',
-      nodes: [
-        { label: 'One', sublabel: 'a' },
-        { label: 'Two', sublabel: 'b' },
-        { label: 'Three', sublabel: 'c' },
-      ],
-      caption: 'A loop.',
-    })
-    const found = rules(doc)
-    expect(found).not.toContain('cycle_requires_long_spine')
-    expect(found).not.toContain('cycle_node_count')
-  })
-
-  it('rejects a node count outside three to five', () => {
-    const doc = validDoc()
-    doc.spine.push({ id: 's3', finding: 'f', requirement: 'r', move: 'm' })
-    doc.blocks.push({ type: 'move_section', spineId: 's3', eyebrow: 'MOVE 3', title: 'Close the loop', body: ['x'], visuals: [] })
-    doc.blocks.push({ type: 'cycle_diagram', nodes: [{ label: 'One', sublabel: 'a' }, { label: 'Two', sublabel: 'b' }], caption: 'Too few.' })
-    expect(rules(doc)).toContain('cycle_node_count')
-  })
-})
-
 describe('metadata grid size', () => {
   it('rejects fewer than four items', () => {
     const doc = validDoc()
@@ -339,7 +290,7 @@ describe('malformed input', () => {
         { type: 'move_section', spineId: 1, title: null, body: 'text', visuals: null },
         { type: 'requirement_cards', cards: undefined },
         { type: 'stat_headline' },
-        { type: 'cycle_diagram', nodes: 'three' },
+        { type: 'a_block_type_that_does_not_exist', nodes: 'three' },
         { type: 'annotated_visual' },
         null,
       ],

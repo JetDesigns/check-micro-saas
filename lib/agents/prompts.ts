@@ -329,10 +329,7 @@ The blocks array is an ORDERED list. Emit exactly these, in this order:
 7. { "type": "requirement_cards", "cards": [{ "spineId": "...", "index": 1, "title": "...", "body": "..." }] }
    One card per spine entry, same order, index starting at 1. The title is what the design had to do; the body says why, in one or two sentences.
 
-8. OPTIONAL { "type": "cycle_diagram", "nodes": [{ "label": "...", "sublabel": "..." }], "caption": "..." }
-   ONLY when there are 3 or 4 spine entries AND the decisions genuinely describe a loop or repeating sequence. 3–5 nodes. A forced diagram looks worse than none — omit it in any doubt.
-
-9. One { "type": "move_section" } per spine entry, in spine order:
+8. One { "type": "move_section" } per spine entry, in spine order:
    { "type": "move_section",
      "spineId": "<matching spine id>",
      "eyebrow": "MOVE 1 — ONE OR TWO WORDS",
