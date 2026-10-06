@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.4 · Scope: the `focused fix` project category only.
+Version 1.5 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -18,6 +18,11 @@ Kept** and its `finding` now **comes from a wizard field**; §6's selection **ga
 contract before choosing among the survivors** rather than gating only the winner; and
 new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
 renderer alongside item 3.
+
+**Changed in 1.5**, from building `order-overlay`'s renderer: §5.3's encoding is
+**rewritten against §9** — two fill states on present-against-absent, the category word in
+a gutter beside its mark, and **no legend**. Rule 7's three-fill exemption is superseded.
+Open item 5 is **closed**, and with it the last blocker on either renderer.
 
 **Changed in 1.4**, from building `set-exception`'s renderer: the medium is **HTML and CSS
 where the geometry is boxes in a grid**, and SVG is held for geometry that needs drawing;
@@ -170,7 +175,10 @@ Two lines maximum. The only sentence in the frame.
 4. Exactly one meaningful axis per geometry.
 5. Never promise a relationship the project does not have.
 6. Mark size is uniform. Nothing scales by importance or effort.
-7. Only `order-overlay` may use more than one fill, capped at three.
+7. ~~Only `order-overlay` may use more than one fill, capped at three.~~
+   **Superseded in 1.5.** No template uses three. C uses two — present
+   against absent — which §9.3 gate 4 allows for every template, so this is
+   not an exemption any more and C does not need one.
 
 ### Measured Inter metrics
 
@@ -445,18 +453,50 @@ at least one category repeats across 2+ sections, OR at least one
 ```
 
 **Encoding**
-- One column, marks 332 wide at x 97, first row top 46, pitch 36.
-- Category slot sits outside the mark, 11 × 11, radius 3, at x 79,
-  vertically centred on its mark. Slots form one tight vertical strip
-  that must be readable before any label is read.
-- Slot fills: `Brand/Primary`, `Background/Secondary`, `Border/Strong`.
-  One chromatic fill at most. Sections with no category get a hairline
-  outline slot and no legend association.
-- Legend below the column, max 3 entries, 12 × 12 swatch + label,
-  `Text/Secondary`.
-- Because the legend names the categories, the category word is **not**
-  repeated inside the mark.
+- One column. The mark is 332 wide at the 568 frame and the strip plus its
+  gutter is 400, centred — but 400 is a MAX, not a fixed width: at the 343
+  column the mark gives way to 225. A fixed 332 ran off the left edge there,
+  and did it silently, because content overflowing to the left of the
+  viewport never produces a scrollbar to notice it by.
+- The mark and the gutter are both constrained, so the strip's left and right
+  edges run straight all the way down. Centring each row's pair instead lets
+  every row shift by the width of its own category word, and a strip whose
+  edges wander cannot be read for where anything falls — which is the only
+  thing it is for.
+- **Two fill states**: `default` where the section is still on the page,
+  `receded` where it was cut. Nothing else carries a fill.
+- **The category word sits in a gutter beside its mark**, at
+  `Text/Secondary`, so one thing per row is at full ink (rule 1). A section
+  the designer left unsorted has an empty gutter — that gap is data, and the
+  extraction rule above forbids inventing a category to fill it.
+- **No legend.**
 - Never sort or group rows. Rearranging the order destroys the finding.
+
+> **This replaces the encoding 1.1 specified, which could not legally be
+> drawn.** That one wanted a legend, three slot fills and a keyed 11 x 11
+> strip in place of direct labels. `prompts/focused-fix-output.md` forbids all
+> three — §9.3 gate 1 ("There are no legends"), gate 3 ("Direct labelling over
+> keyed fills"), gate 4 ("Two fill states maximum") — and §12 items 24 and 25
+> repeat two of them as hard gates. This file's own header says §9 wins where
+> the two disagree about structure, so §9 is what the renderer follows.
+>
+> Each replacement part is legal on §9's own terms. Two fills rather than
+> three, on the one split gate 4 names as self-evident without being named —
+> "present against absent" — and §4 already defines `receded` as marking
+> something that is gone. The category word sits on the row it describes,
+> which is gate 3's requirement and is what removes the need for the key gate
+> 1 forbids.
+>
+> **The fill is not made redundant by the word.** The word says what one row
+> is; the fill is what lets the eye see WHERE the absent rows fall without
+> reading anything, and where they fall is the whole of what the caption
+> claims. Drop the fill and this becomes the table of contents the refusals
+> above warn about.
+>
+> One consequence, accepted: with two fills the strip reads for *cut against
+> kept*, so a finding about where the ADDED sections fell is carried by the
+> gutter rather than by the strip. The alternative was a third fill, which
+> needs a legend, which is forbidden.
 
 **Caption** States the pattern, never the composition.
 ```
@@ -747,8 +787,20 @@ between dark ones, with the page's order untouched.
    Truncation stays ellipsis-with-measurement: the renderer trims to the
    97px box, so a string of wide characters cannot overrun a box that
    counted characters.
-5. **`order-overlay` has no legal encoding, and NO RENDERER MAY BE BUILT
-   FOR IT until this resolves.** §5.3 and §8.3 require a legend, three slot
+5. ~~`order-overlay` has no legal encoding.~~ **Closed in 1.5.** §9 won, as
+   this file's header says it must: two fill states on present-against-absent,
+   the category word in a gutter beside its mark, no legend. §5.3's encoding
+   is rewritten to match and carries the full argument.
+
+   The consequence feared below did not arrive in the shape it was written.
+   `categories` keeps its 2-3 gate, because the gutter names all three and
+   only the FILL is capped at two. What it costs instead is narrower, and is
+   recorded at §5.3: the strip reads for cut against kept, so a finding about
+   where the ADDED sections fell is carried by the word rather than by the
+   fill. **This no longer blocks the renderer.** Original text follows.
+
+   ~~**`order-overlay` has no legal encoding, and NO RENDERER MAY BE BUILT
+   FOR IT until this resolves.**~~ §5.3 and §8.3 require a legend, three slot
    fills, and a keyed strip in place of direct labels. The output
    specification forbids all three: §9.3 gate 1 ("There are no legends"),
    gate 3 ("Direct labelling over keyed fills"), gate 4 ("Two fill states

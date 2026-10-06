@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { setExceptionCaption, setExceptionOrder } from './approach-layout'
-import type { SetExceptionDiagram, SetExceptionItem } from './approach-diagram'
+import {
+  orderOverlayCaption,
+  orderOverlayRows,
+  setExceptionCaption,
+  setExceptionOrder,
+} from './approach-layout'
+import type {
+  OrderOverlayDiagram,
+  SetExceptionDiagram,
+  SetExceptionItem,
+} from './approach-diagram'
 
 const items = (...spec: [string, 'reused' | 'new'][]): SetExceptionItem[] =>
   spec.map(([label, status]) => ({ label, status }))
@@ -71,5 +80,66 @@ describe('caption', () => {
 
   it('adds no framing clause when there is none', () => {
     expect(setExceptionCaption(contract())).not.toContain('—')
+  })
+})
+
+const overlay = (over: Partial<OrderOverlayDiagram> = {}): OrderOverlayDiagram => ({
+  template: 'order-overlay',
+  sections: [
+    { label: 'Headline' },
+    { label: 'Plan prices', category: 'Kept' },
+    { label: 'Feature grid', category: 'Cut' },
+    { label: 'FAQ', category: 'Cut' },
+    { label: 'Book a demo' },
+  ],
+  categories: ['Cut', 'Kept'],
+  finding: 'the two sections nobody asked for sat in the middle',
+  reason: null,
+  text_equivalent: '',
+  ...over,
+})
+
+describe('overlay rows', () => {
+  // "Never sort or group rows. Rearranging the order destroys the finding."
+  it('keeps the page order exactly as given', () => {
+    expect(orderOverlayRows(overlay()).map((r) => r.label)).toEqual([
+      'Headline', 'Plan prices', 'Feature grid', 'FAQ', 'Book a demo',
+    ])
+  })
+
+  // Two fill states, on the one split §9 gate 4 calls self-evident: a cut
+  // section is absent, everything still on the page is present.
+  it('marks only the cut sections absent', () => {
+    expect(orderOverlayRows(overlay()).map((r) => r.absent)).toEqual([
+      false, false, true, true, false,
+    ])
+  })
+
+  it('carries no category for a section the designer left unsorted', () => {
+    const rows = orderOverlayRows(overlay())
+    expect(rows[0].category).toBeUndefined()
+    expect(rows[0].absent).toBe(false)
+  })
+})
+
+describe('overlay caption', () => {
+  it('is the finding, opened as a sentence and closed with a stop', () => {
+    expect(orderOverlayCaption(overlay())).toBe(
+      'The two sections nobody asked for sat in the middle.'
+    )
+  })
+
+  it('leaves punctuation the designer already wrote', () => {
+    expect(orderOverlayCaption(overlay({ finding: 'Everything cut sat in the middle.' }))).toBe(
+      'Everything cut sat in the middle.'
+    )
+  })
+
+  // §5.3's bad example is a caption that states the composition. Composing one
+  // is the thing this must never do, so nothing is added to what was typed.
+  it('adds no words of its own', () => {
+    const out = orderOverlayCaption(overlay())
+    expect(out.toLowerCase()).toContain(overlay().finding.toLowerCase())
+    expect(out).not.toMatch(/\d/)
   })
 })

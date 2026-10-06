@@ -1,5 +1,10 @@
 import { isSetException, type ApproachDiagram as Contract } from '@/lib/approach-diagram'
-import { setExceptionCaption, setExceptionOrder } from '@/lib/approach-layout'
+import {
+  orderOverlayCaption,
+  orderOverlayRows,
+  setExceptionCaption,
+  setExceptionOrder,
+} from '@/lib/approach-layout'
 
 // The Approach diagram, drawn from the contract the pipeline attached.
 //
@@ -33,10 +38,17 @@ const FRAME =
 // Height 24 and radius 4 from §4. box-border so the 1px border is inside the 24
 // and every mark measures the same whether or not its border is visible.
 const MARK =
-  'box-border flex h-6 w-[120px] items-center justify-center overflow-hidden rounded-[var(--studio-r-sm)] border px-3 text-[12px] leading-[1.2] tracking-[-0.12px] whitespace-nowrap'
+  'box-border flex h-6 items-center overflow-hidden rounded-[var(--studio-r-sm)] border px-3 text-[12px] leading-[1.2] tracking-[-0.12px] whitespace-nowrap'
 
 const DEFAULT_MARK =
   'border-[var(--studio-border)] bg-[var(--studio-bg-primary)] text-[var(--studio-text)]'
+
+// §4's `receded`, which the spec defines as marking something that is gone, and
+// warns must stay LIGHTER than what surrounds it: "a solid grey fill gives
+// absence more visual mass than presence and inverts the reading". So the fill
+// does not change — the ink does.
+const RECEDED_MARK =
+  'border-[var(--studio-border)] bg-[var(--studio-bg-primary)] text-[var(--studio-text-soft)]'
 
 // The exception's border is its own fill rather than none, so it occupies the
 // same 121 × 24 as everything else. §4 gives it no border; a missing one would
@@ -47,10 +59,7 @@ const EXCEPTION_MARK =
 export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
   if (!diagram) return null
 
-  // order-overlay has a contract, gates and a wizard input, and no renderer yet.
-  // Drawing nothing is the correct behaviour meanwhile: §9.7's absence is silent,
-  // so a page with an undrawn contract reads exactly like a page with none.
-  if (!isSetException(diagram)) return null
+  if (!isSetException(diagram)) return <OrderOverlay diagram={diagram} />
 
   const marks = setExceptionOrder(diagram.items)
 
@@ -63,7 +72,9 @@ export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
           <div
             key={item.label}
             title={item.label}
-            className={`${MARK} ${item.status === 'new' ? EXCEPTION_MARK : DEFAULT_MARK}`}
+            className={`${MARK} w-[120px] justify-center ${
+              item.status === 'new' ? EXCEPTION_MARK : DEFAULT_MARK
+            }`}
           >
             {item.label}
           </div>
@@ -74,6 +85,64 @@ export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
           only sentence in the frame. */}
       <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
         {setExceptionCaption(diagram)}
+      </figcaption>
+    </figure>
+  )
+}
+
+/**
+ * A page's sections in their own order, with what happened to each.
+ *
+ * ONE MARK PER ROW AND THE ORDER NEVER MOVES — §5.3: "Never sort or group rows.
+ * Rearranging the order destroys the finding." The row's index is the page's
+ * position, which is the only axis this geometry has.
+ *
+ * Two fill states and a word on every row, which is §9's encoding rather than
+ * §5.3's. The reasoning is at the bottom of lib/approach-layout.ts; in short,
+ * the strip's fill shows WHERE the removed sections fall without anything being
+ * read, and the word on each row removes the need for the key that §9 gate 1
+ * forbids.
+ *
+ * Marks run the full width rather than sizing to their label: §4 rule 6 keeps
+ * mark size uniform, and a ragged right edge down a single column would read as
+ * a second axis — length standing for something — which rule 4 forbids.
+ */
+function OrderOverlay({ diagram }: { diagram: Extract<Contract, { template: 'order-overlay' }> }) {
+  const rows = orderOverlayRows(diagram)
+
+  return (
+    <figure className={FRAME} aria-label={diagram.text_equivalent}>
+      {/* 400 is the strip plus its gutter: §5.3's 332 mark, a 12 gap and a 56
+          gutter. It is a MAX rather than a fixed width, so the mark gives way at
+          a narrow column instead of running off the left edge — which a fixed
+          332 did, silently, because content overflowing to the left of the
+          viewport never produces a scrollbar to notice it by. */}
+      <div className="flex w-full max-w-[400px] flex-col gap-3" aria-hidden>
+        {rows.map((row) => (
+          // The mark and the gutter are both constrained, so the strip's left
+          // and right edges run straight all the way down. Centring each pair
+          // instead would let every row shift by the width of its own category
+          // word, and a strip whose edges wander cannot be read for where
+          // anything falls — which is the only thing it is for.
+          <div key={row.label} className="flex w-full items-center gap-3">
+            <div
+              title={row.label}
+              className={`${MARK} min-w-0 flex-1 ${row.absent ? RECEDED_MARK : DEFAULT_MARK}`}
+            >
+              <span className="overflow-hidden text-ellipsis">{row.label}</span>
+            </div>
+            {/* Outside the mark, not inside it. §5.3 puts what happened to a
+                section beside the section rather than in it, and Text/Secondary
+                keeps one thing at full ink per row (§4 rule 1). */}
+            <span className="w-14 shrink-0 text-[12px] leading-[1.2] tracking-[-0.12px] text-[var(--studio-text-soft)]">
+              {row.category}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
+        {orderOverlayCaption(diagram)}
       </figcaption>
     </figure>
   )
