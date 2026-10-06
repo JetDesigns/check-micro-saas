@@ -1,3 +1,4 @@
+import { ApproachDiagram } from '@/components/studio/ApproachDiagram'
 import { parseInline, parseMarkdown, splitSections, type Inline, type MdNode } from '@/lib/markdown-lite'
 import type { GeneratedPage } from '@/types/database'
 
@@ -54,6 +55,11 @@ export function GeneratedPageView({ page, imageUrls = {} }: Props) {
         <section key={s.title ?? i} className="flex flex-col gap-4">
           <h2 className="text-[20px] leading-tight font-medium tracking-[-0.02em]">{s.title}</h2>
           {draw(s.nodes, s.title === 'Credits')}
+          {/* After the prose, not before it. The prose names the parts; the
+              diagram shows the shape they make, which is a claim about what
+              has just been read. `page.diagram` is null for most projects and
+              the section then renders exactly as it did before (§9.7). */}
+          {s.title === 'Approach' && <ApproachDiagram diagram={page.diagram} />}
         </section>
       ))}
     </article>

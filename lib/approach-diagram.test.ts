@@ -5,7 +5,6 @@ import {
   gateSetException,
   isOrderOverlay,
   isSetException,
-  truncateLabel,
   type ApproachDiagram,
   type OrderOverlayDiagram,
   type SetExceptionDiagram,
@@ -218,11 +217,6 @@ describe('order-overlay gates', () => {
 })
 
 describe('labels', () => {
-  it('truncates past fourteen characters rather than refusing', () => {
-    expect(truncateLabel('Campaign performance')).toBe('Campaign perf…')
-    expect(truncateLabel('Orders')).toBe('Orders')
-  })
-
   // The limit is the renderer's, and set-exception's specifically. A contract
   // that trimmed would store one geometry's layout as a fact about the work,
   // and order-overlay — one mark per row, four times the budget — would lose

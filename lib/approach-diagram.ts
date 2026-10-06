@@ -93,25 +93,23 @@ export const CATEGORY_MIN = 2
 export const CATEGORY_MAX = 3
 
 /**
- * PRD §4 — the mark label limit, and it belongs to the RENDERER, not here.
+ * PRD §4's mark label limit is a SIZING FIGURE, not a rule anything applies.
  *
- * 14 rather than 18: four marks per row leaves a 97px text box and Inter's
- * 95th-percentile character advance is 6.64px. 18 was never reachable at that
- * row count under either face — the arithmetic is in the note under §5.1.
+ * There is no constant and no truncation helper here any more, and that is the
+ * finding rather than a tidy-up. The limit is really a box — 96px of text in a
+ * set-exception mark — and CSS trims to that box, which a character count only
+ * approximates. The first real render proved the gap: "Medication chart" is 16
+ * characters and fits 96px with room, so a 14-character rule would have cut a
+ * label that had none of the problem it was guarding against.
  *
- * It is set-exception's number and nobody else's. `order-overlay` draws one
- * mark per row against roughly four times the budget, so trimming a page
- * section to 14 would cut a label that had room to spare. Each geometry trims
- * to its own measured box; there is no shared limit, and a contract that baked
- * one in would be storing one template's layout as if it were a fact about the
- * work.
+ * 14 is therefore how to think about whether a label will fit when designing.
+ * It is written in §4 and it is not enforced, because enforcing it would make
+ * the page worse in exactly the cases it was meant to protect.
  *
- * WHICH IS WHY THE CONTRACT NO LONGER TRUNCATES. Labels are carried whole. The
- * renderer trims what it draws, and `text_equivalent` keeps the full string —
- * a screen reader used to be handed "Campaign performa…", which is the sighted
- * reader's layout constraint leaking into the one channel that has no layout.
+ * Labels are carried whole, which is also what lets `text_equivalent` and the
+ * mark's `title` hand a reader the full string.
  */
-export const LABEL_MAX_CHARS = 14
+
 /**
  * §4's table gives `finding` the caption's limit, "because it becomes the
  * caption" — and the caption REJECTS rather than truncating. Nothing in this
@@ -298,18 +296,6 @@ export function gateOrderOverlay(c: OrderOverlayDiagram): string[] {
   return failed
 }
 
-/**
- * PRD §4: over the limit truncates with an ellipsis rather than refusing.
- *
- * Renderer-side. Nothing in a contract calls this — see the note on
- * LABEL_MAX_CHARS — and a character count is only the floor: the renderer also
- * trims to the measured box, because 14 wide characters and 14 narrow ones are
- * not the same width.
- */
-export function truncateLabel(label: string): string {
-  const trimmed = label.trim()
-  return trimmed.length <= LABEL_MAX_CHARS ? trimmed : `${trimmed.slice(0, LABEL_MAX_CHARS - 1)}…`
-}
 
 /**
  * The set-exception contract this project supports, or null.

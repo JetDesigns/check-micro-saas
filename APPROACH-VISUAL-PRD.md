@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.3 · Scope: the `focused fix` project category only.
+Version 1.4 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -18,6 +18,11 @@ Kept** and its `finding` now **comes from a wizard field**; §6's selection **ga
 contract before choosing among the survivors** rather than gating only the winner; and
 new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
 renderer alongside item 3.
+
+**Changed in 1.4**, from building `set-exception`'s renderer: the medium is **HTML and CSS
+where the geometry is boxes in a grid**, and SVG is held for geometry that needs drawing;
+the mark is **120 wide**, because the frame's own border is inside its width; and the label
+limit is **a 96px box rather than a character count**, which nothing enforces any more.
 
 **Changed in 1.3**, from measuring Inter in the running app: the frame is **568 wide with
 a computed height**, not 509 × 421, and renders as **inline SVG** rather than a PNG export;
@@ -186,23 +191,27 @@ for "Comparison table" is not a limit.
 ### Text limits
 | Slot | Max | Overflow |
 |---|---|---|
-| Mark label (A) | **14 chars** | truncate with ellipsis, renderer-side |
+| Mark label (A) | **a 96px box**, about 14 chars | renderer trims to the box |
 | Caption | 120 chars | reject, regenerate shorter |
 | Legend entry (C) | 10 chars | truncate |
+| `finding` (C) | 120 chars | it becomes the caption, so it carries the caption's limit |
 
-> **The label limit belongs to a geometry, not to the system, and the contract
-> does not apply it.** 14 is what four marks per row leaves room for. C draws one
-> mark per row against roughly four times that budget, so trimming a page section
-> to 14 would cut a label with room to spare — each geometry trims to its own
-> measured box.
+> **The label limit belongs to a geometry, not to the system, and nothing
+> enforces a character count.** 14 is what four marks per row leaves room for,
+> and it is the figure to design against — what actually trims is CSS, to the
+> 96px the mark holds. C draws one mark per row against roughly four times that
+> budget, so trimming a page section to 14 would cut a label with room to spare.
+>
+> The first real render settled it: "Medication chart" is 16 characters and fits
+> the 96px box with room, so a 14-character rule would have cut a label that had
+> none of the problem it was guarding against. The helper that applied one has
+> been removed.
 >
 > Labels are therefore carried **whole** into the contract and trimmed only when
 > drawn, which also fixes an accessibility defect: `text_equivalent` used to carry
 > the truncated string, so a screen reader was handed "Campaign performa…" — the
 > sighted reader's layout constraint leaking into the one channel that has no
-> layout. A character count is the floor; the renderer also trims to the measured
-> box, because 14 wide characters and 14 narrow ones are not the same width.
-| `finding` (C) | 120 chars | it becomes the caption, so it carries the caption's limit |
+> layout.
 
 ---
 
@@ -252,11 +261,16 @@ exceptional, the set has no rule to break and the diagram claims nothing.
 
 **Encoding**
 - A grid, four marks per row, centred, first row top 96, pitch 36 vertical
-  and 12 horizontal. Mark width **121**, uniform: 568 frame less 48 padding
-  is 520, less three 12px gaps is 484, over four. Text budget per mark is
-  121 − 24 padding = **97px**, which is where the 14-character limit comes
-  from (97 ÷ 6.64). At the 343 column it reflows to two per row, not four
+  and 12 horizontal. Mark width **120**, uniform: the 568 frame holds its own
+  1px border inside that width, so the content box is 568 − 2 − 48 = 518;
+  less three 12px gaps is 482, over four is 120.5. Text budget per mark is
+  120 − 24 padding = **96px**, which is where the 14-character limit comes
+  from (96 ÷ 6.64). At the 343 column it reflows to two per row, not four
   scaled down.
+
+  Round down rather than to the exact fit. 121 against a notional 520 is
+  arithmetically right and wrapped 3 + 1 the first time it rendered: an exact
+  equality leaves no tolerance for the sub-pixel rounding underneath it.
 - Marks are laid out in reading order — left to right, top to bottom — in
   the user's order.
 - **Exception marks are placed contiguously.** Emit every `reused` item
@@ -467,7 +481,8 @@ all three contracts from the same answers and applies a fixed rule.
 4  select    exactly one survives   -> that one
              more than one survives -> B, then A, then C
              none survives          -> text only, stop
-5  render    renderer produces SVG from the contract
+5  render    renderer draws the contract; the medium follows the geometry
+             (HTML/CSS for boxes in a grid, SVG where lines are drawn)
 6  verify    swap test on the caption
              fails                 -> text only, discard the image
 ```
