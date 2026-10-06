@@ -71,6 +71,8 @@ export type Draft = {
   collaborators: Collaborator[]
   provenance: Provenance | null
   outcome: OutcomeStatus | null
+  areasWorked: string[]
+  areasFromScratch: string[]
   attachments: DraftAttachment[]
   saved: SavedRow | null
 }
@@ -144,7 +146,18 @@ export function parseDraft(raw: string | null | undefined): Draft | null {
     }
   }
 
-  return { ...(value as unknown as Draft), saved: (saved as SavedRow | null | undefined) ?? null }
+  // Defaulted rather than demanded: a draft written before these existed is
+  // still the person's work, and bumping the version to reject it would throw
+  // away a part-filled form to gain nothing.
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+
+  return {
+    ...(value as unknown as Draft),
+    areasWorked: strings(value.areasWorked),
+    areasFromScratch: strings(value.areasFromScratch),
+    saved: (saved as SavedRow | null | undefined) ?? null,
+  }
 }
 
 /**

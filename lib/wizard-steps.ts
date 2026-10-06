@@ -240,6 +240,19 @@ export const SLOT_ENTRY_LABELS: Record<ImageSlot, string> = {
   after: 'After',
 }
 
+/**
+ * The two taps under "What are the main parts of the product?".
+ *
+ * The third question is the one that earns its place. Which parts were worked on
+ * is a coverage map; which of those were built from scratch is what the Approach
+ * diagram's caption claims, and reading the second off the first would be making
+ * it up.
+ */
+export const AREA_CHIPS = {
+  worked: 'Which did you work on?',
+  fromScratch: 'Which of those were built from scratch?',
+} as const
+
 export const COLLABORATOR_FIELDS = {
   legend: 'Who else worked on it?',
   name: { label: 'Name', placeholder: 'e.g. Dani Okafor' },
@@ -349,6 +362,51 @@ export function stepPosition(current: StepId): { index: number; total: number } 
  * That is what the move to per-slot uploads bought: a file is picked into the
  * slot that explains it, so there is no second structure to keep in step.
  */
+/**
+ * The product's parts, out of one comma-separated answer.
+ *
+ * Commas and newlines both separate, because people do both. Duplicates are
+ * dropped case-insensitively while keeping the first spelling — the chips are
+ * generated from this, and two chips reading "Orders" and "orders" is a bug the
+ * user cannot fix from the form.
+ *
+ * Nothing is capped here. How many parts make a diagram worth drawing is the
+ * diagram's gate to decide, not the form's.
+ */
+export function parseAreas(raw: string | undefined): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of (raw ?? '').split(/[,\n]/)) {
+    const name = part.trim()
+    if (name === '') continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out
+}
+
+/**
+ * Keeps the two selections honest against the text they were chosen from.
+ *
+ * Someone types eight parts, taps four, then edits the answer. Without this the
+ * selections keep names that are no longer on screen, and "from scratch" could
+ * hold a part no longer marked as worked on at all — which is the one thing the
+ * third question exists to prevent.
+ */
+export function reconcileAreas(
+  areas: string[],
+  worked: readonly string[],
+  fromScratch: readonly string[]
+): { worked: string[]; fromScratch: string[] } {
+  const inAreas = worked.filter((w) => areas.includes(w))
+  return {
+    worked: inAreas,
+    fromScratch: fromScratch.filter((n) => inAreas.includes(n)),
+  }
+}
+
 export type Attachment = {
   id: string
   file: File
@@ -365,6 +423,10 @@ export type WizardState = {
   collaborators: Collaborator[]
   provenance: Provenance | null
   outcome: OutcomeStatus | null
+  /** Names tapped under the product-parts answer. Always a subset of what it holds. */
+  areasWorked: string[]
+  /** A subset of `areasWorked`, never of the parts list directly. */
+  areasFromScratch: string[]
   /** In final order. Index here becomes case_study_attachments.order_index. */
   attachments: Attachment[]
 }
@@ -393,6 +455,8 @@ export function emptyWizardState(): WizardState {
     collaborators: [],
     provenance: null,
     outcome: null,
+    areasWorked: [],
+    areasFromScratch: [],
     attachments: [],
   }
 }
@@ -460,6 +524,15 @@ export function buildIntake(state: WizardState): Intake {
     })
 
   const liveDecisionIds = new Set(intake.decisions.map((d) => d.id))
+
+  // The product's parts, reconciled against the text they were chosen from, so
+  // an edited answer cannot leave a selection pointing at a name that is gone.
+  const areas = parseAreas(state.text.product_areas)
+  if (areas.length > 0) {
+    const { worked, fromScratch } = reconcileAreas(areas, state.areasWorked, state.areasFromScratch)
+    if (worked.length > 0) intake.product_areas_worked = worked
+    if (fromScratch.length > 0) intake.product_areas_new = fromScratch
+  }
 
   intake.image_notes = state.attachments.map((a, orderIndex): ImageNote => {
     const note: ImageNote = { orderIndex, slot: a.slot }

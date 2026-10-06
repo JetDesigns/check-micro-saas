@@ -235,6 +235,18 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     collapsed: true,
   },
   {
+    // The source for the Approach diagram. Visible rather than collapsed: behind
+    // a disclosure link most people would never open it, and the diagram fires
+    // on nothing without it.
+    key: 'product_areas',
+    label: 'What are the main parts of the product?',
+    placeholder: 'e.g. Orders, Menu, Payments, Reports, Staff, Tables, Kitchen, Shifts',
+    type: 'textarea',
+    required: false,
+    rows: 2,
+    step: 4,
+  },
+  {
     key: 'constraints', // I14 + I15
     label: 'What were you working around?',
     placeholder:

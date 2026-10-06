@@ -4,8 +4,8 @@ import { Button } from '@/components/studio/Button'
 import { Disclosure } from '@/components/studio/Disclosure'
 import { FieldGroup } from '@/components/studio/FieldGroup'
 import { RepeatCard } from '@/components/studio/RepeatCard'
-import { fieldsForStep, type TextKey } from '@/lib/intake-fields'
-import { DISCLOSURE, RELATION_CHIPS } from '@/lib/wizard-steps'
+import { fieldsForStep, partitionByDisclosure, type TextKey } from '@/lib/intake-fields'
+import { AREA_CHIPS, DISCLOSURE, RELATION_CHIPS, parseAreas, reconcileAreas } from '@/lib/wizard-steps'
 import type { Decision, DecisionRelations } from '@/types/database'
 
 type Props = {
@@ -13,6 +13,9 @@ type Props = {
   onChange: (decisions: Decision[]) => void
   text: Partial<Record<TextKey, string>>
   onTextChange: (key: TextKey, value: string) => void
+  areasWorked: string[]
+  areasFromScratch: string[]
+  onAreasChange: (worked: string[], fromScratch: string[]) => void
   disabled: boolean
 }
 
@@ -33,8 +36,30 @@ type Props = {
 // pattern, repeat across many places and depend on another at the same time, and
 // none of them selected is the honest answer for most decisions, which is why
 // there is no "none".
-export function Step4Structure({ decisions, onChange, text, onTextChange, disabled }: Props) {
+export function Step4Structure({
+  decisions,
+  onChange,
+  text,
+  onTextChange,
+  areasWorked,
+  areasFromScratch,
+  onAreasChange,
+  disabled,
+}: Props) {
   const named = decisions.filter((d) => d.decided.trim())
+
+  // Chips are generated from the answer above them, and both selections are
+  // reconciled against it on every render rather than in an effect. Editing the
+  // list is the common case — someone types eight parts, taps four, then renames
+  // one — and a selection pointing at a name that is no longer on screen is a
+  // claim nobody made.
+  const areas = parseAreas(text.product_areas)
+  const { worked, fromScratch } = reconcileAreas(areas, areasWorked, areasFromScratch)
+
+  const toggle = (list: string[], name: string) =>
+    list.includes(name) ? list.filter((n) => n !== name) : [...list, name]
+
+  const { open, collapsed } = partitionByDisclosure(fieldsForStep(4))
 
   const setRelations = (id: string, patch: Partial<DecisionRelations>) =>
     onChange(
@@ -46,6 +71,54 @@ export function Step4Structure({ decisions, onChange, text, onTextChange, disabl
 
   return (
     <div className="flex flex-col gap-4">
+      <FieldGroup fields={open} text={text} onTextChange={onTextChange} disabled={disabled} />
+
+      {areas.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="studio-h2 text-[var(--studio-text)]">{AREA_CHIPS.worked}</p>
+            <div className="flex flex-wrap gap-2">
+              {areas.map((name) => (
+                <Button
+                  key={name}
+                  variant="chip"
+                  pressed={worked.includes(name)}
+                  disabled={disabled}
+                  onClick={() => {
+                    const next = toggle(worked, name)
+                    onAreasChange(next, fromScratch.filter((n) => next.includes(n)))
+                  }}
+                >
+                  {name}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Only over what was worked on. Which parts were touched is a coverage
+              map; which of those were built from scratch is a different claim, and
+              it is the one the Approach diagram makes. */}
+          {worked.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="studio-h2 text-[var(--studio-text)]">{AREA_CHIPS.fromScratch}</p>
+              <div className="flex flex-wrap gap-2">
+                {worked.map((name) => (
+                  <Button
+                    key={name}
+                    variant="chip"
+                    pressed={fromScratch.includes(name)}
+                    disabled={disabled}
+                    onClick={() => onAreasChange(worked, toggle(fromScratch, name))}
+                  >
+                    {name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {named.length === 0 ? (
         <p className="studio-body rounded-[var(--studio-r-md)] bg-[var(--studio-bg-secondary)] p-4 text-[var(--studio-text-soft)]">
           Name a decision or two in step 3 and they will appear here, so you can say how
@@ -146,16 +219,11 @@ export function Step4Structure({ decisions, onChange, text, onTextChange, disabl
         ))
       )}
 
-      {/* All three of step 4's flat fields are collapsed, so the step opens on
-          the relation chips alone — which is the only question here that every
-          project has an answer to. */}
+      {/* Three of step 4's flat fields stay collapsed. The product's parts is the
+          fourth and opens with the step, because the Approach diagram is built
+          from it and behind a link most people would never reach it. */}
       <Disclosure label={DISCLOSURE.step4} disabled={disabled}>
-        <FieldGroup
-          fields={fieldsForStep(4)}
-          text={text}
-          onTextChange={onTextChange}
-          disabled={disabled}
-        />
+        <FieldGroup fields={collapsed} text={text} onTextChange={onTextChange} disabled={disabled} />
       </Disclosure>
     </div>
   )

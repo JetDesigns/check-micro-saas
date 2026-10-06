@@ -180,6 +180,21 @@ export type Intake = {
   // --- Step 4 — how the work fit together ---------------------------------
   approach_framework?: string    // I13 — only where the designer named one themselves
   constraints?: string           // I14 + I15 — what changed the shape of the solution
+
+  /**
+   * The product's own parts, and where this work sat inside them.
+   *
+   * Three answers rather than two, and the third is the one that matters. Which
+   * parts were worked on is a coverage map; which of those had nothing like them
+   * already is a different claim, and it is the claim the Approach diagram's
+   * caption makes. Deriving the second from the first would be fabrication.
+   *
+   * `product_areas` is raw, as typed. The two arrays hold names parsed out of it,
+   * and `product_areas_new` is always a subset of `product_areas_worked`.
+   */
+  product_areas?: string
+  product_areas_worked?: string[]
+  product_areas_new?: string[]
   authority_split?: string       // I17 — only where a split genuinely shaped the work
 
   // --- Step 5 — where it landed -------------------------------------------

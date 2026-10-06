@@ -16,6 +16,8 @@ import {
   WIZARD_STEPS,
   blankInputs,
   buildIntake,
+  parseAreas,
+  reconcileAreas,
   buildReview,
   compileBlockers,
   reviewNotes,
@@ -604,5 +606,61 @@ describe('reviewNotes', () => {
         expect(note.toLowerCase()).not.toContain(word)
       }
     }
+  })
+})
+
+describe('the product\'s parts', () => {
+  // One answer, two taps. The chips are generated from the text, so the text is
+  // the only place a name exists and the two selections point into it.
+  it('reads parts from one comma-separated answer', () => {
+    expect(parseAreas('Orders, Menu , Payments')).toEqual(['Orders', 'Menu', 'Payments'])
+  })
+
+  it('accepts newlines as separators too, because people use both', () => {
+    expect(parseAreas('Orders\nMenu, Payments')).toEqual(['Orders', 'Menu', 'Payments'])
+  })
+
+  // Two chips reading "Orders" and "orders" is a bug nobody can fix from the form.
+  it('drops a repeat case-insensitively and keeps the first spelling', () => {
+    expect(parseAreas('Orders, orders, ORDERS')).toEqual(['Orders'])
+  })
+
+  it('is empty for an empty answer', () => {
+    expect(parseAreas(undefined)).toEqual([])
+    expect(parseAreas('  ,  , ')).toEqual([])
+  })
+
+  it('caps nothing — how many parts earn a diagram is the diagram\'s question', () => {
+    expect(parseAreas('a,b,c,d,e,f,g,h,i,j,k,l')).toHaveLength(12)
+  })
+
+  it('drops a selection whose name is no longer in the answer', () => {
+    const r = reconcileAreas(['Orders', 'Menu'], ['Orders', 'Payments'], [])
+    expect(r.worked).toEqual(['Orders'])
+  })
+
+  // The whole point of asking twice: from-scratch is a claim about parts that
+  // were worked on, never about the product at large.
+  it('keeps from-scratch inside what was worked on', () => {
+    const r = reconcileAreas(['Orders', 'Menu'], ['Orders'], ['Orders', 'Menu'])
+    expect(r.fromScratch).toEqual(['Orders'])
+  })
+
+  it('carries both selections onto the intake', () => {
+    const state = emptyWizardState()
+    state.text.product_areas = 'Orders, Menu, Payments'
+    state.areasWorked = ['Orders', 'Payments']
+    state.areasFromScratch = ['Payments']
+    const intake = buildIntake(state)
+    expect(intake.product_areas_worked).toEqual(['Orders', 'Payments'])
+    expect(intake.product_areas_new).toEqual(['Payments'])
+  })
+
+  it('writes neither when nothing was tapped', () => {
+    const state = emptyWizardState()
+    state.text.product_areas = 'Orders, Menu'
+    const intake = buildIntake(state)
+    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_areas_new).toBeUndefined()
   })
 })

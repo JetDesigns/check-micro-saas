@@ -99,6 +99,8 @@ export function StudioForm() {
   const [tone, setTone] = useState<Tone>(DEFAULT_TONE)
   const [provenance, setProvenance] = useState<Provenance | null>(null)
   const [outcome, setOutcome] = useState<OutcomeStatus | null>(null)
+  const [areasWorked, setAreasWorked] = useState<string[]>([])
+  const [areasFromScratch, setAreasFromScratch] = useState<string[]>([])
   const [saved, setSaved] = useState<SavedRow | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
@@ -119,6 +121,8 @@ export function StudioForm() {
     collaborators,
     provenance,
     outcome,
+    areasWorked,
+    areasFromScratch,
     attachments,
   }
 
@@ -162,6 +166,8 @@ export function StudioForm() {
           setCollaborators(f.state.collaborators)
           setProvenance(f.state.provenance)
           setOutcome(f.state.outcome)
+          setAreasWorked(f.state.areasWorked)
+          setAreasFromScratch(f.state.areasFromScratch)
           setAttachments([])
           setProjectType(f.projectType)
           setTone(f.tone)
@@ -208,6 +214,8 @@ export function StudioForm() {
         setCollaborators(draft.collaborators)
         setProvenance(draft.provenance)
         setOutcome(draft.outcome)
+        setAreasWorked(draft.areasWorked)
+        setAreasFromScratch(draft.areasFromScratch)
         setProjectType(draft.projectType)
         setTone(draft.tone)
         setAttachments(restored)
@@ -237,6 +245,8 @@ export function StudioForm() {
       collaborators,
       provenance,
       outcome,
+      areasWorked,
+      areasFromScratch,
       attachments,
       saved,
     })
@@ -290,6 +300,8 @@ export function StudioForm() {
     setCollaborators([])
     setProvenance(null)
     setOutcome(null)
+    setAreasWorked([])
+    setAreasFromScratch([])
     setAttachments([])
     setProjectType(DEFAULT_PROJECT_TYPE)
     setTone(DEFAULT_TONE)
@@ -527,6 +539,12 @@ export function StudioForm() {
           <Step4Structure
             decisions={decisions}
             onChange={setDecisions}
+            areasWorked={areasWorked}
+            areasFromScratch={areasFromScratch}
+            onAreasChange={(worked, fromScratch) => {
+              setAreasWorked(worked)
+              setAreasFromScratch(fromScratch)
+            }}
             text={text}
             onTextChange={setTextValue}
             disabled={isBusy}

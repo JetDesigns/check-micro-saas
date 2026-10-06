@@ -28,6 +28,8 @@ function input(over: Partial<DraftInput> = {}): DraftInput {
     collaborators: [{ name: 'Priya Raman', role: 'Clinical lead' }],
     provenance: 'audit',
     outcome: 'shipped',
+    areasWorked: [],
+    areasFromScratch: [],
     attachments: [],
     saved: null,
     ...over,

@@ -82,6 +82,10 @@ export function IntakeForm({ onCreated }: Props) {
     collaborators,
     provenance,
     outcome,
+    // The legacy intake does not ask for the product's parts; the Approach
+    // diagram is the studio path's.
+    areasWorked: [],
+    areasFromScratch: [],
     attachments,
   }
 

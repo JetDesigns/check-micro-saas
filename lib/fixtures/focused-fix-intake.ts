@@ -82,6 +82,9 @@ function baseState(): WizardState {
     cost_to_client:
       'Handover ran fourteen minutes against a six-minute budget, three times a day, across eleven wards.',
 
+    product_areas:
+      'Ward Board, Patient Notes, Handover list, Escalations, Medication chart, Obs chart, Admissions, Discharge',
+
     constraints:
       'The patient record system was off limits, so everything had to work as a layer on top of it.',
     authority_split:
@@ -94,6 +97,10 @@ function baseState(): WizardState {
   state.collaborators = [{ name: 'Priya Raman', role: 'Clinical lead' }]
   state.provenance = 'audit'
   state.outcome = 'shipped'
+  // Four of the eight parts were worked on; only Escalations had nothing like it
+  // already, which is decision 3's no_prior_version said as a product fact.
+  state.areasWorked = ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations']
+  state.areasFromScratch = ['Escalations']
   state.decisions = decisions.map((d) => ({ ...d }))
   return state
 }
