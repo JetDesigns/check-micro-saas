@@ -61,6 +61,7 @@ function Row({
       helper={field.helper}
       optional={!field.required}
       rows={field.type === 'textarea' ? (field.rows ?? 3) : undefined}
+      maxChars={field.maxChars}
       disabled={disabled}
     />
   )

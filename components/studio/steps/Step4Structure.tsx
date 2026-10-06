@@ -1,12 +1,32 @@
 'use client'
 
 import { Button } from '@/components/studio/Button'
+import { ChipRow } from '@/components/studio/ChipRow'
 import { Disclosure } from '@/components/studio/Disclosure'
 import { FieldGroup } from '@/components/studio/FieldGroup'
+import { FormSelect } from '@/components/studio/FormSelect'
 import { RepeatCard } from '@/components/studio/RepeatCard'
-import { fieldsForStep, partitionByDisclosure, type TextKey } from '@/lib/intake-fields'
-import { AREA_CHIPS, DISCLOSURE, RELATION_CHIPS, parseAreas, reconcileAreas } from '@/lib/wizard-steps'
-import type { Decision, DecisionRelations } from '@/types/database'
+import {
+  WORK_SHAPE_OPTIONS,
+  fieldsForShape,
+  partitionByDisclosure,
+  type TextKey,
+  type WorkShape,
+} from '@/lib/intake-fields'
+import {
+  AREA_CHIPS,
+  DISCLOSURE,
+  RELATION_CHIPS,
+  SECTION_CHIPS,
+  SECTION_FATES,
+  assignFate,
+  parseAreas,
+  reconcileAreas,
+  reconcileFates,
+  shownShape,
+  toggleName,
+} from '@/lib/wizard-steps'
+import type { Decision, DecisionRelations, SectionFate } from '@/types/database'
 
 type Props = {
   decisions: Decision[]
@@ -16,6 +36,10 @@ type Props = {
   areasWorked: string[]
   areasFromScratch: string[]
   onAreasChange: (worked: string[], fromScratch: string[]) => void
+  shape: WorkShape | null
+  onShapeChange: (shape: WorkShape) => void
+  sectionFates: Record<string, SectionFate>
+  onSectionFatesChange: (fates: Record<string, SectionFate>) => void
   disabled: boolean
 }
 
@@ -44,6 +68,10 @@ export function Step4Structure({
   areasWorked,
   areasFromScratch,
   onAreasChange,
+  shape: shapeProp,
+  onShapeChange,
+  sectionFates,
+  onSectionFatesChange,
   disabled,
 }: Props) {
   const named = decisions.filter((d) => d.decided.trim())
@@ -53,13 +81,19 @@ export function Step4Structure({
   // list is the common case — someone types eight parts, taps four, then renames
   // one — and a selection pointing at a name that is no longer on screen is a
   // claim nobody made.
+  const shape = shownShape(shapeProp)
+
   const areas = parseAreas(text.product_areas)
   const { worked, fromScratch } = reconcileAreas(areas, areasWorked, areasFromScratch)
 
-  const toggle = (list: string[], name: string) =>
-    list.includes(name) ? list.filter((n) => n !== name) : [...list, name]
+  const sections = parseAreas(text.page_sections)
+  const fates = reconcileFates(sections, sectionFates)
 
-  const { open, collapsed } = partitionByDisclosure(fieldsForStep(4))
+  // One filter, never a hand-written list beside it: a key named in both would
+  // render its input twice, which reads as the field having broken.
+  const { open, collapsed } = partitionByDisclosure(
+    fieldsForShape(shape).filter((f) => f.step === 4)
+  )
 
   const setRelations = (id: string, patch: Partial<DecisionRelations>) =>
     onChange(
@@ -71,51 +105,71 @@ export function Step4Structure({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* The fork. Two kinds of project, and the helper says outright what
+          picking one changes — a fork whose consequence is invisible reads as a
+          setting, and someone will wonder what the other one would have asked. */}
+      <FormSelect
+        legend={SECTION_CHIPS.fork}
+        name="work_shape"
+        options={WORK_SHAPE_OPTIONS}
+        value={shape}
+        onChange={onShapeChange}
+        helper={SECTION_CHIPS.forkHelper}
+        disabled={disabled}
+      />
+
       <FieldGroup fields={open} text={text} onTextChange={onTextChange} disabled={disabled} />
 
-      {areas.length > 0 && (
+      {shape === 'separate_parts' && areas.length > 0 && (
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <p className="studio-h2 text-[var(--studio-text)]">{AREA_CHIPS.worked}</p>
-            <div className="flex flex-wrap gap-2">
-              {areas.map((name) => (
-                <Button
-                  key={name}
-                  variant="chip"
-                  pressed={worked.includes(name)}
-                  disabled={disabled}
-                  onClick={() => {
-                    const next = toggle(worked, name)
-                    onAreasChange(next, fromScratch.filter((n) => next.includes(n)))
-                  }}
-                >
-                  {name}
-                </Button>
-              ))}
-            </div>
-          </div>
+          <ChipRow
+            legend={AREA_CHIPS.worked}
+            names={areas}
+            pressed={(name) => worked.includes(name)}
+            onToggle={(name) => {
+              const next = toggleName(worked, name)
+              onAreasChange(next, fromScratch.filter((n) => next.includes(n)))
+            }}
+            disabled={disabled}
+          />
 
           {/* Only over what was worked on. Which parts were touched is a coverage
               map; which of those were built from scratch is a different claim, and
               it is the one the Approach diagram makes. */}
           {worked.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="studio-h2 text-[var(--studio-text)]">{AREA_CHIPS.fromScratch}</p>
-              <div className="flex flex-wrap gap-2">
-                {worked.map((name) => (
-                  <Button
-                    key={name}
-                    variant="chip"
-                    pressed={fromScratch.includes(name)}
-                    disabled={disabled}
-                    onClick={() => onAreasChange(worked, toggle(fromScratch, name))}
-                  >
-                    {name}
-                  </Button>
-                ))}
-              </div>
-            </div>
+            <ChipRow
+              legend={AREA_CHIPS.fromScratch}
+              names={worked}
+              pressed={(name) => fromScratch.includes(name)}
+              onToggle={(name) => onAreasChange(worked, toggleName(fromScratch, name))}
+              disabled={disabled}
+            />
           )}
+        </div>
+      )}
+
+      {/* One row per section, the three fates exclusive within it. Tapping the
+          fate a section already carries clears it, and a section nobody sorted
+          is a real answer rather than a missing one — so there is no "none"
+          chip and nothing here nags about an empty row. */}
+      {shape === 'single_page' && sections.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <p className="studio-h2 text-[var(--studio-text)]">{SECTION_CHIPS.perSection}</p>
+          {sections.map((name) => (
+            <ChipRow
+              key={name}
+              legend={name}
+              names={SECTION_FATES.map((f) => f.label)}
+              pressed={(label) =>
+                fates[name] === SECTION_FATES.find((f) => f.label === label)?.value
+              }
+              onToggle={(label) => {
+                const fate = SECTION_FATES.find((f) => f.label === label)?.value
+                if (fate) onSectionFatesChange(assignFate(fates, name, fate))
+              }}
+              disabled={disabled}
+            />
+          ))}
         </div>
       )}
 

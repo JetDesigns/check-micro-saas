@@ -15,12 +15,13 @@ import {
   OUTCOME_OPTIONS,
   PROVENANCE_OPTIONS,
   fieldElementId,
-  fieldsForStep,
+  fieldsForShape,
   visibleFields,
   type FieldStep,
   type IntakeField,
   type TextKey,
   type ToggleKey,
+  type WorkShape,
 } from '@/lib/intake-fields'
 import type {
   Collaborator,
@@ -29,7 +30,9 @@ import type {
   ImageSlot,
   Intake,
   OutcomeStatus,
+  PageSection,
   Provenance,
+  SectionFate,
   StoredIntake,
 } from '@/types/database'
 import { isFocusedFixIntake } from '@/types/database'
@@ -253,6 +256,32 @@ export const AREA_CHIPS = {
   fromScratch: 'Which of those were built from scratch?',
 } as const
 
+/**
+ * The other side of step 4's fork: page work rather than a product's parts.
+ *
+ * The fork is phrased as a question about the project, and its helper says
+ * plainly that it changes the next question — a fork whose consequence is
+ * invisible reads as a setting, and someone will wonder what they lost by
+ * picking the other one.
+ *
+ * The section list is parsed by `parseAreas`, the same function the parts
+ * answer uses. Its case-insensitive de-dup is right here too: two rows reading
+ * "CTA" and "cta" cannot be told apart once they are drawn, so collapsing them
+ * is the honest outcome rather than a loss.
+ */
+export const SECTION_CHIPS = {
+  fork: 'Which is closer to what you worked on?',
+  forkHelper: 'It changes the next question and nothing else.',
+  perSection: 'What happened to each one?',
+} as const
+
+/** Added, kept or cut, in the order the diagram's categories list them. */
+export const SECTION_FATES: ReadonlyArray<{ value: SectionFate; label: string }> = [
+  { value: 'added', label: 'Added' },
+  { value: 'cut', label: 'Cut' },
+  { value: 'kept', label: 'Kept' },
+] as const
+
 export const COLLABORATOR_FIELDS = {
   legend: 'Who else worked on it?',
   name: { label: 'Name', placeholder: 'e.g. Dani Okafor' },
@@ -407,6 +436,77 @@ export function reconcileAreas(
   }
 }
 
+/**
+ * Which block step 4 shows, with null read as the screen that came before it.
+ *
+ * One definition, so the form and `buildIntake` cannot drift — and so a draft
+ * written before the fork existed still shows the parts answer the person
+ * typed into it, rather than an empty page question.
+ */
+export function shownShape(shape: WorkShape | null): WorkShape {
+  return shape ?? 'separate_parts'
+}
+
+/** Lifted out of Step4Structure, where no test could reach it. */
+export function toggleName(list: readonly string[], name: string): string[] {
+  return list.includes(name) ? list.filter((n) => n !== name) : [...list, name]
+}
+
+/**
+ * One fate per section, and tapping the one it already has clears it.
+ *
+ * Exclusive, because a section sits in one place on the page. The fourth state
+ * is no fate at all, and it is DELETED rather than stored as a blank: a
+ * section nobody sorted is data the overlay draws as a gap (PRD §5.3), and ''
+ * would travel as a fate whose name happens to be empty.
+ */
+export function assignFate(
+  current: Record<string, SectionFate>,
+  section: string,
+  fate: SectionFate
+): Record<string, SectionFate> {
+  const next = { ...current }
+  if (next[section] === fate) delete next[section]
+  else next[section] = fate
+  return next
+}
+
+/**
+ * Keeps the fates honest against the answer they were chosen from.
+ *
+ * Same reason as `reconcileAreas`: someone lists eight sections, sorts them,
+ * then renames one — and a fate pointing at a section no longer on screen is a
+ * claim nobody made. It is also what makes the diagram's "not in categories"
+ * gate unreachable from the form.
+ */
+export function reconcileFates(
+  sections: readonly string[],
+  assigned: Record<string, SectionFate>
+): Record<string, SectionFate> {
+  const out: Record<string, SectionFate> = {}
+  for (const name of sections) {
+    const fate = assigned[name]
+    if (fate) out[name] = fate
+  }
+  return out
+}
+
+/**
+ * The ordered array that lands in the jsonb. The index IS the page's order.
+ *
+ * Built from the section list rather than from the fate map, because the map
+ * has no order to give and the page's order is the only axis the diagram has.
+ */
+export function buildPageSections(
+  sections: readonly string[],
+  assigned: Record<string, SectionFate>
+): PageSection[] {
+  return sections.map((label) => {
+    const fate = assigned[label]
+    return fate ? { label, fate } : { label }
+  })
+}
+
 export type Attachment = {
   id: string
   file: File
@@ -427,6 +527,20 @@ export type WizardState = {
   areasWorked: string[]
   /** A subset of `areasWorked`, never of the parts list directly. */
   areasFromScratch: string[]
+  /**
+   * Which side of step 4's fork is being asked. Null is the screen as it was
+   * before the fork existed, which is what a restored older draft reads as.
+   */
+  shape: WorkShape | null
+  /**
+   * What happened to each named section of the page, at most one each.
+   *
+   * A record here and an ORDERED ARRAY on the intake. The page's order is
+   * re-derived from the answer on every render, which is the discipline step 4
+   * already follows for the parts chips, so this never has to carry it — and
+   * `buildIntake` is the one place the two meet.
+   */
+  sectionFates: Record<string, SectionFate>
   /** In final order. Index here becomes case_study_attachments.order_index. */
   attachments: Attachment[]
 }
@@ -457,6 +571,8 @@ export function emptyWizardState(): WizardState {
     outcome: null,
     areasWorked: [],
     areasFromScratch: [],
+    shape: null,
+    sectionFates: {},
     attachments: [],
   }
 }
@@ -471,12 +587,18 @@ export function emptyWizardState(): WizardState {
  */
 export function buildIntake(state: WizardState): Intake {
   const intake: Intake = { schema_version: 2, decisions: [], image_notes: [] }
+  const shape = shownShape(state.shape)
 
   for (const field of INTAKE_FIELDS) {
     // A revealed field whose toggle is off was never asked. Storing whatever
     // was typed before the toggle was turned back off would put an answer on
     // the row that the form is not currently showing anyone.
     if (field.revealedBy && state.toggles[field.revealedBy] !== true) continue
+    // A field from the branch step 4 did not show was never asked either, for
+    // exactly the reason above. It is also what records the fork's answer: the
+    // branch is readable off which keys the row carries, so the fork itself
+    // needs no key of its own.
+    if (field.branch && field.branch !== shape) continue
     const value = state.text[field.key]?.trim()
     if (value) intake[field.key] = value
   }
@@ -525,13 +647,27 @@ export function buildIntake(state: WizardState): Intake {
 
   const liveDecisionIds = new Set(intake.decisions.map((d) => d.id))
 
-  // The product's parts, reconciled against the text they were chosen from, so
-  // an edited answer cannot leave a selection pointing at a name that is gone.
-  const areas = parseAreas(state.text.product_areas)
-  if (areas.length > 0) {
-    const { worked, fromScratch } = reconcileAreas(areas, state.areasWorked, state.areasFromScratch)
-    if (worked.length > 0) intake.product_areas_worked = worked
-    if (fromScratch.length > 0) intake.product_areas_new = fromScratch
+  // Where the work sat, down whichever side of the fork was asked. Both are
+  // reconciled against the text they were chosen from, so an edited answer
+  // cannot leave a selection pointing at a name that is gone.
+  //
+  // Only one side is ever written, which is what makes the fork's answer
+  // recoverable from the row without storing it — see `intakeShape`.
+  if (shape === 'separate_parts') {
+    const areas = parseAreas(state.text.product_areas)
+    if (areas.length > 0) {
+      const { worked, fromScratch } = reconcileAreas(areas, state.areasWorked, state.areasFromScratch)
+      if (worked.length > 0) intake.product_areas_worked = worked
+      if (fromScratch.length > 0) intake.product_areas_new = fromScratch
+    }
+  } else {
+    const sections = parseAreas(state.text.page_sections)
+    if (sections.length > 0) {
+      intake.page_sections_ordered = buildPageSections(
+        sections,
+        reconcileFates(sections, state.sectionFates)
+      )
+    }
   }
 
   intake.image_notes = state.attachments.map((a, orderIndex): ImageNote => {
@@ -828,8 +964,25 @@ function section(step: StepId, entries: ReviewEntry[]): ReviewSection {
   }
 }
 
+/**
+ * Which side of step 4's fork this row was asked, read off what it holds.
+ *
+ * Derived, never asked and never stored — the `evidenceBranch` shape. It is
+ * correct precisely because `buildIntake` writes only the branch that was
+ * shown: a row carrying any page answer was asked the page question, and
+ * everything else was asked the one that came before the fork.
+ */
+export function intakeShape(intake: Intake): WorkShape {
+  const page = intake.page_sections || intake.page_pattern || intake.page_sections_ordered
+  return page ? 'single_page' : 'separate_parts'
+}
+
 function textEntries(step: FieldStep, intake: Intake): ReviewEntry[] {
-  const fields: IntakeField[] = visibleFields(fieldsForStep(step), intake)
+  // Two filters, and both are necessary: a toggle that is off and a branch that
+  // was not shown are both answers nobody was asked for, and printing either as
+  // an empty row invites someone to go and fill in a question they never saw.
+  const onThisSide = fieldsForShape(intakeShape(intake)).filter((f) => f.step === step)
+  const fields: IntakeField[] = visibleFields(onThisSide, intake)
   return fields.map((f) =>
     entry(f.label, intake[f.key], fieldElementId(f.key), step)
   )

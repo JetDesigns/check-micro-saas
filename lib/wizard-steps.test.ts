@@ -6,9 +6,12 @@ import {
   DECISION_FIELDS,
   DECISION_TOGGLE,
   DISCLOSURE,
+  AREA_CHIPS,
   DISCOURAGING_WORDS,
   RELATION_CHIPS,
   SCREEN_FIELDS,
+  SECTION_CHIPS,
+  SECTION_FATES,
   SLOT_ENTRY_LABELS,
   SLOT_LABELS,
   TOGGLE_COPY,
@@ -18,6 +21,12 @@ import {
   buildIntake,
   parseAreas,
   reconcileAreas,
+  assignFate,
+  buildPageSections,
+  intakeShape,
+  reconcileFates,
+  shownShape,
+  toggleName,
   buildReview,
   compileBlockers,
   reviewNotes,
@@ -32,7 +41,7 @@ import {
   type Attachment,
   type WizardState,
 } from './wizard-steps'
-import { INTAKE_FIELDS, MEASUREMENT_KEYS } from './intake-fields'
+import { INTAKE_FIELDS, MEASUREMENT_KEYS, WORK_SHAPE_OPTIONS } from './intake-fields'
 import { SPINE_MAX, SPINE_MIN } from './case-study-blocks'
 import type { ImageSlot } from '@/types/database'
 
@@ -448,6 +457,11 @@ describe('copy rules', () => {
       ...Object.values(SCREEN_FIELDS).flatMap((f) => Object.values(f)),
       ...Object.values(SLOT_LABELS),
       ...Object.values(SLOT_ENTRY_LABELS),
+      // Step 4's fork and the chips on both sides of it.
+      ...Object.values(AREA_CHIPS),
+      ...Object.values(SECTION_CHIPS),
+      ...SECTION_FATES.map((f) => f.label),
+      ...WORK_SHAPE_OPTIONS.map((o) => o.label),
       // These three moved out of the step components during the copy pass.
       // They were unreachable from here before, which is how the wizard
       // accumulated a set of explanations nobody had ever run this rule over.
@@ -507,16 +521,25 @@ describe('copy rules', () => {
   // Every question has to earn its answer. Three fields left in this rebuild
   // because no rule read them; the way to stop a fourth arriving is to make
   // the absence of a citation visible here rather than in a review months on.
-  it('cites an input id beside every field in the registry source', async () => {
+  //
+  // An I-number OR a § section, because the three diagram fields have no
+  // I-number: the manifest predates the diagram having an input at all, and
+  // §9.5's row for it is prose rather than a numbered one. Accepting a section
+  // TIGHTENS this rather than loosening it — `product_areas` used to pass only
+  // because I13, on the answer above it, fell inside the window below, which is
+  // not a citation of anything. Each of the three now names its consumer.
+  it('cites what consumes every field in the registry source', async () => {
     const source = await import('node:fs').then((fs) =>
       fs.readFileSync('lib/intake-fields.ts', 'utf8')
     )
     for (const field of INTAKE_FIELDS) {
       const at = source.indexOf(`key: '${field.key}'`)
       expect(at, `${field.key} is not in the registry source`).toBeGreaterThan(-1)
-      // The id sits in the comment block above the field or on its own line.
+      // The citation sits in the comment block above the field or on its own line.
       const window = source.slice(Math.max(0, at - 900), at + 200)
-      expect(window, `${field.key} cites no input id`).toMatch(/\bI\d{1,2}\b/)
+      expect(window, `${field.key} cites no input id and no section`).toMatch(
+        /\bI\d{1,2}\b|§\d/
+      )
     }
   })
 })
@@ -662,5 +685,96 @@ describe('the product\'s parts', () => {
     const intake = buildIntake(state)
     expect(intake.product_areas_worked).toBeUndefined()
     expect(intake.product_areas_new).toBeUndefined()
+  })
+})
+
+describe("the page's sections", () => {
+  const page = (): ReturnType<typeof emptyWizardState> => {
+    const state = emptyWizardState()
+    state.shape = 'single_page'
+    state.text.page_sections = 'Headline, Plan prices, Feature grid, FAQ, Book a demo'
+    state.text.page_pattern = 'the two nobody asked for sat in the middle'
+    state.sectionFates = { 'Plan prices': 'kept', 'Feature grid': 'cut', FAQ: 'cut' }
+    return state
+  }
+
+  // A section sits in one place on the page, so the three are exclusive.
+  it('assigns one fate per section', () => {
+    expect(assignFate({}, 'Hero', 'added')).toEqual({ Hero: 'added' })
+    expect(assignFate({ Hero: 'added' }, 'Hero', 'cut')).toEqual({ Hero: 'cut' })
+  })
+
+  // Deleted rather than blanked: a section nobody sorted is a real answer, and
+  // '' would travel as a fate whose name happens to be empty.
+  it('clears the fate when the same chip is tapped again', () => {
+    expect(assignFate({ Hero: 'added' }, 'Hero', 'added')).toEqual({})
+  })
+
+  it('drops a fate whose section is no longer in the answer', () => {
+    expect(reconcileFates(['Hero', 'FAQ'], { Hero: 'added', Nav: 'cut' })).toEqual({ Hero: 'added' })
+  })
+
+  // The page's order is the diagram's only axis, so it comes from the answer
+  // and never from the fate map, which has no order to give.
+  it('keeps the page order even where the fates were tapped in another one', () => {
+    const built = buildPageSections(['Nav', 'Hero', 'FAQ'], { FAQ: 'cut', Nav: 'kept' })
+    expect(built).toEqual([{ label: 'Nav', fate: 'kept' }, { label: 'Hero' }, { label: 'FAQ', fate: 'cut' }])
+  })
+
+  it('carries no fate key at all for an unmarked section', () => {
+    expect(buildPageSections(['Hero'], {})).toEqual([{ label: 'Hero' }])
+  })
+
+  it('carries the sections onto the intake and leaves the parts branch alone', () => {
+    const intake = buildIntake(page())
+    expect(intake.page_sections_ordered?.map((x) => x.label)).toEqual([
+      'Headline',
+      'Plan prices',
+      'Feature grid',
+      'FAQ',
+      'Book a demo',
+    ])
+    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_areas).toBeUndefined()
+  })
+
+  // The fork's answer is recorded by which keys the row carries, which is only
+  // true because the branch that was not shown writes nothing at all.
+  it('writes no page answer when the parts branch was the one asked', () => {
+    const state = page()
+    state.shape = 'separate_parts'
+    const intake = buildIntake(state)
+    expect(intake.page_sections).toBeUndefined()
+    expect(intake.page_pattern).toBeUndefined()
+    expect(intake.page_sections_ordered).toBeUndefined()
+  })
+
+  it('reads an unanswered fork as the screen that came before it', () => {
+    expect(shownShape(null)).toBe('separate_parts')
+    const state = page()
+    state.shape = null
+    state.text.product_areas = 'Orders, Menu'
+    state.areasWorked = ['Orders']
+    expect(buildIntake(state).product_areas_worked).toEqual(['Orders'])
+  })
+
+  it('reads the branch back off the row, so nothing has to store it', () => {
+    expect(intakeShape(buildIntake(page()))).toBe('single_page')
+    expect(intakeShape(buildIntake(emptyWizardState()))).toBe('separate_parts')
+  })
+
+  it('toggles a name in and out of a list', () => {
+    expect(toggleName(['a'], 'b')).toEqual(['a', 'b'])
+    expect(toggleName(['a', 'b'], 'a')).toEqual(['b'])
+  })
+
+  // The review screen shows what was asked. A branch that never appeared would
+  // otherwise read as a question somebody skipped.
+  it('keeps the branch that was not asked off the review screen', () => {
+    const sections = buildReview(buildIntake(page()))
+    const step4 = sections.find((x) => x.step === 4)
+    const labels = (step4?.entries ?? []).map((e) => e.label)
+    expect(labels).toContain('What were the sections of the page, top to bottom?')
+    expect(labels).not.toContain('What are the main parts of the product?')
   })
 })

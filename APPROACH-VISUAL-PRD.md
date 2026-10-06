@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.1 · Scope: the `focused fix` project category only.
+Version 1.2 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -10,6 +10,14 @@ structure, §9 wins; where they disagree about pixels, this file does.
 **Changed in 1.1**, both from decisions taken against the spec it appends to:
 `set-exception` is drawn as a **grid, not a ring** (§5.1, §8.1), and the type face is
 **Inter, not Helvetica Neue** (§4).
+
+**Changed in 1.2**, all from building `order-overlay` as a second live template:
+§2's "no new wizard fields" is **superseded** — step 4 gained a fork and two page
+answers, which is §7's own stated remedy; §5.3's categories are **fixed as Added / Cut /
+Kept** and its `finding` now **comes from a wizard field**; §6's selection **gates every
+contract before choosing among the survivors** rather than gating only the winner; and
+new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
+renderer alongside item 3.
 
 ---
 
@@ -50,9 +58,22 @@ This is not a style preference. If the agent generates the visual
 directly, it can silently depart from the design system on any single
 run and there is no way to detect it.
 
-**No new wizard fields.** The agent works from the fields that already
+~~**No new wizard fields.** The agent works from the fields that already
 exist. Templates that cannot be filled from those fields simply do not
-fire.
+fire.~~
+
+**Superseded.** This held for as long as one template was built. §7's own
+remedy then came due: `order-overlay` could not be filled from any
+existing field, so it never fired, and §7 says in terms that this is
+evidence for adding a wizard field rather than for relaxing a gate. Step 4
+now asks which shape the work had — a product with separate parts, or a
+single page — and the page branch adds two answers: the sections in order,
+and what the designer noticed about where they sat. No gate was loosened.
+
+What has NOT changed is the division of labour above: the agent still
+never draws, still never writes either contract, and is still told nothing
+about the diagram. Both contracts are derived in code from answers the
+designer typed.
 
 ---
 
@@ -294,13 +315,42 @@ page · homepage rewrite
 ```
 sections[]    label     string  in real page order
               category  string  optional, one of categories[]
-categories[]  string    2 to 3, user's own words, max 10 chars
+categories[]  string    2 to 3, max 10 chars; FIXED, see below
 finding       string    the pattern: a repeat or a gap
 ```
+
+**The categories are fixed: Added, Cut, Kept.** This narrows "the user's
+own words", which is what the row said until the template was built. Three
+reasons, in order of weight. §8.3's own worked example already uses exactly
+these three, so the document was specifying one thing and illustrating
+another. A free-text field for them is a fourth answer on a step that now
+has two, and the gate refuses 4 or more with no way to say so in the form.
+And fixing them makes the per-section question a true exclusive choice —
+one tap, one fate — which is the interaction the parts question on the
+other side of the fork already uses.
+
+`categories[]` is therefore DERIVED: it holds the fates a section actually
+carries, in the order above. A page where nothing was cut has two
+categories, not three with one empty — an empty one would promise a key
+the strip never uses, which §8.3's wrong-render table forbids.
+
+**`finding` comes from a wizard field and is never inferred.** It is
+`page_pattern` — "What did you notice about where they sat?" — capped at
+the input to the caption's 120 characters. There is no deriving it: a
+sentence composed from the grouping would state the composition, which is
+the example the caption rule below names as the bad one, and composing it
+at all is the inference this whole document exists to prevent. A page with
+no answer there gets no diagram.
 
 **Extraction** Order is the page's real order, never a ranking. Assign a
 category only where the user placed that section in a group. Never invent
 a category to fill an empty section — empty is data.
+
+Note the two text limits pull in opposite directions and both are
+deliberate: a category over 10 characters TRUNCATES, and a `finding` over
+120 is REJECTED, because §4 gives it the caption's limit. Nothing in this
+system regenerates a sentence a designer typed, so rejecting means the
+diagram is dropped — which is why the cap sits on the input instead.
 
 **Gates**
 ```
@@ -342,11 +392,11 @@ all three contracts from the same answers and applies a fixed rule.
 1  extract   pull facts from the wizard answers; every field must trace
              to something the user wrote
 2  fill      attempt all three data contracts
-3  select    exactly one complete  -> that one
-             more than one complete -> B, then A, then C
-             none complete          -> text only, stop
-4  gate      run the selected template's gates on the data
-             any gate fails        -> text only, stop
+3  gate      run EVERY filled contract's own gates
+             a contract that fails any gate is out
+4  select    exactly one survives   -> that one
+             more than one survives -> B, then A, then C
+             none survives          -> text only, stop
 5  render    renderer produces SVG from the contract
 6  verify    swap test on the caption
              fails                 -> text only, discard the image
@@ -356,6 +406,21 @@ Priority order is fixed in `SKILL.md`, not decided per project, so two
 projects with similar data always resolve the same way. There is no
 "try another template" branch — that is taste re-entering through the
 back door.
+
+> **Steps 3 and 4 were the other way round in 1.1**, and the order was
+> wrong. Selecting on completeness and gating only the winner costs real
+> coverage: a project that names four product areas and marks none of them
+> as having no precedent has exactly one COMPLETE contract, so A is
+> selected, and only then does A's gate drop it — with the overlay the
+> project could have had never attempted. Gating every candidate and then
+> choosing among the survivors is the same fixed priority applied at the
+> only point where it can be applied honestly. **The priority itself has
+> not moved**, and this is still not a "try another template" branch:
+> every contract is attempted every time, in one pass, with no branch and
+> nothing decided per project.
+>
+> `lib/approach-diagram.ts` implements A then C, because B does not exist
+> — not because the order changed.
 
 ### Swap test
 Replace every label in the contract with labels from an unrelated
@@ -580,3 +645,27 @@ between dark ones, with the page's order untouched.
    ("Campaign performance", "Billing & invoices"). Test truncation
    against real data before launch — and re-derive the limit itself, per
    item 3.
+5. **`order-overlay` has no legal encoding, and NO RENDERER MAY BE BUILT
+   FOR IT until this resolves.** §5.3 and §8.3 require a legend, three slot
+   fills, and a keyed strip in place of direct labels. The output
+   specification forbids all three: §9.3 gate 1 ("There are no legends"),
+   gate 3 ("Direct labelling over keyed fills"), gate 4 ("Two fill states
+   maximum"), and §12 items 24 and 25 repeat two of them as hard gates.
+   This document's own header says §9 wins where the two disagree about
+   structure, so as specified the template cannot be drawn at all.
+
+   The contract, the gates, the wizard input and the selection rule ship
+   without a renderer. That is deliberate and it is the whole of the round
+   that added them: coverage was the problem, and a page project now gets a
+   validated contract in its envelope where before it got nothing.
+
+   Resolving it is an amendment to §9 or a re-encoding of C, and the
+   re-encoding is not free: two fill states and a label beside each row
+   caps the template at two distinguished groups, which would narrow §5.3's
+   `2 <= categories.length <= 3` to exactly 2 and drop one of Added / Cut /
+   Kept. The 2-3 gate ships as §5.3 states it, which means a passing
+   three-category contract may turn out to be undrawable under whatever §9
+   decides. **That consequence is accepted, by decision, and recorded here
+   rather than designed around.**
+
+   Blocks the renderer jointly with item 3.

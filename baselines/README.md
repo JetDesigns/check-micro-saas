@@ -8,8 +8,14 @@ is ignored — one `rm -rf` from gone.
 `.dev/generated/` stays ignored and stays scratch. A page only lands here when something is
 going to be compared against it.
 
-All runs are the `handover` fixture on `claude-sonnet-5-5` at `effort: 'high'`, so a diff
-between any two of them is the specification and the pipeline, never the input.
+Every run here is on `claude-sonnet-5-5` at `effort: 'high'`.
+
+**There are now two inputs, and only one of them is diffable against the others.** Every
+page down to and including `round6-approach-contract.md` is the `handover` fixture, so a
+diff between any two of THOSE is the specification and the pipeline, never the input.
+`round7-order-overlay.md` is a different project — the `landing-rewrite` fixture — and
+diffing it against a handover run tells you nothing, because the input moved too. It is
+here as the first page of its kind, to be read against the next one of its kind.
 
 ## Before the audit
 
@@ -55,9 +61,48 @@ The diagram that page carries, which the markdown does not contain:
 |---|---|---|---|
 | `round6-approach-contract.md` | — | 1 | The floor form is gone and no visual is drawn. Approach renders as prose, which is what §9.7 asks for. The envelope carries a validated `set-exception` contract derived from the intake — four parts worked on, one with no precedent — and the markdown makes no reference to it |
 
+## After order-overlay shipped
+
+The first page from the other side of step 4's fork.
+
+| File | Row | Attempts | Notes |
+|---|---|---|---|
+| `round7-order-overlay.md` | — | 1 | `npm run fixture -- landing-rewrite --dry`, 94s, $0.189, 0 warnings. **A different fixture** — see the note at the top before diffing it against anything above |
+
+The contract that page carries, which the markdown does not contain and never refers to:
+
+```
+order-overlay   categories: Added, Cut, Kept
+
+1  Headline             —
+2  Plan prices          Kept
+3  Feature grid         Cut
+4  FAQ                  Cut
+5  What it replaces     Added
+6  Migration help       Added
+7  Clinic quotes        Kept
+8  Book a demo          —
+
+finding: the two sections nobody asked for sat between the price and the
+         migration answer
+```
+
+Two things this page is evidence for, and they are the reason it is kept:
+
+1. **A page project reaches a diagram at all.** Before this round `order-overlay` had no
+   wizard input, so it could never fire, and a page project got nothing. The two sections
+   with no category are the gap the finding is a claim about.
+2. **§9.7 holds for a shape it had never been tested on.** The register says
+   `diagram_form: omitted` — from the writer's side the page genuinely has none — while
+   the envelope carries the derived contract. The markdown mentions no diagram, figure,
+   caption or legend anywhere, and Approach carries the structure in prose: which changes
+   moved an answer, which one broke the site's own convention, and which depends on
+   another. A reader cannot tell a diagram was ever considered.
+
 ## Reading a diff against these
 
-`round2-final.md` is what a new run should be compared with. Five things the audit named,
+`round2-final.md` is what a new HANDOVER run should be compared with; a page run is
+compared with `round7-order-overlay.md`. Five things the audit named,
 all of which that page passes and a regression would show up in:
 
 1. The register's `dominant_section` is the section that is actually longest.

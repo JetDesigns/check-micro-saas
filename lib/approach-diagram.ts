@@ -1,6 +1,6 @@
 // The Approach diagram's contract, derived from the intake and gated in code.
 //
-// THE AGENT NEVER DRAWS, and in this template it does not write either. Every
+// THE AGENT NEVER DRAWS, and in these templates it does not write either. Every
 // field below is derived from answers the designer gave, so "never infer a
 // product structure the user did not supply" is true by construction rather than
 // by instruction — there is no path by which an invented area name reaches the
@@ -14,24 +14,24 @@
 // repairing something that should simply not exist. Same shape as the
 // `stat_headline` precedent: omitted rather than filled in.
 //
+// TWO TEMPLATES, ONE FIXED RULE. `set-exception` covers multi-area app work;
+// `order-overlay` covers page and landing work. Both are filled, both are
+// gated, and set-exception is preferred among whichever passed — see
+// `buildApproachDiagram`. `sequence-collapse` is specified and deferred: its
+// input is the steps of one flow, which shares no pattern with either of these,
+// and it has no wizard field.
+//
+// NEITHER IS DRAWN. There is no renderer for either template. See the blocker
+// above the order-overlay half, and APPROACH-VISUAL-PRD.md open items 3 and 5.
+//
 // Thresholds come from APPROACH-VISUAL-PRD.md and nowhere else. Each one carries
 // the section it was read from, because a number with no source is a number
 // somebody will round.
 
-import type { Intake } from '@/types/database'
+import type { Intake, PageSection, SectionFate } from '@/types/database'
 
-export type SetExceptionItem = {
-  /** The part, exactly as the designer named it. */
-  label: string
-  /** `new` where they said it had no precedent; everything else is `reused`. */
-  status: 'reused' | 'new'
-}
-
-export type ApproachDiagram = {
-  template: 'set-exception'
-  items: SetExceptionItem[]
-  total: number
-  new_count: number
+/** Carried by every template, whatever its shape. */
+type DiagramTail = {
   /** Stated only. Never inferred, and `null` rather than absent (PRD §8). */
   reason: string | null
   /**
@@ -41,12 +41,82 @@ export type ApproachDiagram = {
   text_equivalent: string
 }
 
-// PRD §5.1 — gates.
+export type SetExceptionItem = {
+  /** The part, exactly as the designer named it. */
+  label: string
+  /** `new` where they said it had no precedent; everything else is `reused`. */
+  status: 'reused' | 'new'
+}
+
+export type SetExceptionDiagram = DiagramTail & {
+  template: 'set-exception'
+  items: SetExceptionItem[]
+  total: number
+  new_count: number
+}
+
+/** A section of one page. The array's index IS the page's real order. */
+export type OrderOverlaySection = {
+  label: string
+  /** One of `categories`. Absent where the designer left it unsorted. */
+  category?: string
+}
+
+export type OrderOverlayDiagram = DiagramTail & {
+  template: 'order-overlay'
+  sections: OrderOverlaySection[]
+  /** The categories actually used, in canonical order. 2 or 3 of them. */
+  categories: string[]
+  /** The pattern, in the designer's words. It becomes the caption (PRD §4). */
+  finding: string
+}
+
+export type ApproachDiagram = SetExceptionDiagram | OrderOverlayDiagram
+
+// Guards rather than comparisons at the call site: an optional chain never
+// narrows a union, so `page.diagram?.items` does not compile and reaching for a
+// cast instead is how a third template would silently pass through. The
+// renderer will switch on these when there is one.
+export const isSetException = (d: ApproachDiagram): d is SetExceptionDiagram =>
+  d.template === 'set-exception'
+export const isOrderOverlay = (d: ApproachDiagram): d is OrderOverlayDiagram =>
+  d.template === 'order-overlay'
+
+// PRD §5.1 — set-exception's gates.
 export const SET_MIN = 4
 export const SET_MAX = 8
 
+// PRD §5.3 — order-overlay's gates.
+export const SECTION_MIN = 5
+export const SECTION_MAX = 8
+export const CATEGORY_MIN = 2
+export const CATEGORY_MAX = 3
+
 // PRD §4 — text limits.
 export const LABEL_MAX_CHARS = 18
+/**
+ * §4's table gives `finding` the caption's limit, "because it becomes the
+ * caption" — and the caption REJECTS rather than truncating. Nothing in this
+ * system regenerates a sentence a designer typed, so rejecting means the
+ * diagram is dropped. That is why the field is capped at the input instead
+ * (`maxChars` in lib/intake-fields.ts), which makes this gate unreachable from
+ * the wizard and leaves it guarding only a hand-built intake.
+ */
+export const FINDING_MAX_CHARS = 120
+
+/**
+ * The three fates and the words they are drawn with.
+ *
+ * Listed in the order PRD §8.3's worked example lists them, so `categories`
+ * is canonical rather than whatever order the designer happened to tap. All
+ * three are inside §4's 10-character legend limit by construction, which is
+ * why no gate checks it.
+ */
+export const FATE_CATEGORIES: ReadonlyArray<{ fate: SectionFate; category: string }> = [
+  { fate: 'added', category: 'Added' },
+  { fate: 'cut', category: 'Cut' },
+  { fate: 'kept', category: 'Kept' },
+] as const
 
 /**
  * Labels name the product, never the designer's process.
@@ -87,7 +157,7 @@ function isProcessWord(label: string): boolean {
  * Returns every failure rather than the first: these are read by a person
  * deciding whether the gate is right, not by a retry loop.
  */
-export function gateSetException(c: ApproachDiagram): string[] {
+export function gateSetException(c: SetExceptionDiagram): string[] {
   const failed: string[] = []
 
   if (c.total < SET_MIN || c.total > SET_MAX) {
@@ -117,6 +187,99 @@ export function gateSetException(c: ApproachDiagram): string[] {
   return failed
 }
 
+// ---------------------------------------------------------------------------
+// order-overlay
+// ---------------------------------------------------------------------------
+//
+// BLOCKER — NO RENDERER MAY BE BUILT FOR THIS TEMPLATE YET. Its encoding has no
+// legal form. PRD §5.3 and §8.3 require a legend, three slot fills and a keyed
+// strip in place of direct labels; prompts/focused-fix-output.md §9.3 forbids all
+// three — gate 1 ("There are no legends"), gate 3 ("Direct labelling over keyed
+// fills") and gate 4 ("Two fill states maximum") — and §12 items 24 and 25 repeat
+// two of them as hard gates. The PRD's own header says §9 wins where the two
+// disagree about structure, so as specified the template cannot be drawn at all.
+//
+// The contract, the gates, the wizard input and the selection rule ship without
+// one, which is what this round is. Recorded as open item 5 in
+// APPROACH-VISUAL-PRD.md, and it blocks the renderer jointly with open item 3
+// (every §4 and §5 dimension is unverified since the face became Inter).
+//
+// Two things §5.3 asks for that nothing here enforces, both deliberate:
+//
+//   - "the grouping is predictable from the labels alone (FAQ -> questions),
+//     which means the overlay carries no judgement". That is the swap test, and
+//     only a person can run it.
+//   - "the parts are steps a user walks -> sequence-collapse". That template is
+//     deferred, so there is nowhere to send them. Step 4's fork question stands
+//     in for it by asking what shape the work had before either is attempted.
+//
+// And one tightening NOT applied: `isProcessWord` guards set-exception's labels
+// and does not guard these. `launch` and `audit` are both on that list, and a
+// real landing page with a Launch section being silently refused a diagram is
+// the exact coverage failure this round exists to fix. §5.3 does not restate
+// §5.1's product-noun gate, so leaving it off is reading the specification
+// rather than loosening it. The guard that replaces it is the question's own
+// wording: "the sections of the page, top to bottom" is far harder to answer
+// with a process than "the main parts of the product" was.
+
+export function gateOrderOverlay(c: OrderOverlayDiagram): string[] {
+  const failed: string[] = []
+
+  if (c.sections.length < SECTION_MIN || c.sections.length > SECTION_MAX) {
+    failed.push(
+      `there are ${c.sections.length} sections; the page has to hold ${SECTION_MIN} to ${SECTION_MAX}`
+    )
+  }
+  if (c.categories.length < CATEGORY_MIN || c.categories.length > CATEGORY_MAX) {
+    failed.push(
+      `there are ${c.categories.length} categories; there have to be ${CATEGORY_MIN} to ${CATEGORY_MAX} of them`
+    )
+  }
+
+  for (const s of c.sections) {
+    if (s.label.trim() === '') failed.push('a section has no label')
+    if (s.category !== undefined && !c.categories.includes(s.category)) {
+      failed.push(`"${s.category}" is on a section and not in categories`)
+    }
+  }
+
+  // §8.3's wrong-render table: "Legend swatches that do not appear on the
+  // canvas. The legend promises a key the diagram does not use."
+  for (const category of c.categories) {
+    if (!c.sections.some((s) => s.category === category)) {
+      failed.push(`"${category}" is in categories and on no section`)
+    }
+  }
+
+  // §5.3's third gate, and the whole argument of the form. One colour per row
+  // with nothing repeated and nothing left out is a table of contents: the
+  // strip has no shape, so there is no pattern for the caption to be about.
+  //
+  // It can only ever fire alongside the section-count gate above, because five
+  // or more sections across at most three categories always repeats one, by
+  // pigeonhole. Kept anyway: §5.3 states it, and it is the only thing guarding
+  // a contract built by hand rather than by `buildOrderOverlay`.
+  const repeats = c.categories.some(
+    (category) => c.sections.filter((s) => s.category === category).length >= 2
+  )
+  const gap = c.sections.some((s) => s.category === undefined)
+  if (!repeats && !gap) {
+    failed.push(
+      'no category covers two sections and none was left out; with no repeat and no gap there is no pattern to see'
+    )
+  }
+
+  if (c.finding.trim() === '') {
+    failed.push('there is no finding; the caption IS the finding and nothing infers one')
+  } else if (c.finding.length > FINDING_MAX_CHARS) {
+    failed.push(
+      `the finding is ${c.finding.length} characters; the caption holds ${FINDING_MAX_CHARS} and is rejected rather than cut`
+    )
+  }
+
+  return failed
+}
+
 /** PRD §4: over the limit truncates with an ellipsis rather than refusing. */
 export function truncateLabel(label: string): string {
   const trimmed = label.trim()
@@ -124,18 +287,14 @@ export function truncateLabel(label: string): string {
 }
 
 /**
- * The diagram this project supports, or null.
- *
- * Null is an ordinary outcome and the common one: most projects will not have
- * named four parts and separated some of them, and a project that renders no
- * diagram renders Approach as prose with no trace of the absence (§9.7).
+ * The set-exception contract this project supports, or null.
  *
  * The set is what the designer said they WORKED ON, not everything the product
  * has. The full list exists so that "which did you work on" has something to
  * choose from, and so nobody lists only what they touched and calls it the
  * product — but the diagram is about the work's reach, so the work is the set.
  */
-export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
+function buildSetException(intake: Intake): SetExceptionDiagram | null {
   const worked = intake.product_areas_worked ?? []
   const fromScratch = intake.product_areas_new ?? []
   if (worked.length === 0) return null
@@ -148,7 +307,7 @@ export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
   const newOnes = items.filter((i) => i.status === 'new')
   const reused = items.filter((i) => i.status === 'reused')
 
-  const contract: ApproachDiagram = {
+  const contract: SetExceptionDiagram = {
     template: 'set-exception',
     items,
     total: items.length,
@@ -162,4 +321,96 @@ export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
   }
 
   return gateSetException(contract).length === 0 ? contract : null
+}
+
+/** The page's order and its categories, in words, for a reader who cannot see it. */
+function orderOverlayText(
+  sections: OrderOverlaySection[],
+  categories: string[],
+  finding: string
+): string {
+  const inOrder = sections.map((s) => s.label).join(', ')
+  const grouped = categories
+    .map(
+      (category) =>
+        `${category}: ${sections
+          .filter((s) => s.category === category)
+          .map((s) => s.label)
+          .join(', ')}`
+    )
+    .join('. ')
+  const unsorted = sections.filter((s) => s.category === undefined).map((s) => s.label)
+  const gap =
+    unsorted.length === 0
+      ? ''
+      : ` ${unsorted.join(' and ')} ${unsorted.length === 1 ? 'sits' : 'sit'} in no category.`
+
+  return (
+    `The page runs ${sections.length} sections in this order: ${inOrder}. ` +
+    `${grouped}.${gap} The pattern: ${finding}.`
+  )
+}
+
+/**
+ * The order-overlay contract this project supports, or null.
+ *
+ * The categories are derived from the fates actually used rather than from the
+ * three the form offers: a page where nothing was cut has two categories, not
+ * three with one empty, and an empty one would promise a key the strip never
+ * uses. A section the designer left unmarked carries no category at all, and
+ * that gap is data — §5.3 forbids inventing one to fill it.
+ */
+function buildOrderOverlay(intake: Intake): OrderOverlayDiagram | null {
+  const rows: PageSection[] = intake.page_sections_ordered ?? []
+  const finding = (intake.page_pattern ?? '').trim()
+  if (rows.length === 0 || finding === '') return null
+
+  const word = new Map(FATE_CATEGORIES.map((f) => [f.fate, f.category]))
+  const categories = FATE_CATEGORIES.filter((f) => rows.some((r) => r.fate === f.fate)).map(
+    (f) => f.category
+  )
+
+  const sections: OrderOverlaySection[] = rows.map((row) => {
+    const category = row.fate ? word.get(row.fate) : undefined
+    return { label: truncateLabel(row.label), ...(category ? { category } : {}) }
+  })
+
+  const contract: OrderOverlayDiagram = {
+    template: 'order-overlay',
+    sections,
+    categories,
+    // §5.3's caption is the finding, and no field supplies anything else.
+    reason: null,
+    finding,
+    text_equivalent: orderOverlayText(sections, categories, finding),
+  }
+
+  return gateOrderOverlay(contract).length === 0 ? contract : null
+}
+
+/**
+ * The diagram this project supports, or null.
+ *
+ * Null is an ordinary outcome and the common one: a project that renders no
+ * diagram renders Approach as prose with no trace of the absence (§9.7). There
+ * is no fallback form and no placeholder — the floor form that guaranteed one
+ * was deleted for drawing a near-identical picture for two unrelated projects.
+ *
+ * BOTH contracts are filled and BOTH are gated, and set-exception wins among
+ * whichever passed. That is a deliberate deviation from PRD §6 steps 3 and 4,
+ * which select on completeness and then gate only the winner: under that order
+ * a project with four named areas and no exception loses to nothing — its
+ * set-exception contract is the only complete one, so it is selected, and only
+ * then does the gate drop it, with the overlay it could have had never
+ * attempted. The priority itself has not moved; only the point at which the
+ * gates run. The PRD step is amended to match, and a test pins the case.
+ *
+ * In practice the fork in step 4 decides which template a wizard project gets,
+ * because `buildIntake` writes only the branch it asked. The preference below
+ * covers hand-built intakes, fixtures, and rows written before the fork existed.
+ */
+export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
+  const set = buildSetException(intake)
+  const overlay = buildOrderOverlay(intake)
+  return set ?? overlay
 }

@@ -30,6 +30,8 @@ function input(over: Partial<DraftInput> = {}): DraftInput {
     outcome: 'shipped',
     areasWorked: [],
     areasFromScratch: [],
+    shape: null,
+    sectionFates: {},
     attachments: [],
     saved: null,
     ...over,
@@ -121,6 +123,31 @@ describe('a bad draft is never allowed to stop the wizard opening', () => {
     expect(parseDraft(JSON.stringify(bad))).toBeNull()
   })
 
+  // The precedent the area lists set: a draft written before a field existed is
+  // still the person's work, so it is defaulted rather than thrown away. The
+  // version is NOT bumped for an additive field, and these pin that choice.
+  it('accepts a draft written before step 4 had a fork, and reads it as the old screen', () => {
+    const before = JSON.parse(good)
+    delete before.shape
+    delete before.sectionFates
+    const restored = parseDraft(JSON.stringify(before))
+    expect(restored?.shape).toBeNull()
+    expect(restored?.sectionFates).toEqual({})
+    expect(restored?.text.title).toBe('Rebuilding shift handover for a hospital ward')
+  })
+
+  it('drops one unrecognised fate instead of taking the draft with it', () => {
+    const bad = JSON.parse(good)
+    bad.sectionFates = { Hero: 'added', Nav: 'sideways', FAQ: 'cut' }
+    expect(parseDraft(JSON.stringify(bad))?.sectionFates).toEqual({ Hero: 'added', FAQ: 'cut' })
+  })
+
+  it('reads an unknown fork answer as unanswered', () => {
+    const bad = JSON.parse(good)
+    bad.shape = 'whole_company'
+    expect(parseDraft(JSON.stringify(bad))?.shape).toBeNull()
+  })
+
   it('never throws, whatever it is handed', () => {
     for (const raw of ['null', 'true', '42', '"str"', '{}', '{"version":1}', '{"version":1,"step":1}']) {
       expect(() => parseDraft(raw)).not.toThrow()
@@ -138,6 +165,7 @@ describe('draftHasAnswers', () => {
       collaborators: s.collaborators,
       provenance: s.provenance,
       outcome: s.outcome,
+      shape: s.shape,
       attachments: [] as unknown[],
     }
   }
@@ -157,6 +185,7 @@ describe('draftHasAnswers', () => {
     ['a toggle', { toggles: { has_measurement: true } }],
     ['a collaborator', { collaborators: [{ name: 'P', role: '' }] }],
     ['a picked option', { outcome: 'shipped' as const }],
+    ['a picked branch of step 4', { shape: 'single_page' as const }],
     ['a screen', { attachments: [{}] }],
   ])('is true for %s', (_label, patch) => {
     expect(draftHasAnswers({ ...empty(), ...patch })).toBe(true)

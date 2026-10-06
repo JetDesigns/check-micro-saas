@@ -20,6 +20,8 @@ type Props = {
   optional?: boolean
   /** Renders a textarea at this many rows. Omit for a single-line input. */
   rows?: number
+  /** A hard cap on the control, where an over-long answer costs something. */
+  maxChars?: number
   disabled?: boolean
 }
 
@@ -35,6 +37,7 @@ export function Field({
   helper,
   optional = false,
   rows,
+  maxChars,
   disabled = false,
 }: Props) {
   return (
@@ -51,6 +54,7 @@ export function Field({
           id={id}
           value={value}
           rows={rows}
+          maxLength={maxChars}
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
@@ -63,6 +67,7 @@ export function Field({
           id={id}
           type="text"
           value={value}
+          maxLength={maxChars}
           disabled={disabled}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}

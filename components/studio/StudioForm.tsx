@@ -21,6 +21,7 @@ import {
   DEFAULT_TONE,
   type TextKey,
   type ToggleKey,
+  type WorkShape,
 } from '@/lib/intake-fields'
 import {
   WIZARD_COPY,
@@ -50,6 +51,7 @@ import type {
   OutcomeStatus,
   ProjectType,
   Provenance,
+  SectionFate,
   Tone,
 } from '@/types/database'
 import { BackButton, Button } from '@/components/studio/Button'
@@ -101,6 +103,8 @@ export function StudioForm() {
   const [outcome, setOutcome] = useState<OutcomeStatus | null>(null)
   const [areasWorked, setAreasWorked] = useState<string[]>([])
   const [areasFromScratch, setAreasFromScratch] = useState<string[]>([])
+  const [shape, setShape] = useState<WorkShape | null>(null)
+  const [sectionFates, setSectionFates] = useState<Record<string, SectionFate>>({})
   const [saved, setSaved] = useState<SavedRow | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
@@ -123,6 +127,8 @@ export function StudioForm() {
     outcome,
     areasWorked,
     areasFromScratch,
+    shape,
+    sectionFates,
     attachments,
   }
 
@@ -168,6 +174,8 @@ export function StudioForm() {
           setOutcome(f.state.outcome)
           setAreasWorked(f.state.areasWorked)
           setAreasFromScratch(f.state.areasFromScratch)
+          setShape(f.state.shape)
+          setSectionFates(f.state.sectionFates)
           setAttachments([])
           setProjectType(f.projectType)
           setTone(f.tone)
@@ -216,6 +224,8 @@ export function StudioForm() {
         setOutcome(draft.outcome)
         setAreasWorked(draft.areasWorked)
         setAreasFromScratch(draft.areasFromScratch)
+        setShape(draft.shape)
+        setSectionFates(draft.sectionFates)
         setProjectType(draft.projectType)
         setTone(draft.tone)
         setAttachments(restored)
@@ -247,6 +257,8 @@ export function StudioForm() {
       outcome,
       areasWorked,
       areasFromScratch,
+      shape,
+      sectionFates,
       attachments,
       saved,
     })
@@ -444,7 +456,7 @@ export function StudioForm() {
   const meta = stepMeta(step)
   const { index, total } = stepPosition(step)
   const position = step === 'review' ? 'Review' : `Step ${index + 1} of ${total}`
-  const hasAnswers = draftHasAnswers({ text, decisions, collaborators, attachments, provenance, outcome, toggles })
+  const hasAnswers = draftHasAnswers({ text, decisions, collaborators, attachments, provenance, outcome, toggles, shape })
 
   return (
     <div ref={rootRef}>
@@ -545,6 +557,10 @@ export function StudioForm() {
               setAreasWorked(worked)
               setAreasFromScratch(fromScratch)
             }}
+            shape={shape}
+            onShapeChange={setShape}
+            sectionFates={sectionFates}
+            onSectionFatesChange={setSectionFates}
             text={text}
             onTextChange={setTextValue}
             disabled={isBusy}

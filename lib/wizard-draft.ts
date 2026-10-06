@@ -17,7 +17,7 @@
 // A corrupt draft must never be able to stop the wizard opening: anything that
 // does not parse to exactly the shape expected is treated as no draft at all.
 
-import type { TextKey, ToggleKey } from '@/lib/intake-fields'
+import type { TextKey, ToggleKey, WorkShape } from '@/lib/intake-fields'
 import type { Attachment, StepId } from '@/lib/wizard-steps'
 import type {
   Collaborator,
@@ -26,6 +26,7 @@ import type {
   OutcomeStatus,
   ProjectType,
   Provenance,
+  SectionFate,
   Tone,
 } from '@/types/database'
 
@@ -73,6 +74,8 @@ export type Draft = {
   outcome: OutcomeStatus | null
   areasWorked: string[]
   areasFromScratch: string[]
+  shape: WorkShape | null
+  sectionFates: Record<string, SectionFate>
   attachments: DraftAttachment[]
   saved: SavedRow | null
 }
@@ -100,6 +103,8 @@ export function toDraft(input: DraftInput, now: number = Date.now()): Draft {
 
 const STEPS: readonly unknown[] = [1, 2, 3, 4, 5, 'review']
 const SLOTS: readonly unknown[] = ['problem', 'before', 'after']
+const SHAPES: readonly unknown[] = ['separate_parts', 'single_page']
+const FATES: readonly unknown[] = ['added', 'kept', 'cut']
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
@@ -149,13 +154,28 @@ export function parseDraft(raw: string | null | undefined): Draft | null {
   // Defaulted rather than demanded: a draft written before these existed is
   // still the person's work, and bumping the version to reject it would throw
   // away a part-filled form to gain nothing.
+  //
+  // EVERY ONE OF THESE NEEDS ITS LINE BELOW, not just a property on `Draft`.
+  // The spread is an unchecked cast, so a field named only in the type arrives
+  // `undefined` from an older draft with nothing complaining, and the form then
+  // sets `undefined` into state that is typed as holding neither.
   const strings = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+
+  // One unrecognised fate drops out instead of taking the whole draft with it.
+  const fates = (v: unknown): Record<string, SectionFate> =>
+    isObject(v)
+      ? (Object.fromEntries(
+          Object.entries(v).filter(([, fate]) => FATES.includes(fate))
+        ) as Record<string, SectionFate>)
+      : {}
 
   return {
     ...(value as unknown as Draft),
     areasWorked: strings(value.areasWorked),
     areasFromScratch: strings(value.areasFromScratch),
+    shape: SHAPES.includes(value.shape) ? (value.shape as WorkShape) : null,
+    sectionFates: fates(value.sectionFates),
     saved: (saved as SavedRow | null | undefined) ?? null,
   }
 }
@@ -167,7 +187,10 @@ export function parseDraft(raw: string | null | undefined): Draft | null {
  * decision cards and a default tone, and none of that is the person's work.
  */
 export function draftHasAnswers(
-  d: Pick<Draft, 'text' | 'decisions' | 'collaborators' | 'provenance' | 'outcome' | 'toggles'> & {
+  d: Pick<
+    Draft,
+    'text' | 'decisions' | 'collaborators' | 'provenance' | 'outcome' | 'toggles' | 'shape'
+  > & {
     /** Only the count matters, so a live Attachment[] and a stored one both fit. */
     attachments: readonly unknown[]
   }
@@ -188,7 +211,11 @@ export function draftHasAnswers(
     d.collaborators.some((c) => c.name.trim() !== '' || c.role.trim() !== '') ||
     d.attachments.length > 0 ||
     d.provenance !== null ||
-    d.outcome !== null
+    d.outcome !== null ||
+    // A picked option is an answer, the same as provenance and outcome above.
+    // `sectionFates` is left out for the reason the area lists are: nobody can
+    // have sorted a section without typing it first, which `anyText` covers.
+    d.shape !== null
   )
 }
 

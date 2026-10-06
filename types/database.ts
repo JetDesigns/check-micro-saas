@@ -177,6 +177,29 @@ export type Intake = {
   product_areas?: string
   product_areas_worked?: string[]
   product_areas_new?: string[]
+
+  /**
+   * The page's own sections, in order, and what happened to each.
+   *
+   * The other half of step 4's fork, and the source for the `order-overlay`
+   * Approach diagram exactly as the three above are the source for
+   * `set-exception`. A project supplies one set or the other, never both: the
+   * fork decides which questions were asked, and `buildIntake` writes only the
+   * branch that was.
+   *
+   * ORDER IS THE ONLY AXIS the overlay has (PRD §5.3, "Never sort or group
+   * rows"), so the sections are an ARRAY whose index is the page's real order —
+   * not a record keyed by label, whose key order is not a contract anyone may
+   * lean on.
+   *
+   * `page_sections` and `page_pattern` are raw, as typed. `page_pattern` is the
+   * finding: the designer's own sentence about where the sections sat, and the
+   * one the diagram's caption is built from. Nothing here is derivable from
+   * anything else on the row — which is why it is asked rather than inferred.
+   */
+  page_sections?: string
+  page_pattern?: string
+  page_sections_ordered?: PageSection[]
   authority_split?: string       // I17 — only where a split genuinely shaped the work
 
   // --- Step 5 — where it landed -------------------------------------------
@@ -217,6 +240,27 @@ export type Intake = {
 }
 
 export type Collaborator = { name: string; role: string }
+
+/**
+ * What happened to one section of a page: added, kept or cut.
+ *
+ * Fixed rather than named by the designer. PRD §5.3 says the overlay's
+ * categories are "the user's own words", and §8.3's own worked example then
+ * uses Added / Cut / Kept — so the three are what the form offers, and a free
+ * text field for them is one more thing to answer wrong. Narrowing §5.3 this
+ * way is recorded in that section.
+ */
+export type SectionFate = 'added' | 'kept' | 'cut'
+
+/**
+ * One section of one page, in the page's real order.
+ *
+ * `fate` is ABSENT, never '', where the designer left the section unmarked.
+ * Empty is data (PRD §5.3: "Never invent a category to fill an empty section"):
+ * a section nobody sorted is half of what the overlay can show, and '' would
+ * travel as a fate whose name happens to be blank.
+ */
+export type PageSection = { label: string; fate?: SectionFate }
 
 export type Tieback = { decisionId: string; painPoint: string }
 

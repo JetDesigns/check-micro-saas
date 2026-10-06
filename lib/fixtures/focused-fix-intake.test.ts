@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FIXTURE_NAMES, fixtureIntake, getFixture, isFixtureName } from './focused-fix-intake'
-import { compileBlockers, evidenceBranch, mixedFigure } from '@/lib/wizard-steps'
+import { buildApproachDiagram, isOrderOverlay, isSetException } from '@/lib/approach-diagram'
+import { compileBlockers, evidenceBranch, intakeShape, mixedFigure } from '@/lib/wizard-steps'
 import type { Intake } from '@/types/database'
 
 // The fixture is the thing every later test stands on, so the properties it has
@@ -56,6 +57,44 @@ describe('the two branches', () => {
 
   it('"handover-measured" is the metric branch, with every component present', () => {
     expect(evidenceBranch(fixtureIntake('handover-measured'))).toBe('metric')
+  })
+})
+
+// Step 4's fork, and the diagram each side of it reaches. Asserted on the
+// fixtures rather than on hand-built intakes because a typo in a `sectionFates`
+// key is otherwise invisible: `reconcileFates` would drop the assignment and
+// the gates could still pass on a quietly different grouping.
+describe('the two shapes of work', () => {
+  it('a product project is asked for its parts and gets the set', () => {
+    const intake = fixtureIntake('handover')
+    expect(intakeShape(intake)).toBe('separate_parts')
+    expect(intake.page_sections_ordered).toBeUndefined()
+    expect(isSetException(buildApproachDiagram(intake)!)).toBe(true)
+  })
+
+  it('a page project gets the overlay, because the parts question was never asked', () => {
+    const intake = fixtureIntake('landing-rewrite')
+    expect(intakeShape(intake)).toBe('single_page')
+    expect(intake.product_areas_worked).toBeUndefined()
+
+    const diagram = buildApproachDiagram(intake)!
+    expect(isOrderOverlay(diagram)).toBe(true)
+    if (!isOrderOverlay(diagram)) return
+    expect(diagram.sections).toHaveLength(8)
+    expect(diagram.categories).toEqual(['Added', 'Cut', 'Kept'])
+    expect(diagram.finding).toBe(
+      'the two sections nobody asked for sat between the price and the migration answer'
+    )
+  })
+
+  // The gap the finding is a claim about. If a fate key stops matching the
+  // section list these become categorised and the sentence silently stops
+  // being true of the picture.
+  it('leaves the page project two sections in no category', () => {
+    const diagram = buildApproachDiagram(fixtureIntake('landing-rewrite'))!
+    if (!isOrderOverlay(diagram)) throw new Error('expected order-overlay')
+    const unsorted = diagram.sections.filter((x) => x.category === undefined).map((x) => x.label)
+    expect(unsorted).toEqual(['Headline', 'Book a demo'])
   })
 })
 

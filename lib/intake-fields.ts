@@ -60,6 +60,28 @@ export type FieldStep = 1 | 2 | 3 | 4 | 5
  */
 export type ToggleKey = 'client_may_be_named' | 'reported_verbatim' | 'has_measurement'
 
+/**
+ * Step 4's fork: which shape the work had.
+ *
+ * NOT a `ProjectType`. Those three are a CHECK constraint on
+ * `case_studies.project_type` (migration 0003), there is no page shape among
+ * them, and this question is not about what the client bought.
+ *
+ * NOT ON THE INTAKE EITHER. It decides which questions step 4 asks, and the
+ * answer is recorded by which arrays `buildIntake` writes — so there is no key
+ * in the jsonb anybody has to interpret, and a row written before the fork
+ * existed reads exactly as it always did.
+ */
+export type WorkShape = 'separate_parts' | 'single_page'
+
+// Phrased as two kinds of project, never as two kinds of diagram. The person is
+// describing their work; they are not picking a template, and they are never
+// told one exists.
+export const WORK_SHAPE_OPTIONS: ReadonlyArray<{ value: WorkShape; label: string }> = [
+  { value: 'separate_parts', label: 'A product with separate parts' },
+  { value: 'single_page', label: 'A single page' },
+] as const
+
 export type IntakeField = {
   key: TextKey
   label: string
@@ -82,6 +104,29 @@ export type IntakeField = {
   half?: boolean
   /** Hidden until this toggle is on. */
   revealedBy?: ToggleKey
+  /**
+   * Asked only on one side of step 4's fork.
+   *
+   * The close analogue of `revealedBy`, and it has to be its own property
+   * rather than a reuse of it. `revealedBy` is typed `ToggleKey` and a toggle
+   * is a boolean, so it can say "show when true" and not "one of two" — and a
+   * boolean fork could not tell "never answered" from "answered the other way",
+   * which is the distinction the omit-when-empty rule in `buildIntake` depends
+   * on. `revealedBy` also reaches only registry fields, while half of what this
+   * fork hides is the chip blocks in Step4Structure, which are not in the
+   * registry at all.
+   */
+  branch?: WorkShape
+  /**
+   * A hard cap on what the control accepts, for the one answer whose length is
+   * load-bearing downstream.
+   *
+   * `page_pattern` becomes the Approach diagram's caption, and PRD §4 gives the
+   * caption a limit it REJECTS rather than truncates. Nothing regenerates a
+   * sentence a designer typed, so without a cap here a long answer would drop
+   * their diagram silently. Read in one place, `FieldGroup.tsx`.
+   */
+  maxChars?: number
   /**
    * Behind the step's disclosure link rather than on screen when the step opens.
    *
@@ -235,6 +280,12 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     collapsed: true,
   },
   {
+    // §9.5 "Where the work sat inside the product", and PRD §5.1. No I-number:
+    // the manifest was written before the diagram had an input, and §9.5's row
+    // is prose rather than a numbered one. Cited explicitly because until this
+    // comment existed the field passed the citation test only because I13, on
+    // the answer above it, happened to fall inside the window the test reads.
+    //
     // The source for the Approach diagram. Visible rather than collapsed: behind
     // a disclosure link most people would never open it, and the diagram fires
     // on nothing without it.
@@ -245,6 +296,45 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     required: false,
     rows: 2,
     step: 4,
+    branch: 'separate_parts',
+  },
+  {
+    // §9.5 and PRD §5.3, the same standing as `product_areas` above and with
+    // no I-number for the same reason.
+    //
+    // The other side of the fork, and the source for the page diagram. Visible
+    // for the same reason as the answer above it.
+    //
+    // The helper is the whole question: left to themselves people list sections
+    // in the order they think matter most, and a ranking is the one thing this
+    // answer must not be. It is the only place that can be said.
+    key: 'page_sections',
+    label: 'What were the sections of the page, top to bottom?',
+    placeholder:
+      'e.g. Headline, Plan prices, Feature grid, FAQ, What it replaces, Migration help, Clinic quotes, Book a demo',
+    helper: 'In the order they appear, not in order of importance.',
+    type: 'textarea',
+    required: false,
+    rows: 2,
+    step: 4,
+    branch: 'single_page',
+  },
+  {
+    // §9.5 and PRD §5.3's `finding`, which §4 turns into the caption.
+    //
+    // The finding. Asked rather than derived: a sentence composed from the
+    // grouping would state the composition, which is the example the PRD's
+    // caption rule names as the bad one, and composing it at all is inference.
+    key: 'page_pattern',
+    label: 'What did you notice about where they sat?',
+    placeholder:
+      'e.g. The two sections nobody asked for sat between the price and the migration answer',
+    helper: 'One short sentence. A repeat or a gap — not how many there were.',
+    type: 'input',
+    required: false,
+    step: 4,
+    branch: 'single_page',
+    maxChars: 120,
   },
   {
     key: 'constraints', // I14 + I15
@@ -511,6 +601,19 @@ export function anyAnswered(
   fields: readonly IntakeField[]
 ): boolean {
   return fields.some((f) => (text[f.key] ?? '').trim() !== '')
+}
+
+/**
+ * Fields on this side of step 4's fork, plus everything that has no side.
+ *
+ * Derived rather than hand-listed, the `MEASUREMENT_KEYS` precedent: a field
+ * added to a branch cannot then be missed by the thing that renders it, and
+ * there is no second list to keep in step. It is also the ONLY filter — a step
+ * that both ran this and hand-named its branch keys would render one of them
+ * twice, which reads as the input having broken.
+ */
+export function fieldsForShape(shape: WorkShape): IntakeField[] {
+  return INTAKE_FIELDS.filter((f) => !f.branch || f.branch === shape)
 }
 
 export function fieldsRevealedBy(toggle: ToggleKey): IntakeField[] {

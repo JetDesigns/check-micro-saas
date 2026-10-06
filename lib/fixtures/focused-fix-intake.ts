@@ -131,7 +131,111 @@ const tiebacks: Tieback[] = [
   { decisionId: ACK, painPoint: 'escalations were passed on out loud and skipped when a shift ran late' },
 ]
 
-export type FixtureName = 'handover' | 'handover-measured'
+// ---------------------------------------------------------------------------
+// A page project
+// ---------------------------------------------------------------------------
+//
+// The other side of step 4's fork, and the only fixture that reaches the
+// `order-overlay` diagram. It exists because the hospital project can never
+// exercise that path: a page project answers the sections question and leaves
+// the parts question unasked, which is what `buildIntake` writes and what
+// `buildSetException` then finds nothing in.
+//
+// Every fact here is invented, on the same terms as the project above.
+
+const PRICE_FIRST = 'fixture-dec-price-first'
+const REPLACES = 'fixture-dec-replaces'
+const MIGRATION = 'fixture-dec-migration'
+
+const landingDecisions: Decision[] = [
+  {
+    id: PRICE_FIRST,
+    decided: 'Put the plan prices above the feature grid',
+    prior_behaviour: 'The price sat below two screens of feature copy',
+    consequence: 'A manager sees what it costs without scrolling past anything',
+    why: 'Every manager we sat with scrolled straight past the features looking for a number, and two of them left before they found it.',
+    rejected:
+      'A price link in the nav. It answers the question by sending someone somewhere else.',
+    client_request: '"The pricing page is not converting and we think it is too long."',
+  },
+  {
+    id: REPLACES,
+    decided: 'Name the records system it replaces, on the page',
+    prior_behaviour: 'Nothing on the site said what it replaced',
+    consequence: 'Managers stop asking whether they would be running two systems',
+    why: 'Managers were already running a records system and assumed this sat on top of it, so the question was always whether they would be paying for both.',
+    rejected:
+      'A comparison table. It invites a feature argument, and the question was not about features.',
+    relations: {
+      breaks_pattern: 'Every other page on the site avoids naming a competitor',
+    },
+  },
+  {
+    id: MIGRATION,
+    decided: 'Answer the migration question in its own section, not in the FAQ',
+    prior_behaviour: 'Who does the data migration was a footnote under the FAQ',
+    consequence: 'Nobody has to open an accordion to find out who moves their records',
+    why: 'It was the third question on every call and the last thing on the page, and a clinic that has typed in six years of records does not treat it as a detail.',
+    rejected:
+      'Promoting the FAQ entry to the top of the accordion. It is still a question someone has to go looking for.',
+    relations: { depends_on: PRICE_FIRST },
+  },
+]
+
+function landingState(): WizardState {
+  const state = emptyWizardState()
+  state.text = {
+    title: 'Rewriting the pricing page for a veterinary practice tool',
+    product_and_users:
+      'Practice-management software for small animal clinics. Practice managers compare it against two competitors before they book a demo.',
+    client_type: 'A veterinary software company',
+    year: '2025',
+    duration: '5 weeks',
+    role: 'Product designer',
+
+    reported_problem: 'The pricing page is not converting and we think it is too long.',
+    diagnosis:
+      'Managers arrived with three questions: what it costs per vet, whether it replaces the records system they already run, and who does the data migration. The page answered the last one in a footnote under the FAQ, and two blocks of feature copy sat between the price and the first clinic that had migrated.',
+    cost_to_client:
+      'Sales answered the same three questions on every demo call, about eleven calls a week.',
+
+    page_sections:
+      'Headline, Plan prices, Feature grid, FAQ, What it replaces, Migration help, Clinic quotes, Book a demo',
+    page_pattern:
+      'the two sections nobody asked for sat between the price and the migration answer',
+
+    constraints:
+      'The marketing site ran on a template the team would not change, so every section had to be one of its existing blocks.',
+
+    team_change:
+      'The three questions stopped coming up on calls. Sales sends the page now instead of talking through it.',
+    client_response: '"We send the pricing page now instead of walking people through it."',
+  }
+  state.shape = 'single_page'
+  // Two sections are left unmarked on purpose. That gap is half of what the
+  // overlay can show, and the finding above is a claim about where it sits.
+  state.sectionFates = {
+    'Plan prices': 'kept',
+    'Feature grid': 'cut',
+    FAQ: 'cut',
+    'What it replaces': 'added',
+    'Migration help': 'added',
+    'Clinic quotes': 'kept',
+  }
+  state.collaborators = [{ name: 'Marco Ilves', role: 'Sales lead' }]
+  state.provenance = 'user_research'
+  state.outcome = 'shipped'
+  state.decisions = landingDecisions.map((d) => ({ ...d }))
+  return state
+}
+
+const landingTiebacks: Tieback[] = [
+  { decisionId: PRICE_FIRST, painPoint: 'two blocks of feature copy sat between the price and the clinics' },
+  { decisionId: REPLACES, painPoint: 'managers did not know whether it replaced the records system they ran' },
+  { decisionId: MIGRATION, painPoint: 'who does the data migration was answered in a footnote under the FAQ' },
+]
+
+export type FixtureName = 'handover' | 'handover-measured' | 'landing-rewrite'
 
 export type Fixture = {
   name: FixtureName
@@ -157,6 +261,16 @@ const BUILDERS: Record<FixtureName, () => Omit<Fixture, 'name'>> = {
     projectType: 'focused_fix',
     tone: 'professional',
     tiebacks,
+  }),
+  // `focused_fix` because the three project types are a CHECK constraint and
+  // none of them is a page. The fork in step 4 is what makes this a page
+  // project, not the type the client bought.
+  'landing-rewrite': () => ({
+    description: 'The page branch of step 4: the only fixture that reaches order-overlay.',
+    state: landingState(),
+    projectType: 'focused_fix',
+    tone: 'professional',
+    tiebacks: landingTiebacks,
   }),
 }
 
