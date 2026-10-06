@@ -49,6 +49,12 @@ The diagram that page carries, which the markdown does not contain:
 3  Hold escalated notes
 ```
 
+## After the Approach diagram became a contract
+
+| File | Row | Attempts | Notes |
+|---|---|---|---|
+| `round6-approach-contract.md` | — | 1 | The floor form is gone and no visual is drawn. Approach renders as prose, which is what §9.7 asks for. The envelope carries a validated `set-exception` contract derived from the intake — four parts worked on, one with no precedent — and the markdown makes no reference to it |
+
 ## Reading a diff against these
 
 `round2-final.md` is what a new run should be compared with. Five things the audit named,

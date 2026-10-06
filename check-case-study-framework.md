@@ -59,6 +59,36 @@ Jawaban ini menentukan **posisi section Results** (lihat Placement Logic di bawa
 
 ---
 
+## APPROACH — satu diagram, kalau materinya ada
+
+Section Approach boleh membawa **satu** diagram, tidak pernah dua, dan tidak pernah di section
+lain. Isinya adalah **peta produk user sendiri**: bagian-bagian produk yang mereka sebut, mana
+yang mereka kerjakan, dan mana dari yang dikerjakan itu yang tidak punya preseden sama sekali.
+
+**Kapan muncul.** Hanya kalau tiga jawaban itu ada dan cukup: minimal empat bagian yang
+dikerjakan, maksimal delapan, dan minimal satu — tapi tidak lebih dari separuhnya — yang tanpa
+preseden. Di bawah itu, tidak ada diagram.
+
+**Kalau tidak muncul.** Approach tetap tampil penuh, sebagai prosa, tanpa placeholder, tanpa
+frame kosong, dan tanpa kalimat yang menjelaskan ketiadaannya. Pembaca tidak boleh tahu bahwa
+ada sesuatu yang tidak jadi dibuat. Tidak ada diagram lebih baik daripada diagram lemah.
+
+**Yang tidak boleh.** Diagram yang menggambarkan proses desainer — discovery, iterasi, testing,
+handoff — ditolak. Proses setiap desainer sama, jadi gambarnya akan sama di setiap project;
+yang membuktikan pendekatan adalah apa yang berubah di produknya. Label juga tidak boleh
+dikarang: setiap nama bagian harus nama yang user sendiri ketik.
+
+**Catatan genre.** Dokumen teknisnya ditulis sebelum pivot 25 Agustus dan masih memakai
+kerangka "business-framed". Pembacanya sekarang adalah tim hiring dan reviewer, bukan klien —
+yang berubah hanya untuk siapa halaman ini ditulis, bukan satu pun angka, gate, token, atau
+koordinat di dalamnya.
+
+Spesifikasi lengkap — contract, gate, encoding, token, contoh — ada di
+`APPROACH-VISUAL-PRD.md`, yang menjadi lampiran teknis dari §9
+`prompts/focused-fix-output.md`.
+
+---
+
 ## ANTI-PATTERNS — harus ditolak oleh structuring agent
 
 - Label section vague seperti "Closing" tanpa kata yang menjanjikan hasil/refleksi eksplisit.

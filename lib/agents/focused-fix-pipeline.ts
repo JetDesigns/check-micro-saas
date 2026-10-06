@@ -8,6 +8,7 @@ import {
 } from '@/lib/agents/focused-fix-prompts'
 import { parseJsonObject } from '@/lib/agents/parse'
 import { runExtraction, type PipelineImage } from '@/lib/agents/pipeline'
+import { buildApproachDiagram } from '@/lib/approach-diagram'
 import { validateFocusedFix, type Issue } from '@/lib/focused-fix-validate'
 import type { GeneratedPage, Intake } from '@/types/database'
 
@@ -159,6 +160,10 @@ export async function runFocusedFixPipeline(params: {
       attempts: attempt + 1,
       page: {
         ...checked.page,
+        // Derived from the answers, not from the reply. A project whose material
+        // does not support one gets null, and Approach reads as prose with no
+        // trace of the absence (§9.7).
+        diagram: buildApproachDiagram(intake),
         meta: {
           model: result.model,
           attempts: attempt + 1,

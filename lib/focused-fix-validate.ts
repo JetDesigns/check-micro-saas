@@ -191,25 +191,6 @@ const CROSS_REFERENCE = [
  */
 const SPEC_ECHO_WINDOW = 8
 
-/**
- * A node in the Approach visual carries a NAME, not a statement.
- *
- * The first version of this gave every item a full sentence, which put the prose
- * in a box beside the prose. Three words is the budget; the shape test catches
- * the clause that fits inside it.
- */
-const NAME_WORD_CAP = 3
-const NAME_IS_A_CLAUSE = /[.?!,;:]|\s[—–]\s|\b(?:was|were|is|are|had|have|because|which|that|so)\b/i
-
-function nameProblem(name: string): string | null {
-  const trimmed = name.trim()
-  if (trimmed === '') return 'is empty'
-  const words = trimmed.split(/\s+/).length
-  if (words > NAME_WORD_CAP) return `is ${words} words; a node carries a name of ${NAME_WORD_CAP} at most`
-  if (NAME_IS_A_CLAUSE.test(trimmed)) return 'reads as a statement; a node carries a name, not a sentence'
-  return null
-}
-
 export function validateFocusedFix(value: unknown, ctx: ValidateContext): Validation {
   const issues: Issue[] = []
   const warnings: Issue[] = []
@@ -509,10 +490,14 @@ export function validateFocusedFix(value: unknown, ctx: ValidateContext): Valida
     if (!(REGISTER_CHOICES as readonly string[]).includes(c)) issue('register', `"${c}" is not one of the six register choices`)
     if (choices.filter((x) => x === c).length > 1) issue('register', `"${c}" appears more than once in the register`)
   }
-  // `diagram_form` used to be required to read "omitted", which is how a
-  // specification that calls the diagram load-bearing shipped a pipeline that
-  // could not produce one. It now has to agree with the diagram actually returned.
-  const diagramChoice = register.find((r) => r.choice === 'diagram_form')
+  // The writer produces no diagram: Approach's visual is derived from the intake
+  // in lib/approach-diagram.ts and attached after this runs, so from the model's
+  // side the page genuinely has none. Round 4 removed this check because the
+  // model was being asked for a diagram; it is back because it no longer is.
+  const diagram = register.find((r) => r.choice === 'diagram_form')
+  if (diagram && diagram.value !== 'omitted') {
+    issue('register', 'diagram_form must be "omitted"; the page you write carries no diagram')
+  }
 
   // Until this check existed the register was taken on trust: a driver was
   // measured for length and never against the page. The first register this
@@ -620,101 +605,6 @@ export function validateFocusedFix(value: unknown, ctx: ValidateContext): Valida
     }
   }
 
-  // ---- 9. The visual Approach carries ---------------------------------------
-  // §9 guarantees one. §9.7's single remaining threshold — one undifferentiated
-  // decision — cannot be reached, because the wizard refuses a submission with
-  // fewer than two, so a missing diagram is a failure rather than an omission.
-  const rawDiagram = isObject(value.diagram) ? value.diagram : null
-  let diagram: GeneratedPage['diagram'] = null
-
-  if (!rawDiagram) {
-    issue('diagram', 'Approach carries no visual; every page has one (§9), and the floor form is built from the decisions themselves')
-  } else {
-    const form = String(rawDiagram.form ?? '')
-    if (form !== 'decision_flow') {
-      issue(
-        'diagram',
-        `"${form}" is not an available form; the six in §9.2 need the confirmation step, which does not exist yet, so the floor form "decision_flow" is the only one`
-      )
-    }
-    if (diagramChoice && diagramChoice.value !== form) {
-      issue('register', `the register calls the diagram "${diagramChoice.value}" and the diagram calls itself "${form}"`)
-    }
-
-    const rawItems = Array.isArray(rawDiagram.items) ? rawDiagram.items.map((i) => (isObject(i) ? i : {})) : []
-    if (rawItems.length !== ctx.intake.decisions.length) {
-      issue(
-        'diagram',
-        `the diagram has ${rawItems.length} items against ${ctx.intake.decisions.length} decisions; one each, in the designer's order`
-      )
-    }
-
-    rawItems.forEach((item, i) => {
-      const name = String(item.name ?? '').trim()
-      const d = ctx.intake.decisions[i]
-
-      const problem = nameProblem(name)
-      if (problem) {
-        issue('diagram', `the name on diagram item ${i + 1} ("${name}") ${problem}`)
-      }
-      // Nothing beyond a name and a state. An extra key is an explanation
-      // looking for somewhere to live, and the budget only holds if there is
-      // nowhere.
-      const extra = Object.keys(item).filter((k) => k !== 'name' && k !== 'deviates')
-      if (extra.length > 0) {
-        issue('diagram', `diagram item ${i + 1} carries ${extra.join(', ')}; a node is a name and a state, nothing else`)
-      }
-      if (!d) return
-
-      // Shortened, never reworded: a coined name is the fastest way to make a
-      // generated graphic look generated (§9.5).
-      const own = norm(d.decided ?? '')
-      const coined = significantWords(name).filter((w) => !own.includes(w))
-      if (name !== '' && coined.length > 0) {
-        issue(
-          'diagram',
-          `the name on diagram item ${i + 1} uses "${coined.join(', ')}", which the decision it stands for does not ("${d.decided}"); names are the designer's own words, shortened`
-        )
-      }
-
-      // The designer said which one departs. The writer does not get to decide.
-      const saidSo = d.relations?.breaks_pattern !== undefined
-      if (item.deviates === true && !saidSo) {
-        issue('diagram', `diagram item ${i + 1} is marked as departing from the others, which the answers do not say of it`)
-      }
-      if (item.deviates !== true && saidSo) {
-        warn('diagram', `the answers say decision ${i + 1} breaks a pattern the others follow, and the diagram does not mark it`)
-      }
-    })
-
-    // §9.3: a text equivalent states the relationship, not the parts. A reader
-    // handed only the labels has been given the items and not the shape.
-    const textEquivalent = String(rawDiagram.text_equivalent ?? '').trim()
-    if (textEquivalent === '') {
-      issue('diagram', 'the diagram has no text equivalent; one without it is incomplete (§9.3)')
-    } else {
-      const nameWords = norm(rawItems.map((i) => String(i.name ?? '')).join(' '))
-      const beyond = significantWords(textEquivalent).filter((w) => !nameWords.includes(w))
-      if (beyond.length === 0) {
-        issue(
-          'diagram',
-          'the text equivalent only repeats the names; it has to state the relationship they are in (§9.3)'
-        )
-      }
-    }
-
-    if (issues.filter((i) => i.rule === 'diagram').length === 0) {
-      diagram = {
-        form: 'decision_flow',
-        items: rawItems.map((item) => ({
-          name: String(item.name ?? '').trim(),
-          deviates: item.deviates === true,
-        })),
-        text_equivalent: textEquivalent,
-      }
-    }
-  }
-
   // ---- Warnings: heuristic, kept but not blocking --------------------------
   // A number on the page that is nowhere in the answers might be an invention or
   // might be arithmetic on numbers that are. Either way someone should look.
@@ -761,7 +651,8 @@ export function validateFocusedFix(value: unknown, ctx: ValidateContext): Valida
       driver: String(r.driver ?? ''),
     })),
     branch: branch as 'metric' | 'contribution',
-    diagram,
+    // Attached by the pipeline from the intake, never read off the reply.
+    diagram: null,
     ...(flags.length > 0 ? { needs_confirmation: flags as string[] } : {}),
   }
 

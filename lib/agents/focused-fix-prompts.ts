@@ -78,7 +78,6 @@ Return ONE JSON object and nothing else — no prose before it or after it, no c
   "figures": [ { "imageId": "…", "caption": "…", "alt": "…" } ],
   "variance_register": [ { "choice": "…", "value": "…", "driver": "…" } ],
   "branch": "contribution" | "metric",
-  "diagram": { "form": "decision_flow", "items": [ { "name": "…", "deviates": true or false } ], "text_equivalent": "…" },
   "needs_confirmation": [ "…" ]
 }
 
@@ -116,24 +115,7 @@ For each one, "value" is what you chose and "driver" is the specific fact in THI
 
 The register is CHECKED AGAINST THE PAGE, not taken on trust. "dominant_section" must name the section you actually gave the most room to — count it before you answer. Saying Problem dominates while Solution runs twice as long is rejected. If the fixes carry the page, say Solution: a true report of an ordinary shape is worth more than a claim the page contradicts.
 
-For diagram_form the value is the diagram's own "form" — they must agree.
-
-THE DIAGRAM
-
-Approach always carries one. You do not choose whether to produce it (§9).
-
-The only form available is "decision_flow", the floor form (§9.2b): the decisions, in the order the designer gave them, each against the pain point it answers. The six relationship forms in §9.2 need a confirmation step that does not exist yet, so they are not available to you — do not attempt one and do not describe one.
-
-THIS IS AN INDEX, NOT PROSE. No sentence appears anywhere inside it.
-
-- One item per decision, in the designer's order. Never more, never fewer, never re-sorted.
-- "name" is the decision as a NAME: three words at most, taken from the designer's own wording for it and shortened. "Freeze the note at shift change" becomes "Freeze the note". Never a category you coined to tidy the set, and never a clause — no verb phrase, no comma, no full stop.
-- "deviates" is true ONLY where the answers say that decision breaks a pattern the others follow. It is a true or false, never a description: the renderer writes the words that mark it. False everywhere else, and never set true to make the set look varied.
-- "text_equivalent" states the relationship in a sentence or two, for a reader who cannot see the diagram. It is NOT a list of the names — a reader given only the names has the parts and not the shape. This is the one place prose belongs, and it is not rendered on the page.
-
-Do NOT restate the pain point each decision answers. It is already in that fix's tie-back in "## Solution", and repeating it here is the prose in a box.
-
-You are describing content, not drawing. There are no colours, no fills and no legend to specify: the renderer draws the order as position and marks the one that departs. Do not ask for a visual device, and do not write a caption that carries the finding — the diagram shows what it shows (§9.3).
+For diagram_form the value is "omitted". You produce no diagram: "## Approach" carries the structure in prose (§9.7). A visual may be built from the answers afterwards, by code, from facts the designer stated about their product — that is not yours to describe and nothing on the page refers to it.
 
 EVERYTHING ELSE
 
