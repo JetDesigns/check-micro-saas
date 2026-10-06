@@ -218,9 +218,33 @@ describe('order-overlay gates', () => {
 })
 
 describe('labels', () => {
-  it('truncates past eighteen characters rather than refusing', () => {
-    expect(truncateLabel('Campaign performance')).toBe('Campaign performa…')
+  it('truncates past fourteen characters rather than refusing', () => {
+    expect(truncateLabel('Campaign performance')).toBe('Campaign perf…')
     expect(truncateLabel('Orders')).toBe('Orders')
+  })
+
+  // The limit is the renderer's, and set-exception's specifically. A contract
+  // that trimmed would store one geometry's layout as a fact about the work,
+  // and order-overlay — one mark per row, four times the budget — would lose
+  // labels that had room to spare.
+  it('carries labels whole into the contract, however long they are', () => {
+    const long = intake({
+      product_areas_worked: ['Campaign performance', 'Billing & invoices', 'Orders', 'Menu'],
+      product_areas_new: ['Orders'],
+    })
+    const built = asSetException(buildApproachDiagram(long))
+    expect(built.items.map((i) => i.label)).toContain('Campaign performance')
+    expect(built.items.some((i) => i.label.includes('…'))).toBe(false)
+  })
+
+  // Accessibility: the one channel with no layout should not inherit the
+  // layout's constraint.
+  it('gives the text equivalent the full label, not the trimmed one', () => {
+    const long = intake({
+      product_areas_worked: ['Campaign performance', 'Billing & invoices', 'Orders', 'Menu'],
+      product_areas_new: ['Orders'],
+    })
+    expect(buildApproachDiagram(long)?.text_equivalent).toContain('Campaign performance')
   })
 })
 

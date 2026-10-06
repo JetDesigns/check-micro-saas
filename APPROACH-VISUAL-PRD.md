@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.2 · Scope: the `focused fix` project category only.
+Version 1.3 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -18,6 +18,12 @@ Kept** and its `finding` now **comes from a wizard field**; §6's selection **ga
 contract before choosing among the survivors** rather than gating only the winner; and
 new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
 renderer alongside item 3.
+
+**Changed in 1.3**, from measuring Inter in the running app: the frame is **568 wide with
+a computed height**, not 509 × 421, and renders as **inline SVG** rather than a PNG export;
+the mark label limit is **14 characters**, not 18, because four per row never had room for
+18 under either face; mark height 24 and pitch 36 are **re-verified unchanged**. Open items
+3 and 4 are **closed**.
 
 ---
 
@@ -103,11 +109,26 @@ values are shown for reference only.
 ### Frame
 | Property | Value |
 |---|---|
-| Size | 509 × 421 |
+| Width | **568** — the read page's prose column, measured |
+| Height | per template; it is content, not a fixed artboard |
 | Background | `Background/Primary` |
 | Border | 1px `Border/Default` (#ededed) |
 | Radius | `Medium 2` (12) |
-| Export | PNG @2x → 1018 × 842 |
+| Narrow | the column is **343** at 375px viewport; the geometry reflows, it does not scale |
+
+> **Was 509 × 421 with a PNG @2x export, and both were wrong.** 509 was an
+> artboard width that corresponds to nothing in the product — the column the
+> diagram actually sits in measures **568** on the read page, and stays 568 at a
+> 1600px viewport because it is capped. The fixed height went with it: the number
+> of rows is data, so the height is computed and the frame has no business
+> declaring one.
+>
+> The PNG export is dropped too. The diagram renders as **inline SVG**, which
+> removes the rasterisation step entirely and buys three things a PNG cannot: it
+> stays sharp at any density, it inherits the page's own theme tokens instead of
+> baking one in, and its `text_equivalent` can live in `<title>`/`<desc>` where a
+> screen reader reaches it. Scaling a 12px-text PNG down to the 343 column would
+> render text at ~7px; reflowing instead keeps it at 12.
 
 ### Mark (shared by all three)
 | Property | Value |
@@ -116,6 +137,10 @@ values are shown for reference only.
 | Padding | 12 horizontal, 4 vertical |
 | Radius | `Small` (4) |
 | Type | `Body small` — Inter Regular 12 / 1.2, tracking −0.12 |
+
+Height 24 **re-verified against Inter** and unchanged: 12px at 1.2 leading is
+14.4, plus 4 vertical padding each side, is 22.4 — inside 24 with room. Vertical
+pitch 36 is therefore unchanged too, leaving the same 12px gap between rows.
 
 | State | Fill | Border | Text |
 |---|---|---|---|
@@ -142,12 +167,41 @@ Two lines maximum. The only sentence in the frame.
 6. Mark size is uniform. Nothing scales by importance or effort.
 7. Only `order-overlay` may use more than one fill, capped at three.
 
+### Measured Inter metrics
+
+Measured in the running app at `/studio/read/...`, against the live font stack
+rather than a redrawn Figma component, so these are what actually renders.
+Reproduce by measuring a `<span>` at `400 12px/1.2 Inter` with
+`letter-spacing: -0.12px` over the label corpus below.
+
+| Quantity | Value |
+|---|---|
+| Mean character advance | **5.93px** |
+| 95th-percentile character advance | **6.64px** — size against this, not the mean |
+| Inter against Helvetica Neue | **+5.42%** over 15 real product labels |
+
+Sized on the p95 figure, because a limit that holds for average text and fails
+for "Comparison table" is not a limit.
+
 ### Text limits
 | Slot | Max | Overflow |
 |---|---|---|
-| Mark label | 18 chars | truncate with ellipsis |
+| Mark label (A) | **14 chars** | truncate with ellipsis, renderer-side |
 | Caption | 120 chars | reject, regenerate shorter |
 | Legend entry (C) | 10 chars | truncate |
+
+> **The label limit belongs to a geometry, not to the system, and the contract
+> does not apply it.** 14 is what four marks per row leaves room for. C draws one
+> mark per row against roughly four times that budget, so trimming a page section
+> to 14 would cut a label with room to spare — each geometry trims to its own
+> measured box.
+>
+> Labels are therefore carried **whole** into the contract and trimmed only when
+> drawn, which also fixes an accessibility defect: `text_equivalent` used to carry
+> the truncated string, so a screen reader was handed "Campaign performa…" — the
+> sighted reader's layout constraint leaking into the one channel that has no
+> layout. A character count is the floor; the renderer also trims to the measured
+> box, because 14 wide characters and 14 narrow ones are not the same width.
 | `finding` (C) | 120 chars | it becomes the caption, so it carries the caption's limit |
 
 ---
@@ -198,7 +252,11 @@ exceptional, the set has no rule to break and the diagram claims nothing.
 
 **Encoding**
 - A grid, four marks per row, centred, first row top 96, pitch 36 vertical
-  and 12 horizontal.
+  and 12 horizontal. Mark width **121**, uniform: 568 frame less 48 padding
+  is 520, less three 12px gaps is 484, over four. Text budget per mark is
+  121 − 24 padding = **97px**, which is where the 14-character limit comes
+  from (97 ÷ 6.64). At the 343 column it reflows to two per row, not four
+  scaled down.
 - Marks are laid out in reading order — left to right, top to bottom — in
   the user's order.
 - **Exception marks are placed contiguously.** Emit every `reused` item
@@ -206,6 +264,18 @@ exceptional, the set has no rule to break and the diagram claims nothing.
   Scattered exceptions have to be counted; an unbroken run is read as one
   mass.
 - Exceptions use the `exception` state. Everything else is `default`.
+
+> **Four per row and an 18-character label never co-existed.** This is
+> arithmetic, and it predates the type face: four 18-character marks need
+> 4 × (121.7 + 24) + 36 = 619px of row, against a 509 frame then and a 568
+> column now. Under Helvetica Neue the real figure at four-wide was 13
+> characters; under Inter it is 14 in the wider frame. So open item 4 was
+> pointing at a real problem and naming the wrong cause — the limit was not
+> too loose for real product labels, it was never reachable at this row
+> count. **Four per row is what gives, last.** Eight items in two clean rows
+> is the form's whole argument — a set seen at once, exceptions as one mass
+> — and three per row turns eight into a ragged 3 + 3 + 2 that reads as a
+> list. The label limit moved instead.
 
 > **Why not a ring.** Version 1.0 specified one, and the reference this
 > template was derived from draws one. A ring asserts that each item leads
@@ -633,7 +703,18 @@ between dark ones, with the page's order untouched.
    call. Validate against real projects before freezing.
 2. `sequence-collapse` requires a reduction of at least 2. Validate
    whether 1 is ever legible.
-3. ~~Helvetica Neue must be embeddable by the renderer.~~ **Closed in 1.1:**
+3. ~~Every dimension in §4 and §5 is unverified under Inter.~~ **Closed in
+   1.3:** measured in the running app against the live font stack rather than
+   redrawn in Figma, which measures what renders instead of what was drawn.
+   Inter is 5.42% wider than Helvetica Neue over 15 real labels; mean
+   character advance 5.93px, p95 6.64px. Mark height 24 and pitch 36 survive
+   unchanged. The frame does not: 509 × 421 became a 568 width with a
+   computed height, because 568 is the column the diagram sits in and the row
+   count is data. The 18-character label limit became 14 — see the note under
+   §5.1, which is the more important finding. **This no longer blocks the
+   renderer.** The original wording is kept below for history.
+
+   ~~Helvetica Neue must be embeddable by the renderer.~~ **Closed in 1.1:**
    the face is Inter, which is OFL licensed and already loaded by the app.
    It leaves a consequence in its place — **every dimension in §4 and §5
    was measured against Helvetica Neue and is now unverified.** Inter sets
@@ -641,10 +722,16 @@ between dark ones, with the page's order untouched.
    18-character label limit all have to be re-measured, and the Figma
    components redrawn in Inter, **before** any renderer work rather than
    after.
-4. Mark labels over 18 characters are common in real products
-   ("Campaign performance", "Billing & invoices"). Test truncation
-   against real data before launch — and re-derive the limit itself, per
-   item 3.
+4. ~~Mark labels over 18 characters are common in real products.~~
+   **Closed in 1.3**, and it was the wrong diagnosis: the limit was never
+   reachable at four marks per row under either face, so the problem was the
+   row count's budget rather than real labels being long. It is 14 now, and
+   tested against the labels both fixtures actually carry — `Ward Board`,
+   `Patient Notes`, `Handover list`, `Escalations` all fit; the page
+   fixture's sections run against a far wider budget and are not close to it.
+   Truncation stays ellipsis-with-measurement: the renderer trims to the
+   97px box, so a string of wide characters cannot overrun a box that
+   counted characters.
 5. **`order-overlay` has no legal encoding, and NO RENDERER MAY BE BUILT
    FOR IT until this resolves.** §5.3 and §8.3 require a legend, three slot
    fills, and a keyed strip in place of direct labels. The output
