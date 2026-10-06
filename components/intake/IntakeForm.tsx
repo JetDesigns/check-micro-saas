@@ -88,6 +88,7 @@ export function IntakeForm({ onCreated }: Props) {
     areasFromScratch: [],
     shape: null,
     sectionFates: {},
+    stepsRemoved: [],
     attachments,
   }
 

@@ -1,7 +1,16 @@
-import { isSetException, type ApproachDiagram as Contract } from '@/lib/approach-diagram'
 import {
+  isOrderOverlay,
+  isSetException,
+  type ApproachDiagram as Contract,
+} from '@/lib/approach-diagram'
+import {
+  MARK_HEIGHT,
+  ROW_PITCH,
+  columnHeight,
   orderOverlayCaption,
   orderOverlayRows,
+  sequenceCaption,
+  sequenceConnectors,
   setExceptionCaption,
   setExceptionOrder,
 } from '@/lib/approach-layout'
@@ -59,7 +68,8 @@ const EXCEPTION_MARK =
 export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
   if (!diagram) return null
 
-  if (!isSetException(diagram)) return <OrderOverlay diagram={diagram} />
+  if (isOrderOverlay(diagram)) return <OrderOverlay diagram={diagram} />
+  if (!isSetException(diagram)) return <SequenceCollapse diagram={diagram} />
 
   const marks = setExceptionOrder(diagram.items)
 
@@ -143,6 +153,111 @@ function OrderOverlay({ diagram }: { diagram: Extract<Contract, { template: 'ord
 
       <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
         {orderOverlayCaption(diagram)}
+      </figcaption>
+    </figure>
+  )
+}
+
+// §4's `emphasised`: the only full-weight element in the frame (§5.2).
+const EMPHASISED_MARK =
+  'border-[var(--studio-border-strong)] bg-[var(--studio-bg-primary)] text-[var(--studio-text)]'
+
+const AXIS = 'text-[12px] leading-[1.2] tracking-[-0.12px] text-[var(--studio-text-soft)]'
+
+/**
+ * One flow before and after, with the steps that survived joined across.
+ *
+ * THE SLANT OF THE CONNECTORS IS THE COMPRESSION (§5.2), which is the whole
+ * reason the right column starts at the same top as the left and simply ends
+ * earlier: "The space below the shorter right column stays empty. Never centre
+ * the columns against each other."
+ *
+ * The connectors are SVG because they are lines between two points, which is
+ * the one thing in this system HTML cannot draw. Everything else stays HTML, so
+ * the labels still truncate to their measured box and the columns still give
+ * way at a narrow screen.
+ *
+ * The SVG stretches horizontally only — `preserveAspectRatio="none"` against a
+ * viewBox 100 units wide — so the channel can be any width the layout leaves it
+ * while the row centres stay in exact pixel step with the marks beside them.
+ * §4's pitch of 36 is load-bearing here: a connector that misses a mark centre
+ * is visible immediately, so both read it from `rowCentre`.
+ */
+function SequenceCollapse({
+  diagram,
+}: {
+  diagram: Extract<Contract, { template: 'sequence-collapse' }>
+}) {
+  const connectors = sequenceConnectors(diagram)
+  const height = columnHeight(diagram.before.length)
+
+  return (
+    <figure className={FRAME} aria-label={diagram.text_equivalent}>
+      <div className="w-full max-w-[342px]" aria-hidden>
+        {/* minmax(0,1fr) rather than 1fr: a bare 1fr carries an automatic
+            min-content floor, so a long step name forces its column past its
+            share and the pair overflows the frame — which is what happened at
+            the 343 column before this. The floor has to be stated as 0 for the
+            label to give way and truncate instead.
+
+            At the 568 column the 342 cap leaves (342 - 84) / 2 = 129 per
+            column, which is §5.2's figure exactly. */}
+        <div className="grid grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] gap-0">
+          <span className={AXIS}>Before</span>
+          <span />
+          <span className={AXIS}>After</span>
+        </div>
+
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_84px_minmax(0,1fr)] items-start">
+          <div className="flex flex-col" style={{ gap: ROW_PITCH - MARK_HEIGHT }}>
+            {diagram.before.map((step) => (
+              <div
+                key={step.label}
+                title={step.label}
+                className={`${MARK} ${step.fate === 'removed' ? RECEDED_MARK : DEFAULT_MARK}`}
+              >
+                <span className="overflow-hidden text-ellipsis">{step.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <svg
+            width="100%"
+            height={height}
+            viewBox={`0 0 100 ${height}`}
+            preserveAspectRatio="none"
+            className="overflow-visible"
+          >
+            {connectors.map((c) => (
+              <line
+                key={`${c.from}-${c.to}`}
+                x1={0}
+                y1={c.from}
+                x2={100}
+                y2={c.to}
+                stroke="var(--studio-border-strong)"
+                strokeWidth={1}
+                strokeDasharray="1 3"
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
+
+          {/* Starts at the same top and ends earlier. The empty space below it
+              is the reduction, and centring the two columns would delete it. */}
+          <div className="flex flex-col" style={{ gap: ROW_PITCH - MARK_HEIGHT }}>
+            {diagram.after.map((label) => (
+              <div key={label} title={label} className={`${MARK} ${EMPHASISED_MARK}`}>
+                <span className="overflow-hidden text-ellipsis">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <figcaption className="max-w-[340px] text-center text-[12px] leading-[1.3] text-[var(--studio-text-soft)]">
+        {sequenceCaption(diagram)}
       </figcaption>
     </figure>
   )

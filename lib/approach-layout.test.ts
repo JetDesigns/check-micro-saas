@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest'
 import {
   orderOverlayCaption,
   orderOverlayRows,
+  columnHeight,
+  rowCentre,
+  sequenceCaption,
+  sequenceConnectors,
   setExceptionCaption,
   setExceptionOrder,
 } from './approach-layout'
 import type {
   OrderOverlayDiagram,
+  SequenceCollapseDiagram,
   SetExceptionDiagram,
   SetExceptionItem,
 } from './approach-diagram'
@@ -141,5 +146,92 @@ describe('overlay caption', () => {
     const out = orderOverlayCaption(overlay())
     expect(out.toLowerCase()).toContain(overlay().finding.toLowerCase())
     expect(out).not.toMatch(/\d/)
+  })
+})
+
+// APPROACH-VISUAL-PRD.md §8.2's worked example, step for step.
+const sequence = (over: Partial<SequenceCollapseDiagram> = {}): SequenceCollapseDiagram => {
+  const before: SequenceCollapseDiagram['before'] = [
+    { label: 'Select plan', fate: 'kept' },
+    { label: 'Billing address', fate: 'kept' },
+    { label: 'Card details', fate: 'kept' },
+    { label: 'Review order', fate: 'removed' },
+    { label: 'Confirm email', fate: 'removed' },
+    { label: 'Place order', fate: 'kept' },
+  ]
+  return {
+    template: 'sequence-collapse',
+    before,
+    after: before.filter((s) => s.fate === 'kept').map((s) => s.label),
+    reason: null,
+    text_equivalent: '',
+    ...over,
+  }
+}
+
+describe('sequence geometry', () => {
+  // §5.2: "Pitch 36 in both columns, identical. This number is load-bearing:
+  // connectors land on mark centres and any drift is visible immediately." The
+  // PRD states its positions from the frame's top, which is 82 above the first
+  // row; these are from the column's own top, so the two differ by that 82 and
+  // by nothing else.
+  it("lands on the row centres §8.2 lists, offset by the column's top", () => {
+    const FRAME_TOP = 82
+    expect([0, 1, 2, 3, 4, 5].map((i) => rowCentre(i) + FRAME_TOP)).toEqual([
+      94, 130, 166, 202, 238, 274,
+    ])
+  })
+
+  it('gives a column of six rows the height six marks and five gaps need', () => {
+    expect(columnHeight(6)).toBe(5 * 36 + 24)
+    expect(columnHeight(1)).toBe(24)
+    expect(columnHeight(0)).toBe(0)
+  })
+
+  // §8.2: "three horizontal at y 94 / 130 / 166, one slanting from y 274 up to
+  // y 202. The slant is the compression."
+  it('draws one connector per survivor, three level and one slanting', () => {
+    const FRAME_TOP = 82
+    const drawn = sequenceConnectors(sequence()).map((c) => ({
+      from: c.from + FRAME_TOP,
+      to: c.to + FRAME_TOP,
+    }))
+    expect(drawn).toEqual([
+      { from: 94, to: 94 },
+      { from: 130, to: 130 },
+      { from: 166, to: 166 },
+      { from: 274, to: 202 },
+    ])
+    expect(drawn.filter((c) => c.from !== c.to)).toHaveLength(1)
+  })
+
+  it('draws nothing for a removed step', () => {
+    expect(sequenceConnectors(sequence())).toHaveLength(4)
+  })
+})
+
+describe('sequence caption', () => {
+  // §5.2's formula, with its numerals and the designer's own capitalisation.
+  // §8.2 renders the same caption as prose — "Six steps became four — review
+  // order and…" — and the formula is what binds: spelling the counts out is
+  // presentation, but lowercasing the labels would be editing what was typed.
+  it('follows the formula and leaves the labels as they were typed', () => {
+    expect(sequenceCaption(sequence())).toBe(
+      '6 steps became 4 — Review order and Confirm email were removed entirely.'
+    )
+  })
+
+  it('agrees with its count when only one step went', () => {
+    const before = sequence().before.map((s, i) =>
+      i === 4 ? { ...s, fate: 'kept' as const } : s
+    )
+    const one = sequence({ before, after: before.filter((s) => s.fate === 'kept').map((s) => s.label) })
+    expect(sequenceCaption(one)).toContain('Review order was removed')
+  })
+
+  it("carries the designer's reason in place of the closing word", () => {
+    expect(sequenceCaption(sequence({ reason: 'the card screen was the provider\'s' }))).toBe(
+      "6 steps became 4 — Review order and Confirm email were removed because the card screen was the provider's."
+    )
   })
 })

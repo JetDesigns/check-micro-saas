@@ -235,7 +235,100 @@ const landingTiebacks: Tieback[] = [
   { decisionId: MIGRATION, painPoint: 'who does the data migration was answered in a footnote under the FAQ' },
 ]
 
-export type FixtureName = 'handover' | 'handover-measured' | 'landing-rewrite'
+// ---------------------------------------------------------------------------
+// A flow project
+// ---------------------------------------------------------------------------
+//
+// The third side of step 4's fork, and the only fixture that reaches
+// `sequence-collapse`. Seven steps down to four, which clears §5.2's reduction
+// gate — two is the floor, because a single-step reduction does not read as a
+// reduction.
+
+const GUEST = 'fixture-dec-guest'
+const ADDRESS = 'fixture-dec-address'
+const SLOT = 'fixture-dec-slot'
+
+const checkoutDecisions: Decision[] = [
+  {
+    id: GUEST,
+    decided: 'Let people pay without making an account',
+    prior_behaviour: 'Checkout opened on a sign-up form',
+    consequence: 'Somebody buying once never makes an account they will not use again',
+    why: 'Two thirds of the people who left did it on the sign-up screen, before they had seen a delivery price.',
+    rejected:
+      'Social sign-in. It is a faster way through a screen that did not need to be there.',
+    client_request: '"Checkout is too long and people drop out."',
+  },
+  {
+    id: ADDRESS,
+    decided: 'Fill the address from the postcode instead of asking for it',
+    prior_behaviour: 'Five fields, typed out, one of them the city',
+    consequence: 'An address takes one field and a choice rather than five fields',
+    why: 'The delivery address and the billing address were asked separately and were the same on nearly every order.',
+    rejected: 'Remembering the last address. It helps the second order and not the first.',
+    relations: { repeated_treatment: true },
+  },
+  {
+    id: SLOT,
+    decided: 'Put the delivery slot on the same screen as the basket',
+    prior_behaviour: 'The slot was chosen two screens after the basket',
+    consequence: 'Nobody reaches payment and finds out that nothing arrives before Friday',
+    why: 'People were getting to payment before they learned the earliest slot was four days out, and that is where they stopped.',
+    rejected:
+      'A delivery estimate on the basket. An estimate is the thing they would have to come back and check.',
+    relations: { depends_on: GUEST },
+  },
+]
+
+function checkoutState(): WizardState {
+  const state = emptyWizardState()
+  state.text = {
+    title: 'Shortening checkout for a grocery delivery service',
+    product_and_users:
+      'A grocery delivery service. People order a weekly shop on their phone, mostly in the evening.',
+    client_type: 'A regional grocery delivery company',
+    year: '2025',
+    duration: '6 weeks',
+    role: 'Product designer',
+
+    reported_problem: 'Checkout is too long and people drop out.',
+    diagnosis:
+      'Checkout opened on a sign-up form, and two thirds of the people who left did it there, before they had seen a delivery price. The address was five typed fields asked twice, once for delivery and once for billing. The delivery slot came two screens after the basket, so people reached payment before they learned the earliest slot was four days out.',
+    cost_to_client:
+      'About a fifth of full baskets were abandoned after the basket screen, every evening.',
+
+    flow_steps:
+      'Basket, Sign up, Delivery address, Billing address, Delivery slot, Payment, Confirm',
+
+    constraints:
+      'The payment provider owned the card screen, so nothing on it could change.',
+
+    team_change:
+      'Support stopped getting calls asking why an order had not arrived yet. The slot is on the basket now, so nobody is surprised by it.',
+    client_response: '"We stopped talking about checkout in the weekly numbers."',
+  }
+  state.shape = 'one_flow'
+  // Seven steps to four. Sign up went, the two address screens became one, and
+  // the slot moved onto the basket rather than being its own step.
+  state.stepsRemoved = ['Sign up', 'Billing address', 'Delivery slot']
+  state.collaborators = [{ name: 'Dani Okafor', role: 'Operations lead' }]
+  state.provenance = 'analytics'
+  state.outcome = 'shipped'
+  state.decisions = checkoutDecisions.map((d) => ({ ...d }))
+  return state
+}
+
+const checkoutTiebacks: Tieback[] = [
+  { decisionId: GUEST, painPoint: 'two thirds of the people who left did it on the sign-up screen' },
+  { decisionId: ADDRESS, painPoint: 'the address was five typed fields asked twice' },
+  { decisionId: SLOT, painPoint: 'people reached payment before learning the earliest slot was four days out' },
+]
+
+export type FixtureName =
+  | 'handover'
+  | 'handover-measured'
+  | 'landing-rewrite'
+  | 'checkout-collapse'
 
 export type Fixture = {
   name: FixtureName
@@ -271,6 +364,13 @@ const BUILDERS: Record<FixtureName, () => Omit<Fixture, 'name'>> = {
     projectType: 'focused_fix',
     tone: 'professional',
     tiebacks: landingTiebacks,
+  }),
+  'checkout-collapse': () => ({
+    description: 'The flow branch of step 4: the only fixture that reaches sequence-collapse.',
+    state: checkoutState(),
+    projectType: 'focused_fix',
+    tone: 'professional',
+    tiebacks: checkoutTiebacks,
   }),
 }
 

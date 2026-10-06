@@ -26,6 +26,7 @@ import {
 import type {
   Collaborator,
   Decision,
+  FlowStep,
   ImageNote,
   ImageSlot,
   Intake,
@@ -275,6 +276,18 @@ export const SECTION_CHIPS = {
   perSection: 'What happened to each one?',
 } as const
 
+/**
+ * The third side of the fork: one flow, by its steps.
+ *
+ * One tap per step and it is binary, where the page question is a tri-state —
+ * a step either survived or it did not. Phrased as what is GONE rather than
+ * what was deleted, because §5.2 counts a step merged into another as removed
+ * and "deleted" would read as excluding it.
+ */
+export const FLOW_CHIPS = {
+  removed: 'Which of them are gone now?',
+} as const
+
 /** Added, kept or cut, in the order the diagram's categories list them. */
 export const SECTION_FATES: ReadonlyArray<{ value: SectionFate; label: string }> = [
   { value: 'added', label: 'Added' },
@@ -497,6 +510,19 @@ export function reconcileFates(
  * Built from the section list rather than from the fate map, because the map
  * has no order to give and the page's order is the only axis the diagram has.
  */
+/**
+ * The ordered array that lands in the jsonb. Index is the flow's order.
+ *
+ * Binary rather than a fate map: a step survived or it did not, and `removed`
+ * is absent rather than false so the two states cannot be half-read.
+ */
+export function buildFlowSteps(
+  steps: readonly string[],
+  removed: readonly string[]
+): FlowStep[] {
+  return steps.map((label) => (removed.includes(label) ? { label, removed: true } : { label }))
+}
+
 export function buildPageSections(
   sections: readonly string[],
   assigned: Record<string, SectionFate>
@@ -541,6 +567,8 @@ export type WizardState = {
    * `buildIntake` is the one place the two meet.
    */
   sectionFates: Record<string, SectionFate>
+  /** Steps of the flow that are gone. Always a subset of what the answer holds. */
+  stepsRemoved: string[]
   /** In final order. Index here becomes case_study_attachments.order_index. */
   attachments: Attachment[]
 }
@@ -573,6 +601,7 @@ export function emptyWizardState(): WizardState {
     areasFromScratch: [],
     shape: null,
     sectionFates: {},
+    stepsRemoved: [],
     attachments: [],
   }
 }
@@ -660,12 +689,22 @@ export function buildIntake(state: WizardState): Intake {
       if (worked.length > 0) intake.product_areas_worked = worked
       if (fromScratch.length > 0) intake.product_areas_new = fromScratch
     }
-  } else {
+  } else if (shape === 'single_page') {
     const sections = parseAreas(state.text.page_sections)
     if (sections.length > 0) {
       intake.page_sections_ordered = buildPageSections(
         sections,
         reconcileFates(sections, state.sectionFates)
+      )
+    }
+  } else {
+    const steps = parseAreas(state.text.flow_steps)
+    if (steps.length > 0) {
+      // Reconciled against the answer the taps were made from, like the two
+      // branches above: a step renamed after it was tapped is a claim nobody made.
+      intake.flow_steps_ordered = buildFlowSteps(
+        steps,
+        state.stepsRemoved.filter((n) => steps.includes(n))
       )
     }
   }
@@ -973,8 +1012,11 @@ function section(step: StepId, entries: ReviewEntry[]): ReviewSection {
  * everything else was asked the one that came before the fork.
  */
 export function intakeShape(intake: Intake): WorkShape {
-  const page = intake.page_sections || intake.page_pattern || intake.page_sections_ordered
-  return page ? 'single_page' : 'separate_parts'
+  if (intake.flow_steps || intake.flow_steps_ordered) return 'one_flow'
+  if (intake.page_sections || intake.page_pattern || intake.page_sections_ordered) {
+    return 'single_page'
+  }
+  return 'separate_parts'
 }
 
 function textEntries(step: FieldStep, intake: Intake): ReviewEntry[] {

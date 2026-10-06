@@ -105,6 +105,7 @@ export function StudioForm() {
   const [areasFromScratch, setAreasFromScratch] = useState<string[]>([])
   const [shape, setShape] = useState<WorkShape | null>(null)
   const [sectionFates, setSectionFates] = useState<Record<string, SectionFate>>({})
+  const [stepsRemoved, setStepsRemoved] = useState<string[]>([])
   const [saved, setSaved] = useState<SavedRow | null>(null)
 
   const [isBusy, setIsBusy] = useState(false)
@@ -129,6 +130,7 @@ export function StudioForm() {
     areasFromScratch,
     shape,
     sectionFates,
+    stepsRemoved,
     attachments,
   }
 
@@ -176,6 +178,7 @@ export function StudioForm() {
           setAreasFromScratch(f.state.areasFromScratch)
           setShape(f.state.shape)
           setSectionFates(f.state.sectionFates)
+          setStepsRemoved(f.state.stepsRemoved)
           setAttachments([])
           setProjectType(f.projectType)
           setTone(f.tone)
@@ -226,6 +229,7 @@ export function StudioForm() {
         setAreasFromScratch(draft.areasFromScratch)
         setShape(draft.shape)
         setSectionFates(draft.sectionFates)
+        setStepsRemoved(draft.stepsRemoved)
         setProjectType(draft.projectType)
         setTone(draft.tone)
         setAttachments(restored)
@@ -259,6 +263,7 @@ export function StudioForm() {
       areasFromScratch,
       shape,
       sectionFates,
+      stepsRemoved,
       attachments,
       saved,
     })
@@ -561,6 +566,8 @@ export function StudioForm() {
             onShapeChange={setShape}
             sectionFates={sectionFates}
             onSectionFatesChange={setSectionFates}
+            stepsRemoved={stepsRemoved}
+            onStepsRemovedChange={setStepsRemoved}
             text={text}
             onTextChange={setTextValue}
             disabled={isBusy}

@@ -1,6 +1,6 @@
 # Check — Approach Visual System (Focused Fix)
 
-Version 1.5 · Scope: the `focused fix` project category only.
+Version 1.6 · Scope: the `focused fix` project category only.
 
 Technical appendix to §9 of `prompts/focused-fix-output.md`, which holds the structural
 decision — that the block exists, when it appears, and what happens when it does not. This
@@ -18,6 +18,11 @@ Kept** and its `finding` now **comes from a wizard field**; §6's selection **ga
 contract before choosing among the survivors** rather than gating only the winner; and
 new open item 5 records that `order-overlay` **has no legal encoding**, which blocks its
 renderer alongside item 3.
+
+**Changed in 1.6**, from building `sequence-collapse`: it is **no longer deferred** — it has
+a contract, gates, a wizard branch and a renderer, so all three templates are live. §5.2's
+columns are **responsive**, with 129 falling out of the 342 cap rather than being fixed, and
+its connectors are **SVG**, the only part of the system drawn that way.
 
 **Changed in 1.5**, from building `order-overlay`'s renderer: §5.3's encoding is
 **rewritten against §9** — two fill states on present-against-absent, the category word in
@@ -83,8 +88,10 @@ remedy then came due: `order-overlay` could not be filled from any
 existing field, so it never fired, and §7 says in terms that this is
 evidence for adding a wizard field rather than for relaxing a gate. Step 4
 now asks which shape the work had — a product with separate parts, or a
-single page — and the page branch adds two answers: the sections in order,
-and what the designer noticed about where they sat. No gate was loosened.
+single page, or one flow — and each branch asks its own question: the page
+branch wants the sections in order and what the designer noticed about where
+they sat, the flow branch wants the steps start to finish and which are gone.
+No gate was loosened.
 
 What has NOT changed is the division of labour above: the agent still
 never draws, still never writes either contract, and is still told nothing
@@ -368,12 +375,33 @@ A single-step reduction does not read as a reduction.
 - Right column holds surviving steps only, `emphasised`. It is the only
   full-weight element in the frame.
 - Connectors: one per surviving step, from its left-column centre to its
-  right-column centre, in the 84px channel from x 212 to x 296. 1px,
-  dotted, `Border/Strong`, round caps, behind the marks. No curves, no
-  arrowheads, no endpoint dots.
+  right-column centre, in the 84px channel. 1px, dotted, `Border/Strong`,
+  round caps, behind the marks. No curves, no arrowheads, no endpoint dots.
 - The space below the shorter right column stays empty. Never centre the
   columns against each other — the slant of the connectors is the
   compression.
+
+> **The columns are responsive; 129 is what the cap produces, not a fixed
+> width.** The strip is capped at 342 and the channel is 84, so at the 568
+> column each side gets (342 − 84) ÷ 2 = **129**, which is the figure above
+> exactly. At the 343 column they give way to 104.5 and the longer step names
+> truncate. The x coordinates 212 and 296 are dropped: they described one
+> frame width and there is now more than one.
+>
+> Each column has to be declared `minmax(0, 1fr)` rather than `1fr`. A bare
+> `1fr` carries an automatic min-content floor, so a long step name pushes its
+> column past its share and the pair overflows the frame — which is what
+> happened at 343 before the floor was stated as 0.
+>
+> **The connectors are the one thing in this system drawn as SVG**, because a
+> line between two points is what HTML cannot do. Everything else stays HTML,
+> so labels still truncate to their measured box. The SVG stretches
+> horizontally only — `preserveAspectRatio="none"` against a viewBox 100 units
+> wide — so the channel can be any width the layout leaves it while the row
+> centres stay in exact pixel step with the marks beside them. §5.2 calls the
+> pitch load-bearing because "any drift is visible immediately", so both the
+> marks and the connectors read their y from one function. Measured in the
+> browser at both column widths: **drift 0px**.
 
 **Caption**
 ```

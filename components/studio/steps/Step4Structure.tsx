@@ -16,6 +16,7 @@ import {
 import {
   AREA_CHIPS,
   DISCLOSURE,
+  FLOW_CHIPS,
   RELATION_CHIPS,
   SECTION_CHIPS,
   SECTION_FATES,
@@ -40,6 +41,8 @@ type Props = {
   onShapeChange: (shape: WorkShape) => void
   sectionFates: Record<string, SectionFate>
   onSectionFatesChange: (fates: Record<string, SectionFate>) => void
+  stepsRemoved: string[]
+  onStepsRemovedChange: (removed: string[]) => void
   disabled: boolean
 }
 
@@ -72,6 +75,8 @@ export function Step4Structure({
   onShapeChange,
   sectionFates,
   onSectionFatesChange,
+  stepsRemoved,
+  onStepsRemovedChange,
   disabled,
 }: Props) {
   const named = decisions.filter((d) => d.decided.trim())
@@ -88,6 +93,9 @@ export function Step4Structure({
 
   const sections = parseAreas(text.page_sections)
   const fates = reconcileFates(sections, sectionFates)
+
+  const steps = parseAreas(text.flow_steps)
+  const removed = stepsRemoved.filter((n) => steps.includes(n))
 
   // One filter, never a hand-written list beside it: a key named in both would
   // render its input twice, which reads as the field having broken.
@@ -171,6 +179,19 @@ export function Step4Structure({
             />
           ))}
         </div>
+      )}
+
+      {/* One tap per step, binary: a step survived or it did not. §5.2 counts a
+          step merged into another as removed, which is why the question asks
+          what is gone rather than what was deleted. */}
+      {shape === 'one_flow' && steps.length > 0 && (
+        <ChipRow
+          legend={FLOW_CHIPS.removed}
+          names={steps}
+          pressed={(name) => removed.includes(name)}
+          onToggle={(name) => onStepsRemovedChange(toggleName(removed, name))}
+          disabled={disabled}
+        />
       )}
 
       {named.length === 0 ? (

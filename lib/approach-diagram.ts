@@ -28,7 +28,7 @@
 // the section it was read from, because a number with no source is a number
 // somebody will round.
 
-import type { Intake, PageSection, SectionFate } from '@/types/database'
+import type { FlowStep, Intake, PageSection, SectionFate } from '@/types/database'
 
 /** Carried by every template, whatever its shape. */
 type DiagramTail = {
@@ -71,7 +71,26 @@ export type OrderOverlayDiagram = DiagramTail & {
   finding: string
 }
 
-export type ApproachDiagram = SetExceptionDiagram | OrderOverlayDiagram
+/** One step of the flow as drawn. `note` is specified; nothing supplies it yet. */
+export type SequenceStep = {
+  label: string
+  fate: 'kept' | 'removed'
+  /** PRD §5.2: the user's own word, shortened. No wizard field collects one. */
+  note?: string
+}
+
+export type SequenceCollapseDiagram = DiagramTail & {
+  template: 'sequence-collapse'
+  /** Every step, in flow order. */
+  before: SequenceStep[]
+  /** Derived: the labels of the steps that survived, in the same order. */
+  after: string[]
+}
+
+export type ApproachDiagram =
+  | SetExceptionDiagram
+  | OrderOverlayDiagram
+  | SequenceCollapseDiagram
 
 // Guards rather than comparisons at the call site: an optional chain never
 // narrows a union, so `page.diagram?.items` does not compile and reaching for a
@@ -81,10 +100,19 @@ export const isSetException = (d: ApproachDiagram): d is SetExceptionDiagram =>
   d.template === 'set-exception'
 export const isOrderOverlay = (d: ApproachDiagram): d is OrderOverlayDiagram =>
   d.template === 'order-overlay'
+export const isSequenceCollapse = (d: ApproachDiagram): d is SequenceCollapseDiagram =>
+  d.template === 'sequence-collapse'
 
 // PRD §5.1 — set-exception's gates.
 export const SET_MIN = 4
 export const SET_MAX = 8
+
+// PRD §5.2 — sequence-collapse's gates.
+export const STEP_MIN = 4
+export const STEP_MAX = 8
+export const SURVIVOR_MIN = 2
+/** A single-step reduction does not read as a reduction (§5.2). */
+export const MIN_REDUCTION = 2
 
 // PRD §5.3 — order-overlay's gates.
 export const SECTION_MIN = 5
@@ -201,6 +229,94 @@ export function gateSetException(c: SetExceptionDiagram): string[] {
   }
 
   return failed
+}
+
+// ---------------------------------------------------------------------------
+// sequence-collapse
+// ---------------------------------------------------------------------------
+//
+// One flow, by its steps, where the flow got shorter. The only template whose
+// claim is a quantity — how much of a path people actually walk was taken out —
+// which is why its gates are about the SIZE of the reduction rather than about
+// the shape of the data.
+//
+// §5.2 names two refusals this cannot enforce, both recorded rather than faked:
+// "the flow was reordered but not shortened" is caught by the reduction gate
+// below only when nothing was removed, and a reorder with a removal is
+// indistinguishable here from a plain removal — the wizard asks for the steps
+// as they were, not as they became. "The steps are phases of the designer's
+// process" is guarded by `isProcessWord`, which DOES apply here: a flow is the
+// one place where "Discovery, Research, Handoff" is a plausible wrong answer,
+// because a process is itself a sequence and reads as one.
+
+export function gateSequenceCollapse(c: SequenceCollapseDiagram): string[] {
+  const failed: string[] = []
+
+  if (c.before.length < STEP_MIN || c.before.length > STEP_MAX) {
+    failed.push(
+      `there are ${c.before.length} steps; the flow has to hold ${STEP_MIN} to ${STEP_MAX}`
+    )
+  }
+
+  const survivors = c.before.filter((s) => s.fate === 'kept')
+  if (c.after.length !== survivors.length) {
+    failed.push(`after has ${c.after.length} steps and ${survivors.length} survived`)
+  }
+  if (c.after.length < SURVIVOR_MIN) {
+    failed.push(
+      `${c.after.length} steps are left; a flow needs ${SURVIVOR_MIN} to still be a flow`
+    )
+  }
+
+  // §5.2's whole argument: a single-step reduction does not read as a reduction.
+  const cut = c.before.length - c.after.length
+  if (cut < MIN_REDUCTION) {
+    failed.push(
+      `${cut} ${cut === 1 ? 'step was' : 'steps were'} removed; it takes ${MIN_REDUCTION} before a flow reads as shorter`
+    )
+  }
+
+  for (const step of c.before) {
+    if (step.label.trim() === '') failed.push('a step has no label')
+    else if (isProcessWord(step.label)) {
+      failed.push(`"${step.label}" names a phase of the designer's process, not a step of the flow`)
+    }
+  }
+
+  return failed
+}
+
+/**
+ * The sequence-collapse contract this project supports, or null.
+ *
+ * `after` is DERIVED and never asked. §5.2 defines it as "the labels of the
+ * steps that survived", so asking would be asking the same question twice and
+ * inviting the two answers to disagree.
+ */
+function buildSequenceCollapse(intake: Intake): SequenceCollapseDiagram | null {
+  const rows: FlowStep[] = intake.flow_steps_ordered ?? []
+  if (rows.length === 0) return null
+
+  const before: SequenceStep[] = rows.map((r) => ({
+    label: r.label,
+    fate: r.removed ? 'removed' : 'kept',
+  }))
+  const after = before.filter((s) => s.fate === 'kept').map((s) => s.label)
+  const removed = before.filter((s) => s.fate === 'removed').map((s) => s.label)
+
+  const contract: SequenceCollapseDiagram = {
+    template: 'sequence-collapse',
+    before,
+    after,
+    // No field supplies a reason and the PRD forbids inferring one.
+    reason: null,
+    text_equivalent:
+      `A flow of ${before.length} steps became ${after.length}. ` +
+      `The steps that remain: ${after.join(', ')}. ` +
+      `${removed.join(', ')} ${removed.length === 1 ? 'was' : 'were'} removed.`,
+  }
+
+  return gateSequenceCollapse(contract).length === 0 ? contract : null
 }
 
 // ---------------------------------------------------------------------------
@@ -408,7 +524,8 @@ function buildOrderOverlay(intake: Intake): OrderOverlayDiagram | null {
  * is no fallback form and no placeholder — the floor form that guaranteed one
  * was deleted for drawing a near-identical picture for two unrelated projects.
  *
- * BOTH contracts are filled and BOTH are gated, and set-exception wins among
+ * EVERY contract is filled and EVERY one is gated, and §6's fixed priority —
+ * sequence-collapse, then set-exception, then order-overlay — picks among
  * whichever passed. That is a deliberate deviation from PRD §6 steps 3 and 4,
  * which select on completeness and then gate only the winner: under that order
  * a project with four named areas and no exception loses to nothing — its
@@ -422,7 +539,9 @@ function buildOrderOverlay(intake: Intake): OrderOverlayDiagram | null {
  * covers hand-built intakes, fixtures, and rows written before the fork existed.
  */
 export function buildApproachDiagram(intake: Intake): ApproachDiagram | null {
+  // §6's fixed order, B then A then C, applied to whichever passed its gates.
+  const sequence = buildSequenceCollapse(intake)
   const set = buildSetException(intake)
   const overlay = buildOrderOverlay(intake)
-  return set ?? overlay
+  return sequence ?? set ?? overlay
 }

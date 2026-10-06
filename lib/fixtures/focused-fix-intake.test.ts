@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { FIXTURE_NAMES, fixtureIntake, getFixture, isFixtureName } from './focused-fix-intake'
-import { buildApproachDiagram, isOrderOverlay, isSetException } from '@/lib/approach-diagram'
+import {
+  buildApproachDiagram,
+  isOrderOverlay,
+  isSequenceCollapse,
+  isSetException,
+} from '@/lib/approach-diagram'
 import { compileBlockers, evidenceBranch, intakeShape, mixedFigure } from '@/lib/wizard-steps'
 import type { Intake } from '@/types/database'
 
@@ -85,6 +90,20 @@ describe('the two shapes of work', () => {
     expect(diagram.finding).toBe(
       'the two sections nobody asked for sat between the price and the migration answer'
     )
+  })
+
+  it('a flow project gets the collapse, because it answered the steps question', () => {
+    const intake = fixtureIntake('checkout-collapse')
+    expect(intakeShape(intake)).toBe('one_flow')
+    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.page_sections_ordered).toBeUndefined()
+
+    const diagram = buildApproachDiagram(intake)!
+    expect(isSequenceCollapse(diagram)).toBe(true)
+    if (!isSequenceCollapse(diagram)) return
+    // Seven steps to four clears §5.2's floor of two; a one-step cut would not.
+    expect(diagram.before).toHaveLength(7)
+    expect(diagram.after).toEqual(['Basket', 'Delivery address', 'Payment', 'Confirm'])
   })
 
   // The gap the finding is a claim about. If a fate key stops matching the

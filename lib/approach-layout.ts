@@ -16,6 +16,7 @@
 
 import type {
   OrderOverlayDiagram,
+  SequenceCollapseDiagram,
   SetExceptionDiagram,
   SetExceptionItem,
 } from '@/lib/approach-diagram'
@@ -133,4 +134,69 @@ export function orderOverlayCaption(d: OrderOverlayDiagram): string {
   if (t === '') return ''
   const opened = t[0].toUpperCase() + t.slice(1)
   return /[.!?]$/.test(opened) ? opened : `${opened}.`
+}
+
+// ---------------------------------------------------------------------------
+// sequence-collapse
+// ---------------------------------------------------------------------------
+//
+// THE ONE GEOMETRY THAT NEEDS SVG. The other two are boxes, which HTML draws
+// better; this one has connectors running between two columns at an angle, and
+// a line between two points is what SVG is for.
+//
+// §4's pitch of 36 is load-bearing here in a way it is not elsewhere: "connectors
+// land on mark centres and any drift is visible immediately". So the row centres
+// are computed once, here, and both the marks and the connectors read them from
+// the same function rather than each deriving its own.
+
+/** §4: mark height 24, vertical pitch 36. */
+export const MARK_HEIGHT = 24
+export const ROW_PITCH = 36
+
+/** The centre of row `i`, in the same units both columns are laid out in. */
+export function rowCentre(i: number): number {
+  return MARK_HEIGHT / 2 + i * ROW_PITCH
+}
+
+/** The height a column of `n` rows occupies: n marks and n-1 gaps. */
+export function columnHeight(n: number): number {
+  return n === 0 ? 0 : (n - 1) * ROW_PITCH + MARK_HEIGHT
+}
+
+export type Connector = { from: number; to: number }
+
+/**
+ * One connector per surviving step, left-column centre to right-column centre.
+ *
+ * The slant IS the compression (§5.2), which is why the right column starts at
+ * the same top as the left and simply ends earlier: "The space below the shorter
+ * right column stays empty. Never centre the columns against each other."
+ */
+export function sequenceConnectors(d: SequenceCollapseDiagram): Connector[] {
+  const out: Connector[] = []
+  let survivor = 0
+  d.before.forEach((step, i) => {
+    if (step.fate !== 'kept') return
+    out.push({ from: rowCentre(i), to: rowCentre(survivor) })
+    survivor += 1
+  })
+  return out
+}
+
+/** `a, b and c` — an English list, because the caption is a sentence. */
+function listOf(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+/**
+ * §5.2's caption formula: `{n} steps became {m} — {removed, listed} were
+ * removed entirely.` Pluralised, as §5.2 asks ("Pluralise correctly").
+ */
+export function sequenceCaption(d: SequenceCollapseDiagram): string {
+  const removed = d.before.filter((s) => s.fate === 'removed').map((s) => s.label)
+  const verb = removed.length === 1 ? 'was' : 'were'
+  const head = `${d.before.length} steps became ${d.after.length} — ${listOf(removed)} ${verb} removed`
+  // Stated by the designer or absent. Never inferred (PRD §8).
+  return d.reason ? `${head} because ${d.reason}.` : `${head} entirely.`
 }

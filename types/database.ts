@@ -200,6 +200,16 @@ export type Intake = {
   page_sections?: string
   page_pattern?: string
   page_sections_ordered?: PageSection[]
+
+  /**
+   * One flow's steps, in the order someone walks them, and which are gone.
+   *
+   * The third side of step 4's fork and the source for `sequence-collapse`.
+   * Same shape of answer as the two above: a list the designer types, and a
+   * tap per entry. Order is the flow, so it is an array.
+   */
+  flow_steps?: string
+  flow_steps_ordered?: FlowStep[]
   authority_split?: string       // I17 — only where a split genuinely shaped the work
 
   // --- Step 5 — where it landed -------------------------------------------
@@ -261,6 +271,16 @@ export type SectionFate = 'added' | 'kept' | 'cut'
  * travel as a fate whose name happens to be blank.
  */
 export type PageSection = { label: string; fate?: SectionFate }
+
+/**
+ * One step of one flow, in the order someone walks it.
+ *
+ * `removed` is ABSENT where the step survived, for the same reason `fate` is on
+ * PageSection: a flag that is only ever true or missing cannot be half-read.
+ * A step the designer merged into another counts as removed — PRD §5.2 — which
+ * is why the question asks what is gone rather than what was deleted.
+ */
+export type FlowStep = { label: string; removed?: true }
 
 export type Tieback = { decisionId: string; painPoint: string }
 

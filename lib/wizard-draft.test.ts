@@ -32,6 +32,7 @@ function input(over: Partial<DraftInput> = {}): DraftInput {
     areasFromScratch: [],
     shape: null,
     sectionFates: {},
+    stepsRemoved: [],
     attachments: [],
     saved: null,
     ...over,

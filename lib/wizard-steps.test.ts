@@ -10,6 +10,7 @@ import {
   DISCOURAGING_WORDS,
   RELATION_CHIPS,
   SCREEN_FIELDS,
+  FLOW_CHIPS,
   SECTION_CHIPS,
   SECTION_FATES,
   SLOT_ENTRY_LABELS,
@@ -22,6 +23,7 @@ import {
   parseAreas,
   reconcileAreas,
   assignFate,
+  buildFlowSteps,
   buildPageSections,
   intakeShape,
   reconcileFates,
@@ -460,6 +462,7 @@ describe('copy rules', () => {
       // Step 4's fork and the chips on both sides of it.
       ...Object.values(AREA_CHIPS),
       ...Object.values(SECTION_CHIPS),
+      ...Object.values(FLOW_CHIPS),
       ...SECTION_FATES.map((f) => f.label),
       ...WORK_SHAPE_OPTIONS.map((o) => o.label),
       // These three moved out of the step components during the copy pass.
@@ -685,6 +688,47 @@ describe('the product\'s parts', () => {
     const intake = buildIntake(state)
     expect(intake.product_areas_worked).toBeUndefined()
     expect(intake.product_areas_new).toBeUndefined()
+  })
+})
+
+describe("the flow's steps", () => {
+  const flow = (): ReturnType<typeof emptyWizardState> => {
+    const state = emptyWizardState()
+    state.shape = 'one_flow'
+    state.text.flow_steps = 'Basket, Sign up, Address, Payment, Confirm'
+    state.stepsRemoved = ['Sign up']
+    return state
+  }
+
+  it('keeps the walking order, with the gone ones flagged in place', () => {
+    expect(buildFlowSteps(['A', 'B', 'C'], ['B'])).toEqual([
+      { label: 'A' }, { label: 'B', removed: true }, { label: 'C' },
+    ])
+  })
+
+  // Absent rather than false, so the two states cannot be half-read.
+  it('writes no key at all for a step that survived', () => {
+    expect(buildFlowSteps(['A'], [])).toEqual([{ label: 'A' }])
+  })
+
+  it('carries the steps onto the intake and leaves the other branches alone', () => {
+    const intake = buildIntake(flow())
+    expect(intake.flow_steps_ordered?.map((x) => x.label)).toEqual([
+      'Basket', 'Sign up', 'Address', 'Payment', 'Confirm',
+    ])
+    expect(intake.flow_steps_ordered?.filter((x) => x.removed)).toHaveLength(1)
+    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.page_sections_ordered).toBeUndefined()
+  })
+
+  it('drops a tap whose step is no longer in the answer', () => {
+    const state = flow()
+    state.stepsRemoved = ['Sign up', 'Gift wrap']
+    expect(buildIntake(state).flow_steps_ordered?.filter((x) => x.removed)).toHaveLength(1)
+  })
+
+  it('reads the flow branch back off the row', () => {
+    expect(intakeShape(buildIntake(flow()))).toBe('one_flow')
   })
 })
 

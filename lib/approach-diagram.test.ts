@@ -2,15 +2,18 @@ import { describe, expect, it } from 'vitest'
 import {
   buildApproachDiagram,
   gateOrderOverlay,
+  gateSequenceCollapse,
   gateSetException,
   isOrderOverlay,
+  isSequenceCollapse,
   isSetException,
   type ApproachDiagram,
   type OrderOverlayDiagram,
+  type SequenceCollapseDiagram,
   type SetExceptionDiagram,
 } from './approach-diagram'
 import { fixtureIntake } from '@/lib/fixtures/focused-fix-intake'
-import type { Intake, PageSection } from '@/types/database'
+import type { FlowStep, Intake, PageSection } from '@/types/database'
 
 // One test per gate, plus each template's own worked example from the PRD,
 // which is the only thing here that proves the thresholds were read rather than
@@ -51,6 +54,45 @@ const overlay = (over: Partial<OrderOverlayDiagram> = {}): OrderOverlayDiagram =
   finding: 'everything cut sat in the middle of the page',
   reason: null,
   text_equivalent: 'Seven sections, and the two that were cut sat in the middle.',
+  ...over,
+})
+
+// §8.2's worked example: six steps to four.
+const sequence = (over: Partial<SequenceCollapseDiagram> = {}): SequenceCollapseDiagram => {
+  const before: SequenceCollapseDiagram['before'] = [
+    { label: 'Select plan', fate: 'kept' },
+    { label: 'Billing address', fate: 'kept' },
+    { label: 'Card details', fate: 'kept' },
+    { label: 'Review order', fate: 'removed' },
+    { label: 'Confirm email', fate: 'removed' },
+    { label: 'Place order', fate: 'kept' },
+  ]
+  return {
+    template: 'sequence-collapse',
+    before,
+    after: before.filter((x) => x.fate === 'kept').map((x) => x.label),
+    reason: null,
+    text_equivalent: '',
+    ...over,
+  }
+}
+
+const FLOW: FlowStep[] = [
+  { label: 'Basket' },
+  { label: 'Sign up', removed: true },
+  { label: 'Delivery address' },
+  { label: 'Billing address', removed: true },
+  { label: 'Payment' },
+  { label: 'Confirm' },
+]
+
+/** A flow project: neither of the other two questions was asked. */
+const flowIntake = (over: Partial<Intake> = {}): Intake => ({
+  ...fixtureIntake('handover'),
+  product_areas: undefined,
+  product_areas_worked: undefined,
+  product_areas_new: undefined,
+  flow_steps_ordered: FLOW,
   ...over,
 })
 
@@ -103,6 +145,11 @@ describe("the PRD's worked examples", () => {
   // §8.3, the same way: seven sections, three categories, "Added" across three.
   it('passes every order-overlay gate exactly as written', () => {
     expect(gateOrderOverlay(overlay())).toEqual([])
+  })
+
+  // §8.2: 4 <= 6 <= 8, after 4 >= 2, 4 <= 6 - 2.
+  it('passes every sequence-collapse gate exactly as written', () => {
+    expect(gateSequenceCollapse(sequence())).toEqual([])
   })
 
   it('fails when a required field is missing', () => {
@@ -216,6 +263,70 @@ describe('order-overlay gates', () => {
   })
 })
 
+describe('sequence-collapse gates', () => {
+  it('refuses a flow of three steps', () => {
+    const before = sequence().before.slice(0, 3)
+    const c = sequence({ before, after: before.filter((x) => x.fate === 'kept').map((x) => x.label) })
+    expect(gateSequenceCollapse(c).join(' ')).toContain('the flow has to hold 4 to 8')
+  })
+
+  it('refuses a flow of nine steps', () => {
+    const before = [...sequence().before, ...sequence().before.slice(0, 3)]
+    const c = sequence({ before, after: before.filter((x) => x.fate === 'kept').map((x) => x.label) })
+    expect(gateSequenceCollapse(c).join(' ')).toContain('the flow has to hold 4 to 8')
+  })
+
+  // §5.2's whole argument: a single-step reduction does not read as a reduction.
+  it('refuses a flow that lost only one step', () => {
+    const before = sequence().before.map((x, i) => (i === 4 ? { ...x, fate: 'kept' as const } : x))
+    const c = sequence({ before, after: before.filter((x) => x.fate === 'kept').map((x) => x.label) })
+    expect(gateSequenceCollapse(c).join(' ')).toContain('before a flow reads as shorter')
+  })
+
+  it('refuses a flow that lost nothing at all', () => {
+    const before = sequence().before.map((x) => ({ ...x, fate: 'kept' as const }))
+    const c = sequence({ before, after: before.map((x) => x.label) })
+    expect(gateSequenceCollapse(c).join(' ')).toContain('before a flow reads as shorter')
+  })
+
+  it('refuses a flow with fewer than two steps left, which is not a flow', () => {
+    const before = sequence().before.map((x, i) => (i > 0 ? { ...x, fate: 'removed' as const } : x))
+    const c = sequence({ before, after: ['Select plan'] })
+    expect(gateSequenceCollapse(c).join(' ')).toContain('to still be a flow')
+  })
+
+  it('catches an after list that disagrees with what survived', () => {
+    expect(gateSequenceCollapse(sequence({ after: ['Select plan'] })).join(' ')).toContain(
+      'survived'
+    )
+  })
+
+  // A process is itself a sequence, so this is the one template where naming
+  // the designer's phases is a plausible wrong answer rather than an odd one.
+  it('refuses a step that names the designer process', () => {
+    const before = [...sequence().before]
+    before[0] = { label: 'Discovery', fate: 'kept' }
+    expect(gateSequenceCollapse(sequence({ before })).join(' ')).toContain('process')
+  })
+})
+
+describe('building sequence-collapse from the intake', () => {
+  it('derives the after list from what survived, and never asks for it', () => {
+    const built = buildApproachDiagram(flowIntake())
+    expect(built && isSequenceCollapse(built)).toBe(true)
+    if (!built || !isSequenceCollapse(built)) return
+    expect(built.after).toEqual(['Basket', 'Delivery address', 'Payment', 'Confirm'])
+    expect(built.before).toHaveLength(6)
+  })
+
+  it('is null when the flow lost too little, rather than raising anything', () => {
+    const thin = flowIntake({
+      flow_steps_ordered: FLOW.map((x) => (x.label === 'Sign up' ? x : { label: x.label })),
+    })
+    expect(buildApproachDiagram(thin)).toBeNull()
+  })
+})
+
 describe('labels', () => {
   // The limit is the renderer's, and set-exception's specifically. A contract
   // that trimmed would store one geometry's layout as a fact about the work,
@@ -326,6 +437,17 @@ describe('building order-overlay from the intake', () => {
 })
 
 describe('choosing between the two', () => {
+  // §6's fixed order is B, then A, then C.
+  it('prefers sequence-collapse over everything else', () => {
+    const all = flowIntake({
+      product_areas_worked: ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations'],
+      product_areas_new: ['Escalations'],
+      page_sections_ordered: PAGE,
+      page_pattern: 'everything cut sat in the middle of the page',
+    })
+    expect(buildApproachDiagram(all)?.template).toBe('sequence-collapse')
+  })
+
   it('prefers set-exception when both contracts pass', () => {
     const both = pageIntake({
       product_areas_worked: ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations'],

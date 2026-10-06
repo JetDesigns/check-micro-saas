@@ -72,7 +72,7 @@ export type ToggleKey = 'client_may_be_named' | 'reported_verbatim' | 'has_measu
  * in the jsonb anybody has to interpret, and a row written before the fork
  * existed reads exactly as it always did.
  */
-export type WorkShape = 'separate_parts' | 'single_page'
+export type WorkShape = 'separate_parts' | 'single_page' | 'one_flow'
 
 // Phrased as two kinds of project, never as two kinds of diagram. The person is
 // describing their work; they are not picking a template, and they are never
@@ -80,6 +80,7 @@ export type WorkShape = 'separate_parts' | 'single_page'
 export const WORK_SHAPE_OPTIONS: ReadonlyArray<{ value: WorkShape; label: string }> = [
   { value: 'separate_parts', label: 'A product with separate parts' },
   { value: 'single_page', label: 'A single page' },
+  { value: 'one_flow', label: 'One flow people walk through' },
 ] as const
 
 export type IntakeField = {
@@ -335,6 +336,22 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     step: 4,
     branch: 'single_page',
     maxChars: 120,
+  },
+  {
+    // §9.5 and PRD §5.2, the same standing as the two answers above.
+    //
+    // "Start to finish" rather than "in order", because a flow has a direction
+    // and the one wrong answer here is a list of screens that do not follow one
+    // another. The helper names the test: somebody walks it.
+    key: 'flow_steps',
+    label: 'What were the steps, start to finish?',
+    placeholder: 'e.g. Basket, Sign in, Delivery address, Delivery time, Payment, Confirm, Receipt',
+    helper: 'The path someone actually walks, in the order they walk it.',
+    type: 'textarea',
+    required: false,
+    rows: 2,
+    step: 4,
+    branch: 'one_flow',
   },
   {
     key: 'constraints', // I14 + I15

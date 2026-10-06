@@ -76,6 +76,7 @@ export type Draft = {
   areasFromScratch: string[]
   shape: WorkShape | null
   sectionFates: Record<string, SectionFate>
+  stepsRemoved: string[]
   attachments: DraftAttachment[]
   saved: SavedRow | null
 }
@@ -103,7 +104,7 @@ export function toDraft(input: DraftInput, now: number = Date.now()): Draft {
 
 const STEPS: readonly unknown[] = [1, 2, 3, 4, 5, 'review']
 const SLOTS: readonly unknown[] = ['problem', 'before', 'after']
-const SHAPES: readonly unknown[] = ['separate_parts', 'single_page']
+const SHAPES: readonly unknown[] = ['separate_parts', 'single_page', 'one_flow']
 const FATES: readonly unknown[] = ['added', 'kept', 'cut']
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -176,6 +177,7 @@ export function parseDraft(raw: string | null | undefined): Draft | null {
     areasFromScratch: strings(value.areasFromScratch),
     shape: SHAPES.includes(value.shape) ? (value.shape as WorkShape) : null,
     sectionFates: fates(value.sectionFates),
+    stepsRemoved: strings(value.stepsRemoved),
     saved: (saved as SavedRow | null | undefined) ?? null,
   }
 }
