@@ -86,7 +86,7 @@ export function Step4Structure({
   // list is the common case — someone types eight parts, taps four, then renames
   // one — and a selection pointing at a name that is no longer on screen is a
   // claim nobody made.
-  const shape = shownShape(shapeProp)
+  const shape = shownShape(shapeProp, text)
 
   const areas = parseAreas(text.product_areas)
   const { worked, fromScratch } = reconcileAreas(areas, areasWorked, areasFromScratch)
@@ -113,9 +113,11 @@ export function Step4Structure({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* The fork. Two kinds of project, and the helper says outright what
-          picking one changes — a fork whose consequence is invisible reads as a
-          setting, and someone will wonder what the other one would have asked. */}
+      {/* The fork, and NOTHING IS PRESELECTED. It carried a default until two
+          real projects went through on it unnoticed — a one-page website and a
+          three-screen app, both filed as "a product with separate parts"
+          because that was simply what was already ticked. An unanswered
+          question has to look unanswered. */}
       <FormSelect
         legend={SECTION_CHIPS.fork}
         name="work_shape"

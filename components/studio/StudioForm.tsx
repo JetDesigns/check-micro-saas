@@ -588,7 +588,7 @@ export function StudioForm() {
           <Review
             sections={buildReview(intake, attachments)}
             blockers={blockers}
-            notes={reviewNotes(intake)}
+            notes={reviewNotes(intake, shape)}
             onJump={jumpTo}
           />
         )}

@@ -629,7 +629,9 @@ export function anyAnswered(
  * that both ran this and hand-named its branch keys would render one of them
  * twice, which reads as the input having broken.
  */
-export function fieldsForShape(shape: WorkShape): IntakeField[] {
+export function fieldsForShape(shape: WorkShape | null): IntakeField[] {
+  // `null` is the fork unanswered, and then NO branch field belongs: a question
+  // nobody has been asked yet is not a question somebody left blank.
   return INTAKE_FIELDS.filter((f) => !f.branch || f.branch === shape)
 }
 

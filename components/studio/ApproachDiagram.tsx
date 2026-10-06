@@ -266,6 +266,12 @@ function SequenceCollapse({
   )
 }
 
+// The floor form's mark. Everything the shared MARK has except the fixed
+// 24 height and the single line, both of which it has to give up — see the
+// note in `DecisionSet`.
+const FLOOR_MARK =
+  'box-border flex min-h-6 items-center rounded-[var(--studio-r-sm)] border px-3 py-1 text-[12px] leading-[1.3] tracking-[-0.12px]'
+
 /**
  * The decisions themselves, with the ones that built something marked.
  *
@@ -273,32 +279,47 @@ function SequenceCollapse({
  * and what it costs is written out above `gateDecisionSet` in
  * lib/approach-diagram.ts rather than here.
  *
- * A column rather than set-exception's grid, for a plain reason: these labels
- * are the designer's own decision sentences — "Freeze the note at shift
- * change" — and a 120px grid mark would show four words of one. The column
- * gives each its own line and truncates what will not fit.
+ * A column rather than set-exception's grid, because these labels are the
+ * designer's own decision sentences and a 120px grid mark would show four
+ * words of one.
+ *
+ * IT WRAPS TO TWO LINES, which is the one place any template departs from §4's
+ * fixed 24 mark height, and the departure is the point. The other three label
+ * marks with product nouns — "Patient Notes", "Plan prices" — which fit a line
+ * with room. These are sentences, and a real page came back reading "I
+ * redesign entire page and I wanted to make the page…", where the ellipsis
+ * took the half that said anything. §12 item 25 forbids rewriting them — they
+ * are the designer's own words — so the height gives way instead. Past two
+ * lines it still clips, and the full sentence stays on the title and in the
+ * text equivalent.
  *
  * Two fills AND a word, which §9 allows together: the fill shows the
  * exceptions as one mass, and the word is what names them, so no key is needed
  * (§9.3 gates 3 and 4).
  */
 function DecisionSet({ diagram }: { diagram: Extract<Contract, { template: 'decision-set' }> }) {
+  // Where nothing was built new the gutter is empty on every row, so it is not
+  // drawn at all rather than reserved against a word that never comes.
+  const hasGutter = diagram.new_count > 0
+
   return (
     <figure className={FRAME} aria-label={diagram.text_equivalent}>
       <div className="flex w-full max-w-[400px] flex-col gap-3" aria-hidden>
         {diagram.decisions.map((d) => (
-          <div key={d.label} className="flex w-full items-center gap-3">
+          <div key={d.label} className="flex w-full items-start gap-3">
             <div
               title={d.label}
-              className={`${MARK} min-w-0 flex-1 ${
+              className={`${FLOOR_MARK} min-w-0 flex-1 ${
                 d.kind === 'new' ? EXCEPTION_MARK : DEFAULT_MARK
               }`}
             >
-              <span className="overflow-hidden text-ellipsis">{d.label}</span>
+              <span className="line-clamp-2">{d.label}</span>
             </div>
-            <span className="w-14 shrink-0 text-[12px] leading-[1.2] tracking-[-0.12px] text-[var(--studio-text-soft)]">
-              {d.kind === 'new' ? 'New' : ''}
-            </span>
+            {hasGutter && (
+              <span className="w-14 shrink-0 py-1 text-[12px] leading-[1.3] tracking-[-0.12px] text-[var(--studio-text-soft)]">
+                {d.kind === 'new' ? 'New' : ''}
+              </span>
+            )}
           </div>
         ))}
       </div>

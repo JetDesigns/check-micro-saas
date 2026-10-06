@@ -8,6 +8,7 @@
 // markup. Step order, what gets written to the database, and what the review
 // screen says are exactly the parts worth guarding.
 
+import { buildApproachDiagram } from '@/lib/approach-diagram'
 import { SPINE_MAX, SPINE_MIN, containsDigit, countWords } from '@/lib/case-study-blocks'
 import {
   INTAKE_FIELDS,
@@ -85,6 +86,20 @@ export const WIZARD_COPY = {
     'Two decisions give the story something to compare. Add one more in step 3.',
   blockerNoDecisions:
     'Step 3 is where the case study comes from. Add two decisions before writing.',
+
+  // What step 4 buys, said as what the page gains rather than as anything
+  // about the answer. The person is told the picture will be built either way
+  // — they are choosing between two true pictures, not being told one is
+  // deficient, and the discouraging-word rule covers these like everything
+  // else here.
+  noteDiagramUnforked:
+    'Approach will carry a picture of your decisions. Step 4 asks what shape the work had — a product with separate parts, a single page, or one flow — and answering it draws the work itself instead.',
+  noteDiagramParts:
+    'Approach will carry a picture of your decisions. To draw where the work reached across the product, step 4 wants four or more parts listed, with the ones you worked on tapped and at least one of those marked as built from scratch.',
+  noteDiagramPage:
+    "Approach will carry a picture of your decisions. To draw the page's own shape, step 4 wants five or more sections listed top to bottom, each marked added, cut or kept, and one line on what you noticed about where they sat.",
+  noteDiagramFlow:
+    'Approach will carry a picture of your decisions. To draw how much the flow lost, step 4 wants four or more steps listed start to finish, with at least two of them tapped as gone.',
 
   noteNoScreens:
     'No screens yet, so this will be words only. You can add them beside the problem in step 2, and beside each decision in step 3.',
@@ -272,7 +287,11 @@ export const AREA_CHIPS = {
  */
 export const SECTION_CHIPS = {
   fork: 'Which is closer to what you worked on?',
-  forkHelper: 'It changes the next question and nothing else.',
+  // Was "It changes the next question and nothing else." That stopped being
+  // true once the answer started deciding which picture Approach carries, and
+  // the review screen now says what that picture would be — so the helper only
+  // has to make the question answerable.
+  forkHelper: 'It decides what the rest of this step asks.',
   perSection: 'What happened to each one?',
 } as const
 
@@ -450,14 +469,30 @@ export function reconcileAreas(
 }
 
 /**
- * Which block step 4 shows, with null read as the screen that came before it.
+ * Which block step 4 shows, or null where the fork has not been answered.
  *
- * One definition, so the form and `buildIntake` cannot drift — and so a draft
- * written before the fork existed still shows the parts answer the person
- * typed into it, rather than an empty page question.
+ * IT USED TO DEFAULT TO `separate_parts`, AND THAT WAS THE BUG. A default made
+ * the fork look like a question somebody had already answered, so it read as a
+ * setting rather than a choice and was skipped — and skipping it quietly
+ * decided the project was a product with separate parts. Two real projects
+ * went through that way: a one-page website and a three-screen app, both of
+ * which had a better branch available and neither of which was ever offered
+ * it. Nothing is chosen for the person now.
+ *
+ * The one exception is back-compat, and it is narrow: a draft written before
+ * the fork existed has answers under the parts question and no way to have
+ * picked anything, so a filled `product_areas` still resolves to that branch.
+ * A draft written before these existed is still the person's work.
+ *
+ * One definition, used by the form and by `buildIntake`, so what is on screen
+ * and what is stored cannot disagree about which question was asked.
  */
-export function shownShape(shape: WorkShape | null): WorkShape {
-  return shape ?? 'separate_parts'
+export function shownShape(
+  shape: WorkShape | null,
+  text: Partial<Record<TextKey, string>>
+): WorkShape | null {
+  if (shape) return shape
+  return (text.product_areas ?? '').trim() !== '' ? 'separate_parts' : null
 }
 
 /** Lifted out of Step4Structure, where no test could reach it. */
@@ -616,7 +651,7 @@ export function emptyWizardState(): WizardState {
  */
 export function buildIntake(state: WizardState): Intake {
   const intake: Intake = { schema_version: 2, decisions: [], image_notes: [] }
-  const shape = shownShape(state.shape)
+  const shape = shownShape(state.shape, state.text)
 
   for (const field of INTAKE_FIELDS) {
     // A revealed field whose toggle is off was never asked. Storing whatever
@@ -682,7 +717,10 @@ export function buildIntake(state: WizardState): Intake {
   //
   // Only one side is ever written, which is what makes the fork's answer
   // recoverable from the row without storing it — see `intakeShape`.
-  if (shape === 'separate_parts') {
+  if (shape === null) {
+    // The fork was never answered, so neither branch was ever on screen and
+    // nothing from either belongs on the row.
+  } else if (shape === 'separate_parts') {
     const areas = parseAreas(state.text.product_areas)
     if (areas.length > 0) {
       const { worked, fromScratch } = reconcileAreas(areas, state.areasWorked, state.areasFromScratch)
@@ -816,8 +854,52 @@ export function compileBlockers(intake: { decisions: Decision[] }): string[] {
  * The first one exists because someone lost six uploads to a page reload and
  * only found out by reading a finished case study with no pictures in it.
  */
-export function reviewNotes(intake: Intake): string[] {
+/**
+ * What step 4 would have to hold for Approach to draw the work.
+ *
+ * Null when one of the three real templates already fired. Otherwise the page
+ * is going to carry the floor form — a picture of the decisions — and this
+ * says what the branch in question is short of.
+ *
+ * It exists because two real projects shipped on the floor form without anyone
+ * noticing a better picture was a tap away. Nothing here is a judgement about
+ * the answers: a visual is drawn either way, and this is the difference between
+ * two true pictures.
+ */
+export function diagramNote(intake: Intake, shape: WorkShape | null = null): string | null {
+  const diagram = buildApproachDiagram(intake)
+  if (!diagram || diagram.template !== 'decision-set') return null
+
+  // `shape` comes from the form, where it is known outright. The intake cannot
+  // always say: a branch that was picked and then left blank writes no key at
+  // all, so inferring from the row alone tells someone to answer a question
+  // they have already answered. Inference is the fallback, for a stored row
+  // being reviewed without the form's state beside it.
+  switch (shape ?? intakeShapeOrNull(intake)) {
+    case 'single_page':
+      return WIZARD_COPY.noteDiagramPage
+    case 'one_flow':
+      return WIZARD_COPY.noteDiagramFlow
+    case 'separate_parts':
+      return WIZARD_COPY.noteDiagramParts
+    default:
+      return WIZARD_COPY.noteDiagramUnforked
+  }
+}
+
+/** Which branch a stored row was asked, or null when it carries no sign of one. */
+function intakeShapeOrNull(intake: Intake): WorkShape | null {
+  if (intake.page_sections || intake.page_pattern) return 'single_page'
+  if (intake.flow_steps) return 'one_flow'
+  if (intake.product_areas) return 'separate_parts'
+  return null
+}
+
+export function reviewNotes(intake: Intake, shape: WorkShape | null = null): string[] {
   const notes: string[] = []
+
+  const diagram = diagramNote(intake, shape)
+  if (diagram) notes.push(diagram)
 
   if (intake.image_notes.length === 0) {
     notes.push(WIZARD_COPY.noteNoScreens)

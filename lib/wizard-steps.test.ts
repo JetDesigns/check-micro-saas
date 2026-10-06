@@ -32,6 +32,7 @@ import {
   buildReview,
   compileBlockers,
   reviewNotes,
+  diagramNote,
   createDecision,
   emptyWizardState,
   isThin,
@@ -616,14 +617,80 @@ describe('reviewNotes', () => {
     const state = validState()
     state.attachments = [attachment('a', 'problem')]
     const notes = reviewNotes(buildIntake(state))
-    expect(notes).toHaveLength(1)
-    expect(notes[0]).toContain('no note yet')
+    expect(notes.some((n) => n.includes('no note yet'))).toBe(true)
   })
 
-  it('stays quiet once a screen has been described', () => {
+  it('stays quiet about screens once one has been described', () => {
     const state = validState()
     state.attachments = [attachment('a', 'problem', 'The column is empty after the reset')]
-    expect(reviewNotes(buildIntake(state))).toEqual([])
+    const notes = reviewNotes(buildIntake(state))
+    expect(notes.some((n) => n.includes('no note yet'))).toBe(false)
+  })
+
+  // Two real projects shipped on the floor form without anyone noticing that a
+  // better picture was a tap away in step 4. This is what would have said so.
+  describe('the diagram note', () => {
+    it('names the fork when no branch was answered at all', () => {
+      expect(diagramNote(buildIntake(validState()))).toBe(WIZARD_COPY.noteDiagramUnforked)
+    })
+
+    it('names what the parts branch is short of', () => {
+      const state = validState()
+      state.shape = 'separate_parts'
+      state.text.product_areas = 'Homepage'
+      expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramParts)
+    })
+
+    it('names what the page branch is short of', () => {
+      const state = validState()
+      state.shape = 'single_page'
+      state.text.page_sections = 'Hero, Pricing'
+      expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramPage)
+    })
+
+    // A branch picked and then left blank writes no key at all, so the row
+    // cannot say which one it was. Telling that person to answer the fork
+    // sends them back to a question they have already answered.
+    it('trusts the form over the row when a branch was picked and left blank', () => {
+      const state = validState()
+      state.shape = 'single_page'
+      const intake = buildIntake(state)
+      expect(intake.page_sections).toBeUndefined()
+      expect(diagramNote(intake, 'single_page')).toBe(WIZARD_COPY.noteDiagramPage)
+      expect(diagramNote(intake)).toBe(WIZARD_COPY.noteDiagramUnforked)
+    })
+
+    it('names what the flow branch is short of', () => {
+      const state = validState()
+      state.shape = 'one_flow'
+      state.text.flow_steps = 'Basket, Pay'
+      expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramFlow)
+    })
+
+    // Quiet when a real template fired: there is nothing to improve, and a note
+    // that always showed would stop being read.
+    it('says nothing once a real template draws', () => {
+      const state = validState()
+      state.shape = 'separate_parts'
+      state.text.product_areas = 'Orders, Menu, Payments, Reports'
+      state.areasWorked = ['Orders', 'Menu', 'Payments', 'Reports']
+      state.areasFromScratch = ['Reports']
+      expect(diagramNote(buildIntake(state))).toBeNull()
+    })
+
+    it('never phrases any of them as a judgement of the answer', () => {
+      const all = [
+        WIZARD_COPY.noteDiagramUnforked,
+        WIZARD_COPY.noteDiagramParts,
+        WIZARD_COPY.noteDiagramPage,
+        WIZARD_COPY.noteDiagramFlow,
+      ]
+      for (const note of all) {
+        for (const word of DISCOURAGING_WORDS) {
+          expect(note.toLowerCase()).not.toContain(word)
+        }
+      }
+    })
   })
 
   it('never phrases a note as a judgement of the answer', () => {
@@ -793,9 +860,26 @@ describe("the page's sections", () => {
     expect(intake.page_sections_ordered).toBeUndefined()
   })
 
-  it('reads an unanswered fork as the screen that came before it', () => {
-    expect(shownShape(null)).toBe('separate_parts')
+  // The default was the bug. Two real projects — a one-page website and a
+  // three-screen app — went through filed as "a product with separate parts"
+  // because that was simply what was already ticked, and neither was ever
+  // offered the branch that suited it.
+  it('leaves an unanswered fork unanswered, choosing nothing for the person', () => {
+    expect(shownShape(null, {})).toBeNull()
     const state = page()
+    state.shape = null
+    state.text.page_sections = ''
+    const intake = buildIntake(state)
+    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.page_sections_ordered).toBeUndefined()
+  })
+
+  // The one exception, and it is narrow: a draft written before the fork
+  // existed has answers under the parts question and no way to have picked
+  // anything. That work is still the person's.
+  it('still reads a pre-fork draft as the parts branch', () => {
+    expect(shownShape(null, { product_areas: 'Orders, Menu' })).toBe('separate_parts')
+    const state = emptyWizardState()
     state.shape = null
     state.text.product_areas = 'Orders, Menu'
     state.areasWorked = ['Orders']
