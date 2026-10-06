@@ -1,5 +1,7 @@
 /*
- * Studio tokens, read from Figma (file dXB0QOV1HbQGs9q5bsBTOV, page 908:1104).
+ * Studio tokens, read from Figma (file dXB0QOV1HbQGs9q5bsBTOV, page 908:1104),
+ * with one deliberate departure: the type face is Inter, not the file's
+ * Helvetica Neue. See the font-family rule below for why and for what it costs.
  *
  * Scoped to .studio on purpose. app/globals.css is global by definition — it
  * puts a warm oatmeal ground (#f6f3ee), warm borders and a blue focus ring on
@@ -31,12 +33,28 @@
   --studio-r-full: 999px;          /* full */
 
   /*
-   * Helvetica Neue is a macOS system face. It cannot be loaded from Google
-   * Fonts, so this is exact on a Mac and degrades elsewhere. If the route is
-   * ever opened past this machine it needs a hosted face or a deliberate
-   * substitution — a design call, not a build detail.
+   * Inter, not the Figma file's Helvetica Neue.
+   *
+   * Helvetica Neue is a macOS system face: it cannot be loaded from Google
+   * Fonts, cannot be embedded by a server-side PNG renderer, and already
+   * degraded to Arial for anyone not on a Mac — so the Figma match was never
+   * real off this machine. Inter is OFL, is already loaded by the root layout
+   * for the legacy pages, and renders the same everywhere.
+   *
+   * The Approach diagram is rasterised server-side and has to use it; a diagram
+   * in one face inside a page in another is worse than either. So the whole
+   * studio follows rather than the diagram sitting apart.
+   *
+   * CONSEQUENCE, and it blocks the diagram renderer: Inter sets wider than
+   * Helvetica Neue at the same size. Every dimension in APPROACH-VISUAL-PRD.md
+   * §4 and §5 was measured against the old face and is now unverified — the mark
+   * height, the frame, the pitch, and the 18-character label limit. The Figma
+   * components have to be redrawn in Inter BEFORE renderer work, not after. The
+   * five type classes below keep their sizes and tracking for now; the tracking
+   * values were resolved from Figma percentages for Helvetica Neue and want
+   * re-checking too.
    */
-  font-family: 'Helvetica Neue', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, Arial, sans-serif;
   background: var(--studio-bg-primary);
   color: var(--studio-text);
 }
