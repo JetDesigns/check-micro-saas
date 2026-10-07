@@ -128,6 +128,11 @@ export function Step4Structure({
         legend={SECTION_CHIPS.fork}
         name="work_shape"
         options={WORK_SHAPE_OPTIONS}
+        // One per row, the way step 2's provenance question already stacks:
+        // two-up leaves about 201px of text per option, where these examples
+        // need a line of their own, and three options in a two-column grid
+        // strand the third in a ragged second row.
+        columns={1}
         value={shape}
         onChange={onShapeChange}
         helper={SECTION_CHIPS.forkHelper}

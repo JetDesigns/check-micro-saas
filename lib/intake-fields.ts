@@ -77,13 +77,39 @@ export type WorkShape = 'separate_parts' | 'single_page' | 'one_flow'
 // Phrased as two kinds of project, never as two kinds of diagram. The person is
 // describing their work; they are not picking a template, and they are never
 // told one exists.
-export const WORK_SHAPE_OPTIONS: ReadonlyArray<{ value: WorkShape; label: string }> = [
+export const WORK_SHAPE_OPTIONS: ReadonlyArray<{
+  value: WorkShape
+  label: string
+  /**
+   * The kinds of project the option covers, so nobody has to classify their own
+   * work against an abstraction. Every one is its template's own "Typical
+   * projects" line in APPROACH-VISUAL-PRD.md, trimmed to what fits a row —
+   * §5.1 for the areas, §5.3 for the page, §5.2 for the flow. Taking them from
+   * the specification rather than inventing them is what keeps the form and the
+   * document from drifting into disagreeing about what each one is for.
+   *
+   * It still names kinds of PROJECT, never kinds of diagram. See above.
+   */
+  example: string
+}> = [
   // Said the way a designer describes a project out loud, and kept parallel so
   // the three read as one choice. The two directional phrases do double duty:
   // they are also how the branch's next question wants to be answered.
-  { value: 'separate_parts', label: 'Several areas of a product' },
-  { value: 'single_page', label: 'One page, top to bottom' },
-  { value: 'one_flow', label: 'One flow, start to finish' },
+  {
+    value: 'separate_parts',
+    label: 'Several areas of a product',
+    example: 'Multi-area redesign, audit and fix, consistency pass',
+  },
+  {
+    value: 'single_page',
+    label: 'One page, top to bottom',
+    example: 'Landing page, pricing page, homepage',
+  },
+  {
+    value: 'one_flow',
+    label: 'One flow, start to finish',
+    example: 'Checkout, signup, onboarding, booking',
+  },
 ] as const
 
 export type IntakeField = {

@@ -13,7 +13,12 @@ type Props<T extends string> = {
   legend: string
   /** Radio group name — must be unique within the form. */
   name: string
-  options: readonly { value: T; label: string }[]
+  /**
+   * `example` is a second line under the label, naming the kinds of project the
+   * option covers. Optional and structural, so the lists that do not carry one
+   * render exactly as they did before.
+   */
+  options: readonly { value: T; label: string; example?: string }[]
   value: T | null
   onChange: (value: T) => void
   columns?: 1 | 2
@@ -43,7 +48,10 @@ export function FormSelect<T extends string>({
             <label
               key={o.value}
               className={
-                'flex items-center gap-2 rounded-[var(--studio-r-md)] border bg-[var(--studio-bg-primary)] p-2 transition-colors ' +
+                // items-start, not items-center: with an example underneath, a
+                // centred radio floats between the two lines instead of
+                // belonging to the label it selects.
+                'flex items-start gap-2 rounded-[var(--studio-r-md)] border bg-[var(--studio-bg-primary)] p-2 transition-colors ' +
                 (active
                   ? 'border-[var(--studio-brand-hover)]'
                   : 'border-[var(--studio-border-strong)]') +
@@ -62,19 +70,30 @@ export function FormSelect<T extends string>({
               <span
                 aria-hidden
                 className={
-                  'block size-4 shrink-0 rounded-[var(--studio-r-full)] bg-[var(--studio-bg-primary)] ' +
+                  // mt-px sits the ring on the first line's optical centre:
+                  // the radio is 16px and the line box is 14.4px.
+                  'mt-px block size-4 shrink-0 rounded-[var(--studio-r-full)] bg-[var(--studio-bg-primary)] ' +
                   (active
                     ? 'border-[5px] border-[var(--studio-brand-hover)]'
                     : 'border border-[var(--studio-border-strong)]')
                 }
               />
-              <span
-                className={
-                  'studio-small ' +
-                  (active ? 'text-[var(--studio-text)]' : 'text-[var(--studio-text-soft)]')
-                }
-              >
-                {o.label}
+              {/* The label alone carries the selected state. The example stays
+                  Text/Secondary either way: it is what the option covers, not a
+                  second thing that lights up, and selection is carried by the
+                  border and the ring — see the note at the top of this file. */}
+              <span className="flex flex-col gap-1">
+                <span
+                  className={
+                    'studio-small ' +
+                    (active ? 'text-[var(--studio-text)]' : 'text-[var(--studio-text-soft)]')
+                  }
+                >
+                  {o.label}
+                </span>
+                {o.example && (
+                  <span className="studio-small text-[var(--studio-text-soft)]">{o.example}</span>
+                )}
               </span>
             </label>
           )

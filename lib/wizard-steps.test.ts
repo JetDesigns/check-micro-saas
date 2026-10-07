@@ -48,6 +48,7 @@ import {
 import {
   INTAKE_FIELDS,
   MEASUREMENT_KEYS,
+  PROJECT_TYPES,
   WORK_SHAPE_OPTIONS,
   type TextKey,
   type WorkShape,
@@ -473,7 +474,11 @@ describe('copy rules', () => {
       ...Object.values(SECTION_CHIPS),
       ...Object.values(FLOW_CHIPS),
       ...SECTION_FATES.map((f) => f.label),
-      ...WORK_SHAPE_OPTIONS.map((o) => o.label),
+      ...WORK_SHAPE_OPTIONS.flatMap((o) => [o.label, o.example]),
+      // PROJECT_TYPES carries a per-option description and was in no copy test
+      // at all — a second string on an option is exactly the shape that slips
+      // past a list projecting one property, which is how it got here.
+      ...PROJECT_TYPES.flatMap((t) => [t.label, t.description]),
       // These three moved out of the step components during the copy pass.
       // They were unreachable from here before, which is how the wizard
       // accumulated a set of explanations nobody had ever run this rule over.
@@ -763,6 +768,29 @@ describe('the product\'s parts', () => {
     const intake = buildIntake(state)
     expect(intake.product_areas_worked).toBeUndefined()
     expect(intake.product_areas_new).toBeUndefined()
+  })
+})
+
+describe("the fork's examples", () => {
+  // Every one is its template's own "Typical projects" line in the PRD. The
+  // form naming different projects from the specification is the drift this
+  // guards: a reader picks a branch by its examples, and the gates behind it
+  // were written for the document's.
+  it.each([
+    ['separate_parts', '§5.1', ['Multi-area redesign', 'audit and fix', 'consistency pass']],
+    ['single_page', '§5.3', ['Landing page', 'pricing page', 'homepage']],
+    ['one_flow', '§5.2', ['Checkout', 'signup', 'onboarding', 'booking']],
+  ])('%s names the projects %s lists', (value, _section, expected) => {
+    const option = WORK_SHAPE_OPTIONS.find((o) => o.value === value)
+    for (const project of expected) {
+      expect(option?.example).toContain(project)
+    }
+  })
+
+  it('gives every option one, since a missing one reads as a shorter answer', () => {
+    for (const option of WORK_SHAPE_OPTIONS) {
+      expect(option.example.trim()).not.toBe('')
+    }
   })
 })
 
