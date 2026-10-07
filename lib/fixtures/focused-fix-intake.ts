@@ -18,7 +18,7 @@
 // client. The client is anonymised (`client_may_be_named` off) so the run also
 // exercises the rule that an unnamed client is never named.
 
-import { buildIntake, emptyWizardState, type WizardState } from '@/lib/wizard-steps'
+import { buildIntake, emptyWizardState, type Chip, type WizardState } from '@/lib/wizard-steps'
 import type { Decision, Intake, ProjectType, Tieback, Tone } from '@/types/database'
 
 // Fixed ids, not randomUUID(): a fixture that changes shape on every load cannot
@@ -26,6 +26,28 @@ import type { Decision, Intake, ProjectType, Tieback, Tone } from '@/types/datab
 const FREEZE = 'fixture-dec-freeze'
 const SORT = 'fixture-dec-sort'
 const ACK = 'fixture-dec-acknowledge'
+
+/**
+ * Chips with fixed ids.
+ *
+ * `createChip` mints a uuid, which is right in the form and wrong here: a
+ * fixture rebuilt on every call has to come back identical, and a test that
+ * compares two builds of the same fixture would otherwise compare two sets of
+ * random ids. The id only has to be stable and unique within its list.
+ */
+function chips(prefix: string, labels: readonly string[]): Chip[] {
+  return labels.map((label, i) => ({ id: `fixture-${prefix}-${i}`, label }))
+}
+
+/** Mark a chip as worked on, and hang the named decisions off it. */
+function work(list: Chip[], label: string, decisionIds: string[] = []): Chip[] {
+  return list.map((c) =>
+    c.label === label
+      ? { ...c, worked: true as const, ...(decisionIds.length > 0 ? { decisions: decisionIds } : {}) }
+      : c
+  )
+}
+
 
 const decisions: Decision[] = [
   {
@@ -99,8 +121,23 @@ function baseState(): WizardState {
   state.outcome = 'shipped'
   // Four of the eight parts were worked on; only Escalations had nothing like it
   // already, which is decision 3's no_prior_version said as a product fact.
-  state.areasWorked = ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations']
-  state.areasFromScratch = ['Escalations']
+  // Eight parts, four worked on, three of those carrying the decision that
+  // landed there. Patient Notes is worked on and carries none, which is an
+  // ordinary answer and keeps the fixture off the gate's edge.
+  state.parts = chips('part', [
+    'Ward Board',
+    'Patient Notes',
+    'Handover list',
+    'Escalations',
+    'Medication chart',
+    'Obs chart',
+    'Admissions',
+    'Discharge',
+  ])
+  state.parts = work(state.parts, 'Ward Board', [SORT])
+  state.parts = work(state.parts, 'Patient Notes')
+  state.parts = work(state.parts, 'Handover list', [FREEZE])
+  state.parts = work(state.parts, 'Escalations', [ACK])
   state.decisions = decisions.map((d) => ({ ...d }))
   return state
 }
@@ -214,6 +251,16 @@ function landingState(): WizardState {
   state.shape = 'single_page'
   // Two sections are left unmarked on purpose. That gap is half of what the
   // overlay can show, and the finding above is a claim about where it sits.
+  state.pageSections = chips('section', [
+    'Headline',
+    'Plan prices',
+    'Feature grid',
+    'FAQ',
+    'What it replaces',
+    'Migration help',
+    'Clinic quotes',
+    'Book a demo',
+  ])
   state.sectionFates = {
     'Plan prices': 'kept',
     'Feature grid': 'cut',
@@ -310,6 +357,15 @@ function checkoutState(): WizardState {
   state.shape = 'one_flow'
   // Seven steps to four. Sign up went, the two address screens became one, and
   // the slot moved onto the basket rather than being its own step.
+  state.flowSteps = chips('step', [
+    'Basket',
+    'Sign up',
+    'Delivery address',
+    'Billing address',
+    'Delivery slot',
+    'Payment',
+    'Confirm',
+  ])
   state.stepsRemoved = ['Sign up', 'Billing address', 'Delivery slot']
   state.collaborators = [{ name: 'Dani Okafor', role: 'Operations lead' }]
   state.provenance = 'analytics'

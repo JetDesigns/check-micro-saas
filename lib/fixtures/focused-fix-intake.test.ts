@@ -80,7 +80,7 @@ describe('the two shapes of work', () => {
   it('a page project gets the overlay, because the parts question was never asked', () => {
     const intake = fixtureIntake('landing-rewrite')
     expect(intakeShape(intake)).toBe('single_page')
-    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_parts).toBeUndefined()
 
     const diagram = buildApproachDiagram(intake)!
     expect(isOrderOverlay(diagram)).toBe(true)
@@ -95,7 +95,7 @@ describe('the two shapes of work', () => {
   it('a flow project gets the collapse, because it answered the steps question', () => {
     const intake = fixtureIntake('checkout-collapse')
     expect(intakeShape(intake)).toBe('one_flow')
-    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_parts).toBeUndefined()
     expect(intake.page_sections_ordered).toBeUndefined()
 
     const diagram = buildApproachDiagram(intake)!
