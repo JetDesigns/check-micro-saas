@@ -17,6 +17,7 @@ import {
   AREA_CHIPS,
   DISCLOSURE,
   FLOW_CHIPS,
+  approachHint,
   RELATION_CHIPS,
   SECTION_CHIPS,
   SECTION_FATES,
@@ -96,6 +97,11 @@ export function Step4Structure({
 
   const steps = parseAreas(text.flow_steps)
   const removed = stepsRemoved.filter((n) => steps.includes(n))
+
+  // The review screen says this too, after the step is behind you. Here it is
+  // said while there is still something to do about it — which is what both
+  // real projects needed and did not get.
+  const hint = approachHint({ shape: shapeProp, text, areasWorked, areasFromScratch, sectionFates, stepsRemoved })
 
   // One filter, never a hand-written list beside it: a key named in both would
   // render its input twice, which reads as the field having broken.
@@ -194,6 +200,14 @@ export function Step4Structure({
           onToggle={(name) => onStepsRemovedChange(toggleName(removed, name))}
           disabled={disabled}
         />
+      )}
+
+      {/* Same classes as the review screen's note, so the two read as one
+          voice rather than as two systems talking. */}
+      {hint && (
+        <p className="studio-small rounded-[var(--studio-r-md)] bg-[var(--studio-bg-secondary)] p-4 text-[var(--studio-text-soft)]">
+          {hint}
+        </p>
       )}
 
       {named.length === 0 ? (

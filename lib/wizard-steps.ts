@@ -8,7 +8,18 @@
 // markup. Step order, what gets written to the database, and what the review
 // screen says are exactly the parts worth guarding.
 
-import { buildApproachDiagram } from '@/lib/approach-diagram'
+import {
+  CATEGORY_MIN,
+  MIN_REDUCTION,
+  SECTION_MAX,
+  SECTION_MIN,
+  SET_MAX,
+  SET_MIN,
+  STEP_MAX,
+  STEP_MIN,
+  SURVIVOR_MIN,
+  buildApproachDiagram,
+} from '@/lib/approach-diagram'
 import { SPINE_MAX, SPINE_MIN, containsDigit, countWords } from '@/lib/case-study-blocks'
 import {
   INTAKE_FIELDS,
@@ -92,14 +103,33 @@ export const WIZARD_COPY = {
   // — they are choosing between two true pictures, not being told one is
   // deficient, and the discouraging-word rule covers these like everything
   // else here.
+  //
+  // THE NUMBERS COME FROM THE GATES, never from English. Every one of these
+  // spelled them out — "four or more parts", "five or more sections" — which
+  // left the copy free to drift from `lib/approach-diagram.ts` the moment a
+  // threshold moved. They are interpolated now, and a test asserts one of them
+  // against its constant.
   noteDiagramUnforked:
-    'Approach will carry a picture of your decisions. Step 4 asks what shape the work had — a product with separate parts, a single page, or one flow — and answering it draws the work itself instead.',
+    'Approach will carry a picture of your decisions. Step 4 asks what shape the work had — several areas of a product, one page, or one flow — and answering it draws the work itself instead.',
   noteDiagramParts:
-    'Approach will carry a picture of your decisions. To draw where the work reached across the product, step 4 wants four or more parts listed, with the ones you worked on tapped and at least one of those marked as built from scratch.',
+    `Approach will carry a picture of your decisions. To draw how far the work reached, step 4 wants ${SET_MIN} or more areas tapped as worked on, with at least one of those built from scratch.`,
   noteDiagramPage:
-    "Approach will carry a picture of your decisions. To draw the page's own shape, step 4 wants five or more sections listed top to bottom, each marked added, cut or kept, and one line on what you noticed about where they sat.",
+    `Approach will carry a picture of your decisions. To draw the page's own shape, step 4 wants ${SECTION_MIN} or more sections in scroll order, each marked added, cut or kept, and one line on what the order showed.`,
   noteDiagramFlow:
-    'Approach will carry a picture of your decisions. To draw how much the flow lost, step 4 wants four or more steps listed start to finish, with at least two of them tapped as gone.',
+    `Approach will carry a picture of your decisions. To draw how much the flow lost, step 4 wants ${STEP_MIN} or more steps, with at least ${MIN_REDUCTION} of them cut or merged.`,
+
+  // The inline version, shown inside step 4 while there is still something to
+  // do about it. Two states per branch — a list typed but nothing tapped, which
+  // is how both real projects ended up on the floor form, and a branch short of
+  // its gate — then one shared line when it is satisfied, so the step reads as
+  // progress rather than as a standing complaint.
+  hintPartsTap: 'Tap the areas you worked on. The picture is of those, not of the whole list.',
+  hintPartsShort: `${SET_MIN} or more tapped, with at least one built from scratch, draws how far the work reached.`,
+  hintPageMark: 'Mark each section Added, Cut or Kept. The picture is where those land in the order.',
+  hintPageShort: `${SECTION_MIN} or more sections, ${CATEGORY_MIN} kinds or more between them, and a line on what the order showed.`,
+  hintFlowTap: 'Tap the steps that are gone. The picture is the difference between the two columns.',
+  hintFlowShort: `${STEP_MIN} or more steps, at least ${MIN_REDUCTION} of them cut or merged, and ${SURVIVOR_MIN} still standing.`,
+  hintDraws: 'This draws the work itself.',
 
   noteNoScreens:
     'No screens yet, so this will be words only. You can add them beside the problem in step 2, and beside each decision in step 3.',
@@ -268,8 +298,8 @@ export const SLOT_ENTRY_LABELS: Record<ImageSlot, string> = {
  * it up.
  */
 export const AREA_CHIPS = {
-  worked: 'Which did you work on?',
-  fromScratch: 'Which of those were built from scratch?',
+  worked: 'Which of these did you work on?',
+  fromScratch: 'Which of those did you build from scratch?',
 } as const
 
 /**
@@ -292,7 +322,7 @@ export const SECTION_CHIPS = {
   // the review screen now says what that picture would be — so the helper only
   // has to make the question answerable.
   forkHelper: 'It decides what the rest of this step asks.',
-  perSection: 'What happened to each one?',
+  perSection: 'What happened to each section?',
 } as const
 
 /**
@@ -304,7 +334,10 @@ export const SECTION_CHIPS = {
  * and "deleted" would read as excluding it.
  */
 export const FLOW_CHIPS = {
-  removed: 'Which of them are gone now?',
+  // "Cut or merge" rather than "removed": §5.2 counts a step merged into
+  // another as gone, and a designer who merged two screens does not read
+  // "removed" as covering it.
+  removed: 'Which of these did you cut or merge?',
 } as const
 
 /** Added, kept or cut, in the order the diagram's categories list them. */
@@ -854,6 +887,71 @@ export function compileBlockers(intake: { decisions: Decision[] }): string[] {
  * The first one exists because someone lost six uploads to a page reload and
  * only found out by reading a finished case study with no pictures in it.
  */
+/**
+ * What step 4 is still short of, said while there is something to do about it.
+ *
+ * The review screen's note arrives after the step is behind you; this is the
+ * same thing said on the step itself. Null means nothing to say — either the
+ * fork is unanswered, and visibly so, or the list is empty and the placeholder
+ * is already doing the work, or the branch is satisfied and says so instead.
+ *
+ * Takes what `Step4Structure` holds rather than a whole `WizardState`, and
+ * re-derives the lists through the same `parseAreas` / `reconcile*` the form
+ * uses, so the hint cannot disagree with the chips beside it.
+ */
+export function approachHint(a: {
+  shape: WorkShape | null
+  text: Partial<Record<TextKey, string>>
+  areasWorked: readonly string[]
+  areasFromScratch: readonly string[]
+  sectionFates: Record<string, SectionFate>
+  stepsRemoved: readonly string[]
+}): string | null {
+  const shape = shownShape(a.shape, a.text)
+  if (shape === null) return null
+
+  if (shape === 'separate_parts') {
+    const areas = parseAreas(a.text.product_areas)
+    if (areas.length === 0) return null
+    const { worked, fromScratch } = reconcileAreas(areas, a.areasWorked, a.areasFromScratch)
+    if (worked.length === 0) return WIZARD_COPY.hintPartsTap
+    // The upper bound is the form's own argument: when half the set is
+    // exceptional there is no rule left for the exceptions to break.
+    const ok =
+      worked.length >= SET_MIN &&
+      worked.length <= SET_MAX &&
+      fromScratch.length >= 1 &&
+      fromScratch.length <= worked.length / 2
+    return ok ? WIZARD_COPY.hintDraws : WIZARD_COPY.hintPartsShort
+  }
+
+  if (shape === 'single_page') {
+    const sections = parseAreas(a.text.page_sections)
+    if (sections.length === 0) return null
+    const fates = reconcileFates(sections, a.sectionFates)
+    const marked = Object.values(fates)
+    if (marked.length === 0) return WIZARD_COPY.hintPageMark
+    const kinds = new Set(marked).size
+    const ok =
+      sections.length >= SECTION_MIN &&
+      sections.length <= SECTION_MAX &&
+      kinds >= CATEGORY_MIN &&
+      (a.text.page_pattern ?? '').trim() !== ''
+    return ok ? WIZARD_COPY.hintDraws : WIZARD_COPY.hintPageShort
+  }
+
+  const steps = parseAreas(a.text.flow_steps)
+  if (steps.length === 0) return null
+  const removed = a.stepsRemoved.filter((n) => steps.includes(n))
+  if (removed.length === 0) return WIZARD_COPY.hintFlowTap
+  const ok =
+    steps.length >= STEP_MIN &&
+    steps.length <= STEP_MAX &&
+    removed.length >= MIN_REDUCTION &&
+    steps.length - removed.length >= SURVIVOR_MIN
+  return ok ? WIZARD_COPY.hintDraws : WIZARD_COPY.hintFlowShort
+}
+
 /**
  * What step 4 would have to hold for Approach to draw the work.
  *

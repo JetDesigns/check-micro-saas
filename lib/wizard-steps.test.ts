@@ -20,6 +20,7 @@ import {
   WIZARD_STEPS,
   blankInputs,
   buildIntake,
+  approachHint,
   parseAreas,
   reconcileAreas,
   assignFate,
@@ -44,9 +45,16 @@ import {
   type Attachment,
   type WizardState,
 } from './wizard-steps'
-import { INTAKE_FIELDS, MEASUREMENT_KEYS, WORK_SHAPE_OPTIONS } from './intake-fields'
+import {
+  INTAKE_FIELDS,
+  MEASUREMENT_KEYS,
+  WORK_SHAPE_OPTIONS,
+  type TextKey,
+  type WorkShape,
+} from './intake-fields'
+import { SECTION_MIN, SET_MIN, STEP_MIN } from './approach-diagram'
 import { SPINE_MAX, SPINE_MIN } from './case-study-blocks'
-import type { ImageSlot } from '@/types/database'
+import type { ImageSlot, SectionFate } from '@/types/database'
 
 // What this file guards, in order of how expensive the mistake would be:
 //
@@ -758,6 +766,116 @@ describe('the product\'s parts', () => {
   })
 })
 
+describe('the step 4 hint', () => {
+  const base = {
+    shape: null as WorkShape | null,
+    text: {} as Partial<Record<TextKey, string>>,
+    areasWorked: [] as string[],
+    areasFromScratch: [] as string[],
+    sectionFates: {} as Record<string, SectionFate>,
+    stepsRemoved: [] as string[],
+  }
+  const hint = (over: Partial<typeof base>) => approachHint({ ...base, ...over })
+
+  // The fork sits right there unanswered; saying so twice is noise.
+  it('says nothing while the fork is unanswered', () => {
+    expect(hint({})).toBeNull()
+  })
+
+  it('says nothing before anything is typed', () => {
+    expect(hint({ shape: 'separate_parts' })).toBeNull()
+    expect(hint({ shape: 'single_page' })).toBeNull()
+    expect(hint({ shape: 'one_flow' })).toBeNull()
+  })
+
+  // Both real projects typed the list and tapped nothing, which is how they
+  // ended up on the floor form.
+  it('asks for a tap once a list is typed and nothing is marked', () => {
+    expect(hint({ shape: 'separate_parts', text: { product_areas: 'Orders, Menu' } })).toBe(
+      WIZARD_COPY.hintPartsTap
+    )
+    expect(hint({ shape: 'single_page', text: { page_sections: 'Hero, Pricing' } })).toBe(
+      WIZARD_COPY.hintPageMark
+    )
+    expect(hint({ shape: 'one_flow', text: { flow_steps: 'Basket, Pay' } })).toBe(
+      WIZARD_COPY.hintFlowTap
+    )
+  })
+
+  it('names what each branch is short of once something is marked', () => {
+    expect(
+      hint({
+        shape: 'separate_parts',
+        text: { product_areas: 'Orders, Menu' },
+        areasWorked: ['Orders'],
+      })
+    ).toBe(WIZARD_COPY.hintPartsShort)
+    expect(
+      hint({
+        shape: 'single_page',
+        text: { page_sections: 'Hero, Pricing' },
+        sectionFates: { Hero: 'added' },
+      })
+    ).toBe(WIZARD_COPY.hintPageShort)
+    expect(
+      hint({
+        shape: 'one_flow',
+        text: { flow_steps: 'Basket, Pay' },
+        stepsRemoved: ['Pay'],
+      })
+    ).toBe(WIZARD_COPY.hintFlowShort)
+  })
+
+  it('confirms once a branch would draw the work', () => {
+    expect(
+      hint({
+        shape: 'separate_parts',
+        text: { product_areas: 'Orders, Menu, Payments, Reports' },
+        areasWorked: ['Orders', 'Menu', 'Payments', 'Reports'],
+        areasFromScratch: ['Reports'],
+      })
+    ).toBe(WIZARD_COPY.hintDraws)
+    expect(
+      hint({
+        shape: 'single_page',
+        text: {
+          page_sections: 'Hero, Pricing, Features, FAQ, Footer',
+          page_pattern: 'the cut ones sat in the middle',
+        },
+        sectionFates: { Hero: 'added', Pricing: 'kept', Features: 'cut', FAQ: 'cut' },
+      })
+    ).toBe(WIZARD_COPY.hintDraws)
+    expect(
+      hint({
+        shape: 'one_flow',
+        text: { flow_steps: 'Basket, Sign up, Address, Billing, Pay, Confirm' },
+        stepsRemoved: ['Sign up', 'Billing'],
+      })
+    ).toBe(WIZARD_COPY.hintDraws)
+  })
+
+  // The numbers in the copy are the gates' own. Spelled in English they were
+  // free to drift the moment a threshold moved.
+  it('takes its numbers from the gates rather than from English', () => {
+    expect(WIZARD_COPY.hintPartsShort).toContain(String(SET_MIN))
+    expect(WIZARD_COPY.hintPageShort).toContain(String(SECTION_MIN))
+    expect(WIZARD_COPY.noteDiagramFlow).toContain(String(STEP_MIN))
+  })
+
+  // A set that is more than half exceptional has no rule left to break, so it
+  // is short of the gate even though every count looks generous.
+  it('still asks when more than half the areas were built from scratch', () => {
+    expect(
+      hint({
+        shape: 'separate_parts',
+        text: { product_areas: 'Orders, Menu, Payments, Reports' },
+        areasWorked: ['Orders', 'Menu', 'Payments', 'Reports'],
+        areasFromScratch: ['Orders', 'Menu', 'Payments'],
+      })
+    ).toBe(WIZARD_COPY.hintPartsShort)
+  })
+})
+
 describe("the flow's steps", () => {
   const flow = (): ReturnType<typeof emptyWizardState> => {
     const state = emptyWizardState()
@@ -898,11 +1016,16 @@ describe("the page's sections", () => {
 
   // The review screen shows what was asked. A branch that never appeared would
   // otherwise read as a question somebody skipped.
+  // Against the registry, never against the words. This pinned both labels as
+  // raw strings and broke on a copy pass that had nothing to do with branch
+  // filtering, which is what it is actually guarding.
   it('keeps the branch that was not asked off the review screen', () => {
+    const labelOf = (key: string) =>
+      INTAKE_FIELDS.find((f) => f.key === key)?.label ?? `missing: ${key}`
     const sections = buildReview(buildIntake(page()))
     const step4 = sections.find((x) => x.step === 4)
     const labels = (step4?.entries ?? []).map((e) => e.label)
-    expect(labels).toContain('What were the sections of the page, top to bottom?')
-    expect(labels).not.toContain('What are the main parts of the product?')
+    expect(labels).toContain(labelOf('page_sections'))
+    expect(labels).not.toContain(labelOf('product_areas'))
   })
 })

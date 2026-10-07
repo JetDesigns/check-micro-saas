@@ -78,9 +78,12 @@ export type WorkShape = 'separate_parts' | 'single_page' | 'one_flow'
 // describing their work; they are not picking a template, and they are never
 // told one exists.
 export const WORK_SHAPE_OPTIONS: ReadonlyArray<{ value: WorkShape; label: string }> = [
-  { value: 'separate_parts', label: 'A product with separate parts' },
-  { value: 'single_page', label: 'A single page' },
-  { value: 'one_flow', label: 'One flow people walk through' },
+  // Said the way a designer describes a project out loud, and kept parallel so
+  // the three read as one choice. The two directional phrases do double duty:
+  // they are also how the branch's next question wants to be answered.
+  { value: 'separate_parts', label: 'Several areas of a product' },
+  { value: 'single_page', label: 'One page, top to bottom' },
+  { value: 'one_flow', label: 'One flow, start to finish' },
 ] as const
 
 export type IntakeField = {
@@ -91,12 +94,16 @@ export type IntakeField = {
   helper?: string
   type: 'input' | 'textarea'
   /**
-   * Drives the "optional" tag beside the label — and nothing else. Read in one
-   * place, `components/studio/FieldGroup.tsx`. It has not gated navigation since
-   * the wizard stopped blocking "next" (check-revision-prompt.md § Phase 2), and
-   * the review screen's thin marker is computed from the answer's length, not
-   * from this. Marking a field required is a statement about what the case study
-   * needs, not a lock.
+   * Drives the "optional" tag beside the label — and nothing else.
+   *
+   * Read in TWO places, not one as this said until it was checked:
+   * `components/studio/FieldGroup.tsx` and `components/intake/FieldRow.tsx`,
+   * which is the legacy form still mounted at `/`. Both only render the tag.
+   * It has not gated navigation since the wizard stopped blocking "next"
+   * (check-revision-prompt.md § Phase 2), the review screen's thin marker is
+   * computed from the answer's length, and `compileBlockers` never reads the
+   * registry at all. Marking a field required is a statement about what the
+   * case study needs, not a lock.
    */
   required: boolean
   rows?: number
@@ -291,10 +298,19 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // a disclosure link most people would never open it, and the diagram fires
     // on nothing without it.
     key: 'product_areas',
-    label: 'What are the main parts of the product?',
+    label: "What are the product's main areas?",
     placeholder: 'e.g. Orders, Menu, Payments, Reports, Staff, Tables, Kitchen, Shifts',
+    // The next question narrows this one, so listing only the worked-on areas
+    // leaves it nothing to narrow — and the diagram is about reach, which needs
+    // both numbers.
+    helper: 'All of them, not only the ones you touched.',
     type: 'textarea',
-    required: false,
+    // Required, like the three below it. Every page carries a picture now, and
+    // these four are what decide whether it is a picture of the work or of the
+    // decision list — so "optional" told people the skip was free when it was
+    // not. Two real projects took that offer. Nothing here gates anything; the
+    // flag only removes the tag.
+    required: true,
     rows: 2,
     step: 4,
     branch: 'separate_parts',
@@ -310,12 +326,12 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // in the order they think matter most, and a ranking is the one thing this
     // answer must not be. It is the only place that can be said.
     key: 'page_sections',
-    label: 'What were the sections of the page, top to bottom?',
+    label: "What were the page's sections, top to bottom?",
     placeholder:
       'e.g. Headline, Plan prices, Feature grid, FAQ, What it replaces, Migration help, Clinic quotes, Book a demo',
-    helper: 'In the order they appear, not in order of importance.',
+    helper: 'In scroll order, not by importance.',
     type: 'textarea',
-    required: false,
+    required: true,
     rows: 2,
     step: 4,
     branch: 'single_page',
@@ -327,12 +343,12 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     // grouping would state the composition, which is the example the PRD's
     // caption rule names as the bad one, and composing it at all is inference.
     key: 'page_pattern',
-    label: 'What did you notice about where they sat?',
+    label: 'What did you notice about the order?',
     placeholder:
       'e.g. The two sections nobody asked for sat between the price and the migration answer',
-    helper: 'One short sentence. A repeat or a gap — not how many there were.',
+    helper: 'One line about where things landed — a cluster, or a gap.',
     type: 'input',
-    required: false,
+    required: true,
     step: 4,
     branch: 'single_page',
     maxChars: 120,
@@ -346,9 +362,9 @@ export const INTAKE_FIELDS: readonly IntakeField[] = [
     key: 'flow_steps',
     label: 'What were the steps, start to finish?',
     placeholder: 'e.g. Basket, Sign in, Delivery address, Delivery time, Payment, Confirm, Receipt',
-    helper: 'The path someone actually walks, in the order they walk it.',
+    helper: 'The screens someone moves through, in order.',
     type: 'textarea',
-    required: false,
+    required: true,
     rows: 2,
     step: 4,
     branch: 'one_flow',
