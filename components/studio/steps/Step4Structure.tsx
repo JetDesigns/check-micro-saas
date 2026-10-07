@@ -1,6 +1,7 @@
 'use client'
 
 import { Button } from '@/components/studio/Button'
+import { ChipInput } from '@/components/studio/ChipInput'
 import { ChipRow } from '@/components/studio/ChipRow'
 import { Disclosure } from '@/components/studio/Disclosure'
 import { FieldGroup } from '@/components/studio/FieldGroup'
@@ -8,7 +9,9 @@ import { FormSelect } from '@/components/studio/FormSelect'
 import { RepeatCard } from '@/components/studio/RepeatCard'
 import {
   WORK_SHAPE_OPTIONS,
+  fieldByKey,
   fieldsForShape,
+  isChipField,
   partitionByDisclosure,
   type TextKey,
   type WorkShape,
@@ -17,16 +20,17 @@ import {
   AREA_CHIPS,
   DISCLOSURE,
   FLOW_CHIPS,
+  WIZARD_COPY,
   approachHint,
   RELATION_CHIPS,
   SECTION_CHIPS,
   SECTION_FATES,
   assignFate,
-  parseAreas,
-  reconcileAreas,
   reconcileFates,
   shownShape,
   toggleName,
+  unattachedDecisions,
+  type Chip,
 } from '@/lib/wizard-steps'
 import type { Decision, DecisionRelations, SectionFate } from '@/types/database'
 
@@ -35,9 +39,12 @@ type Props = {
   onChange: (decisions: Decision[]) => void
   text: Partial<Record<TextKey, string>>
   onTextChange: (key: TextKey, value: string) => void
-  areasWorked: string[]
-  areasFromScratch: string[]
-  onAreasChange: (worked: string[], fromScratch: string[]) => void
+  parts: Chip[]
+  onPartsChange: (parts: Chip[]) => void
+  pageSections: Chip[]
+  onPageSectionsChange: (sections: Chip[]) => void
+  flowSteps: Chip[]
+  onFlowStepsChange: (steps: Chip[]) => void
   shape: WorkShape | null
   onShapeChange: (shape: WorkShape) => void
   sectionFates: Record<string, SectionFate>
@@ -69,9 +76,12 @@ export function Step4Structure({
   onChange,
   text,
   onTextChange,
-  areasWorked,
-  areasFromScratch,
-  onAreasChange,
+  parts,
+  onPartsChange,
+  pageSections,
+  onPageSectionsChange,
+  flowSteps,
+  onFlowStepsChange,
   shape: shapeProp,
   onShapeChange,
   sectionFates,
@@ -82,32 +92,54 @@ export function Step4Structure({
 }: Props) {
   const named = decisions.filter((d) => d.decided.trim())
 
-  // Chips are generated from the answer above them, and both selections are
-  // reconciled against it on every render rather than in an effect. Editing the
-  // list is the common case — someone types eight parts, taps four, then renames
-  // one — and a selection pointing at a name that is no longer on screen is a
-  // claim nobody made.
+  // The chips ARE the list now, so nothing is parsed out of a textarea and
+  // nothing is reconciled back against one. The page and flow branches still
+  // keep their marking in a separate structure keyed by label, so those two are
+  // reconciled against the chip labels on every render — the same discipline,
+  // against the chips rather than against text.
   const shape = shownShape(shapeProp, text)
 
-  const areas = parseAreas(text.product_areas)
-  const { worked, fromScratch } = reconcileAreas(areas, areasWorked, areasFromScratch)
-
-  const sections = parseAreas(text.page_sections)
+  const sections = pageSections.map((c) => c.label)
   const fates = reconcileFates(sections, sectionFates)
 
-  const steps = parseAreas(text.flow_steps)
+  const steps = flowSteps.map((c) => c.label)
   const removed = stepsRemoved.filter((n) => steps.includes(n))
 
   // The review screen says this too, after the step is behind you. Here it is
   // said while there is still something to do about it — which is what both
   // real projects needed and did not get.
-  const hint = approachHint({ shape: shapeProp, text, areasWorked, areasFromScratch, sectionFates, stepsRemoved })
+  const hint = approachHint({
+    shape: shapeProp,
+    text,
+    parts,
+    pageSections,
+    flowSteps,
+    sectionFates,
+    stepsRemoved,
+  })
+
+  // Named in step 3 and on no part. A note, never a blocker: plenty of work does
+  // not land on one named area, and nothing downstream may invent a part to hang
+  // it on — so the only honest move is to show which decisions the picture will
+  // not mention and let the designer decide.
+  const unattached = shape === 'separate_parts' ? unattachedDecisions(decisions, parts) : []
 
   // One filter, never a hand-written list beside it: a key named in both would
-  // render its input twice, which reads as the field having broken.
+  // render its input twice, which reads as the field having broken. The three
+  // list fields come out here because `ChipInput` draws them instead; their copy
+  // is still read from the registry, by key, just below.
   const { open, collapsed } = partitionByDisclosure(
-    fieldsForShape(shape).filter((f) => f.step === 4)
+    fieldsForShape(shape).filter((f) => f.step === 4 && !isChipField(f))
   )
+
+  const listField = (key: TextKey) => {
+    const f = fieldByKey(key)
+    return {
+      legend: f?.label ?? '',
+      helper: f?.helper,
+      placeholder: f?.placeholder,
+    }
+  }
 
   const setRelations = (id: string, patch: Partial<DecisionRelations>) =>
     onChange(
@@ -136,37 +168,43 @@ export function Step4Structure({
         value={shape}
         onChange={onShapeChange}
         helper={SECTION_CHIPS.forkHelper}
+        lockedLabel={WIZARD_COPY.comingSoon}
         disabled={disabled}
       />
 
       <FieldGroup fields={open} text={text} onTextChange={onTextChange} disabled={disabled} />
 
-      {shape === 'separate_parts' && areas.length > 0 && (
+      {/* The whole list, the taps, and the attachments, in one control. Tapping a
+          chip says "I worked on this"; a tapped chip opens to take the decisions
+          that landed on it. Both are things the designer states — neither is read
+          off the other, which is what the two separate chip rows here used to be
+          protecting and what this keeps. */}
+      {shape === 'separate_parts' && (
         <div className="flex flex-col gap-4">
-          <ChipRow
-            legend={AREA_CHIPS.worked}
-            names={areas}
-            pressed={(name) => worked.includes(name)}
-            onToggle={(name) => {
-              const next = toggleName(worked, name)
-              onAreasChange(next, fromScratch.filter((n) => next.includes(n)))
-            }}
+          <ChipInput
+            {...listField('product_areas')}
+            chips={parts}
+            onChange={onPartsChange}
+            markable
+            decisions={named.map((d) => ({ id: d.id, label: d.decided.trim() }))}
             disabled={disabled}
           />
-
-          {/* Only over what was worked on. Which parts were touched is a coverage
-              map; which of those were built from scratch is a different claim, and
-              it is the one the Approach diagram makes. */}
-          {worked.length > 0 && (
-            <ChipRow
-              legend={AREA_CHIPS.fromScratch}
-              names={worked}
-              pressed={(name) => fromScratch.includes(name)}
-              onToggle={(name) => onAreasChange(worked, toggleName(fromScratch, name))}
-              disabled={disabled}
-            />
+          {parts.length > 0 && (
+            <p className="studio-small text-[var(--studio-text-soft)]">{AREA_CHIPS.worked}</p>
           )}
         </div>
+      )}
+
+      {/* Entry and order only. The page branch keeps its three fates, which are
+          what the overlay's categories are built from — a binary mark here would
+          leave that diagram with nothing to group by. */}
+      {shape === 'single_page' && (
+        <ChipInput
+          {...listField('page_sections')}
+          chips={pageSections}
+          onChange={onPageSectionsChange}
+          disabled={disabled}
+        />
       )}
 
       {/* One row per section, the three fates exclusive within it. Tapping the
@@ -197,14 +235,28 @@ export function Step4Structure({
       {/* One tap per step, binary: a step survived or it did not. §5.2 counts a
           step merged into another as removed, which is why the question asks
           what is gone rather than what was deleted. */}
-      {shape === 'one_flow' && steps.length > 0 && (
-        <ChipRow
-          legend={FLOW_CHIPS.removed}
-          names={steps}
-          pressed={(name) => removed.includes(name)}
-          onToggle={(name) => onStepsRemovedChange(toggleName(removed, name))}
-          disabled={disabled}
-        />
+      {/* Unreachable from the fork, which locks this branch (`locked` on
+          WORK_SHAPE_OPTIONS). Built and kept wired because the branch itself —
+          `buildSequenceCollapse` and its gates — is finished and passing, and an
+          older draft or a fixture can still arrive carrying this shape. */}
+      {shape === 'one_flow' && (
+        <div className="flex flex-col gap-4">
+          <ChipInput
+            {...listField('flow_steps')}
+            chips={flowSteps}
+            onChange={onFlowStepsChange}
+            disabled={disabled}
+          />
+          {steps.length > 0 && (
+            <ChipRow
+              legend={FLOW_CHIPS.removed}
+              names={steps}
+              pressed={(name) => removed.includes(name)}
+              onToggle={(name) => onStepsRemovedChange(toggleName(removed, name))}
+              disabled={disabled}
+            />
+          )}
+        </div>
       )}
 
       {/* Same classes as the review screen's note, so the two read as one
@@ -213,6 +265,21 @@ export function Step4Structure({
         <p className="studio-small rounded-[var(--studio-r-md)] bg-[var(--studio-bg-secondary)] p-4 text-[var(--studio-text-soft)]">
           {hint}
         </p>
+      )}
+
+      {/* Only once something has been tapped. Before that every decision is
+          unattached, and saying so would be a complaint about a question nobody
+          has reached yet. The decision text is the designer's own, so it is
+          listed rather than described. */}
+      {unattached.length > 0 && parts.some((c) => c.worked) && (
+        <div className="studio-small rounded-[var(--studio-r-md)] bg-[var(--studio-bg-secondary)] p-4 text-[var(--studio-text-soft)]">
+          <p>{WIZARD_COPY.noteUnattached}</p>
+          <ul className="mt-1 list-disc pl-5">
+            {unattached.map((label) => (
+              <li key={label}>{label}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {named.length === 0 ? (

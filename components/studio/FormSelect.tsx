@@ -18,13 +18,15 @@ type Props<T extends string> = {
    * option covers. Optional and structural, so the lists that do not carry one
    * render exactly as they did before.
    */
-  options: readonly { value: T; label: string; example?: string }[]
+  options: readonly { value: T; label: string; example?: string; locked?: boolean }[]
   value: T | null
   onChange: (value: T) => void
   columns?: 1 | 2
   helper?: string
   disabled?: boolean
   id?: string
+  /** Badge on a locked option. Same treatment SelectionCard gives step 1's. */
+  lockedLabel?: string
 }
 
 export function FormSelect<T extends string>({
@@ -37,6 +39,7 @@ export function FormSelect<T extends string>({
   helper,
   disabled = false,
   id,
+  lockedLabel = 'Coming soon',
 }: Props<T>) {
   return (
     <fieldset id={id} className="w-full">
@@ -44,6 +47,11 @@ export function FormSelect<T extends string>({
       <div className={'mt-3 grid gap-3 ' + (columns === 2 ? 'sm:grid-cols-2' : '')}>
         {options.map((o) => {
           const active = value === o.value
+          // A locked option is visible, unselectable and labelled — the same
+          // three properties SelectionCard gives step 1's, and for the same
+          // reason: hiding it would make the fork look like it has two answers.
+          // The radio is `disabled`, so there is no onChange to guard.
+          const locked = o.locked === true || disabled
           return (
             <label
               key={o.value}
@@ -51,11 +59,14 @@ export function FormSelect<T extends string>({
                 // items-start, not items-center: with an example underneath, a
                 // centred radio floats between the two lines instead of
                 // belonging to the label it selects.
-                'flex items-start gap-2 rounded-[var(--studio-r-md)] border bg-[var(--studio-bg-primary)] p-2 transition-colors ' +
-                (active
-                  ? 'border-[var(--studio-brand-hover)]'
-                  : 'border-[var(--studio-border-strong)]') +
-                (disabled ? ' cursor-not-allowed opacity-60' : ' cursor-pointer')
+                'flex items-start gap-2 rounded-[var(--studio-r-md)] border p-2 transition-colors ' +
+                (o.locked
+                  ? 'border-[var(--studio-border)] bg-[var(--studio-bg-secondary)] opacity-60'
+                  : 'bg-[var(--studio-bg-primary)] ' +
+                    (active
+                      ? 'border-[var(--studio-brand-hover)]'
+                      : 'border-[var(--studio-border-strong)]')) +
+                (locked ? ' cursor-not-allowed' : ' cursor-pointer')
               }
             >
               <input
@@ -63,7 +74,7 @@ export function FormSelect<T extends string>({
                 name={name}
                 value={o.value}
                 checked={active}
-                disabled={disabled}
+                disabled={locked}
                 onChange={() => onChange(o.value)}
                 className="sr-only"
               />
@@ -83,13 +94,20 @@ export function FormSelect<T extends string>({
                   second thing that lights up, and selection is carried by the
                   border and the ring — see the note at the top of this file. */}
               <span className="flex flex-col gap-1">
-                <span
-                  className={
-                    'studio-small ' +
-                    (active ? 'text-[var(--studio-text)]' : 'text-[var(--studio-text-soft)]')
-                  }
-                >
-                  {o.label}
+                <span className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={
+                      'studio-small ' +
+                      (active ? 'text-[var(--studio-text)]' : 'text-[var(--studio-text-soft)]')
+                    }
+                  >
+                    {o.label}
+                  </span>
+                  {o.locked && (
+                    <span className="studio-small rounded-[var(--studio-r-sm)] border border-[var(--studio-border)] bg-[var(--studio-bg-primary)] px-2 py-0.5 text-[var(--studio-text-soft)]">
+                      {lockedLabel}
+                    </span>
+                  )}
                 </span>
                 {o.example && (
                   <span className="studio-small text-[var(--studio-text-soft)]">{o.example}</span>

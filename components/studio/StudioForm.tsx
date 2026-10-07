@@ -29,12 +29,14 @@ import {
   buildReview,
   compileBlockers,
   reviewNotes,
+  chipsFromText,
   emptyWizardState,
   nextStep,
   prevStep,
   stepMeta,
   stepPosition,
   type Attachment,
+  type Chip,
   type StepId,
   type WizardState,
 } from '@/lib/wizard-steps'
@@ -101,8 +103,9 @@ export function StudioForm() {
   const [tone, setTone] = useState<Tone>(DEFAULT_TONE)
   const [provenance, setProvenance] = useState<Provenance | null>(null)
   const [outcome, setOutcome] = useState<OutcomeStatus | null>(null)
-  const [areasWorked, setAreasWorked] = useState<string[]>([])
-  const [areasFromScratch, setAreasFromScratch] = useState<string[]>([])
+  const [parts, setParts] = useState<Chip[]>([])
+  const [pageSections, setPageSections] = useState<Chip[]>([])
+  const [flowSteps, setFlowSteps] = useState<Chip[]>([])
   const [shape, setShape] = useState<WorkShape | null>(null)
   const [sectionFates, setSectionFates] = useState<Record<string, SectionFate>>({})
   const [stepsRemoved, setStepsRemoved] = useState<string[]>([])
@@ -126,8 +129,9 @@ export function StudioForm() {
     collaborators,
     provenance,
     outcome,
-    areasWorked,
-    areasFromScratch,
+    parts,
+    pageSections,
+    flowSteps,
     shape,
     sectionFates,
     stepsRemoved,
@@ -174,8 +178,9 @@ export function StudioForm() {
           setCollaborators(f.state.collaborators)
           setProvenance(f.state.provenance)
           setOutcome(f.state.outcome)
-          setAreasWorked(f.state.areasWorked)
-          setAreasFromScratch(f.state.areasFromScratch)
+          setParts(f.state.parts)
+          setPageSections(f.state.pageSections)
+          setFlowSteps(f.state.flowSteps)
           setShape(f.state.shape)
           setSectionFates(f.state.sectionFates)
           setStepsRemoved(f.state.stepsRemoved)
@@ -225,8 +230,17 @@ export function StudioForm() {
         setCollaborators(draft.collaborators)
         setProvenance(draft.provenance)
         setOutcome(draft.outcome)
-        setAreasWorked(draft.areasWorked)
-        setAreasFromScratch(draft.areasFromScratch)
+        // A draft written before chips carries the typed lists and no chips.
+        // That list is still the person's work, so it comes back as chips —
+        // unmarked, because the taps were stored by name and there is no honest
+        // way to reattach them to ids that did not exist when they were made.
+        setParts(draft.parts.length > 0 ? draft.parts : chipsFromText(draft.text.product_areas))
+        setPageSections(
+          draft.pageSections.length > 0 ? draft.pageSections : chipsFromText(draft.text.page_sections)
+        )
+        setFlowSteps(
+          draft.flowSteps.length > 0 ? draft.flowSteps : chipsFromText(draft.text.flow_steps)
+        )
         setShape(draft.shape)
         setSectionFates(draft.sectionFates)
         setStepsRemoved(draft.stepsRemoved)
@@ -259,8 +273,9 @@ export function StudioForm() {
       collaborators,
       provenance,
       outcome,
-      areasWorked,
-      areasFromScratch,
+      parts,
+      pageSections,
+      flowSteps,
       shape,
       sectionFates,
       stepsRemoved,
@@ -275,7 +290,7 @@ export function StudioForm() {
       if (latest.current) writeDraft(latest.current)
     }, SAVE_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [hydrated, step, projectType, tone, text, toggles, decisions, collaborators, provenance, outcome, attachments, saved])
+  }, [hydrated, step, projectType, tone, text, toggles, decisions, collaborators, provenance, outcome, parts, pageSections, flowSteps, shape, sectionFates, stepsRemoved, attachments, saved])
 
   // Whatever is still inside the debounce window when the page goes away. Without
   // it the last quarter-second of typing is lost on every reload.
@@ -317,8 +332,12 @@ export function StudioForm() {
     setCollaborators([])
     setProvenance(null)
     setOutcome(null)
-    setAreasWorked([])
-    setAreasFromScratch([])
+    setParts([])
+    setPageSections([])
+    setFlowSteps([])
+    setShape(null)
+    setSectionFates({})
+    setStepsRemoved([])
     setAttachments([])
     setProjectType(DEFAULT_PROJECT_TYPE)
     setTone(DEFAULT_TONE)
@@ -556,12 +575,12 @@ export function StudioForm() {
           <Step4Structure
             decisions={decisions}
             onChange={setDecisions}
-            areasWorked={areasWorked}
-            areasFromScratch={areasFromScratch}
-            onAreasChange={(worked, fromScratch) => {
-              setAreasWorked(worked)
-              setAreasFromScratch(fromScratch)
-            }}
+            parts={parts}
+            onPartsChange={setParts}
+            pageSections={pageSections}
+            onPageSectionsChange={setPageSections}
+            flowSteps={flowSteps}
+            onFlowStepsChange={setFlowSteps}
             shape={shape}
             onShapeChange={setShape}
             sectionFates={sectionFates}

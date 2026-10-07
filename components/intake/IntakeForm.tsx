@@ -84,8 +84,9 @@ export function IntakeForm({ onCreated }: Props) {
     outcome,
     // The legacy intake asks neither side of step 4's fork; the Approach
     // diagram is the studio path's, and so is the question it is built from.
-    areasWorked: [],
-    areasFromScratch: [],
+    parts: [],
+    pageSections: [],
+    flowSteps: [],
     shape: null,
     sectionFates: {},
     stepsRemoved: [],
