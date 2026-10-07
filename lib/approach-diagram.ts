@@ -21,12 +21,16 @@
 // input is the steps of one flow, which shares no pattern with either of these,
 // and it has no wizard field.
 //
-// NEITHER IS DRAWN. There is no renderer for either template. See the blocker
-// above the order-overlay half, and APPROACH-VISUAL-PRD.md open items 3 and 5.
+// ALL FOUR ARE DRAWN — components/studio/ApproachDiagram.tsx switches on the
+// four guards below. This block used to say "NEITHER IS DRAWN. There is no
+// renderer for either template", which was true when it was written and has not
+// been for some time. Corrected here rather than left, because it sits directly
+// above the contract it describes.
 //
-// Thresholds come from APPROACH-VISUAL-PRD.md and nowhere else. Each one carries
-// the section it was read from, because a number with no source is a number
-// somebody will round.
+// Thresholds come from APPROACH-VISUAL-PRD.md and nowhere else, EXCEPT
+// set-exception's, which no longer do — see the note above `PART_MIN`. Each of
+// the others carries the section it was read from, because a number with no
+// source is a number somebody will round.
 
 import type { FlowStep, Intake, PageSection, SectionFate } from '@/types/database'
 
@@ -44,15 +48,24 @@ type DiagramTail = {
 export type SetExceptionItem = {
   /** The part, exactly as the designer named it. */
   label: string
-  /** `new` where they said it had no precedent; everything else is `reused`. */
-  status: 'reused' | 'new'
+  /** True where they tapped it as worked on. */
+  worked: boolean
 }
 
 export type SetExceptionDiagram = DiagramTail & {
   template: 'set-exception'
+  /**
+   * EVERY part the designer named, in their own order — not only the worked set.
+   *
+   * It was the worked set until the chips gained ids and attachments. The form
+   * has always insisted on the whole list ("All of them, not only the ones you
+   * touched"), and then threw the untouched ones away, which left the reach
+   * claim with no denominator. The exception is now the worked part against the
+   * product it sits in, which is what the full list was being collected for.
+   */
   items: SetExceptionItem[]
   total: number
-  new_count: number
+  worked_count: number
 }
 
 /** A section of one page. The array's index IS the page's real order. */
@@ -115,9 +128,31 @@ export const isSequenceCollapse = (d: ApproachDiagram): d is SequenceCollapseDia
 export const isDecisionSet = (d: ApproachDiagram): d is DecisionSetDiagram =>
   d.template === 'decision-set'
 
-// PRD §5.1 — set-exception's gates.
-export const SET_MIN = 4
-export const SET_MAX = 8
+/**
+ * set-exception's floor, and the only threshold left in its gate.
+ *
+ * PRD §5.1's 4–8 window and its "no more than half exceptional" rule were
+ * deleted with the axis they measured: the exception used to be "no precedent",
+ * and it is now "worked on, with a decision attached". The four conditions in
+ * `gateSetException` are the whole gate, decided as a product call and
+ * implemented as written.
+ *
+ * TWO GUARDS WENT WITH THEM, AND BOTH ARE A REAL LOSS. There is no upper bound,
+ * so seven of eight marked still draws although it is nearly the no-contrast
+ * case condition 3 exists to catch; and `isProcessWord` no longer guards these
+ * labels, so "Discovery, Research, Handoff" can reach the grid as product parts
+ * — the failure the banner above `PROCESS_WORDS` calls the one this whole
+ * system exists to prevent. Recorded here rather than quietly reinstated: the
+ * four conditions were specified as non-negotiable and adding a fifth is not
+ * this change's call to make.
+ *
+ * The brief asked for a chip cap of 10. The form caps at `PART_MAX` instead, so
+ * that the number of chips a person is allowed to enter and the number the grid
+ * can hold cannot disagree — under a 10-cap someone fills nine chips with no
+ * resistance and silently gets no picture.
+ */
+export const PART_MIN = 4
+export const PART_MAX = 8
 
 // The floor form's bounds. Not a gate in the sense the other three have one:
 // `compileBlockers` already refuses to write a page with fewer than two
@@ -220,31 +255,36 @@ function isProcessWord(label: string): boolean {
  * Returns every failure rather than the first: these are read by a person
  * deciding whether the gate is right, not by a retry loop.
  */
-export function gateSetException(c: SetExceptionDiagram): string[] {
+export function gateSetException(c: SetExceptionDiagram, attached: number = 0): string[] {
   const failed: string[] = []
 
-  if (c.total < SET_MIN || c.total > SET_MAX) {
-    failed.push(`total is ${c.total}; the set has to hold ${SET_MIN} to ${SET_MAX} parts`)
+  // The four conditions, in the order they were specified, and nothing else.
+  // No threshold is relaxed, none is merged into another, and none is
+  // configurable. See the note above PART_MIN for the two guards this cost.
+  if (c.total < PART_MIN) {
+    failed.push(`there are ${c.total} parts; the grid needs ${PART_MIN}`)
   }
+  if (c.worked_count === 0) {
+    failed.push('no part is marked as worked on')
+  }
+  if (c.total > 0 && c.worked_count === c.total) {
+    failed.push(`all ${c.total} parts are marked; with nothing left unmarked there is no contrast to draw`)
+  }
+  if (attached === 0) {
+    failed.push('no decision is attached to any marked part')
+  }
+
+  // Internal consistency, not a fifth condition: these catch a hand-built
+  // contract disagreeing with itself, and cannot fire on one `buildSetException`
+  // produced.
   if (c.items.length !== c.total) {
     failed.push(`total says ${c.total} and there are ${c.items.length} items`)
   }
-  if (c.new_count !== c.items.filter((i) => i.status === 'new').length) {
-    failed.push(`new_count says ${c.new_count} and the items disagree`)
+  if (c.worked_count !== c.items.filter((i) => i.worked).length) {
+    failed.push(`worked_count says ${c.worked_count} and the items disagree`)
   }
-
-  // The upper bound is deliberate and is the whole argument of the form: when
-  // half the set is exceptional the set has no rule left to break, and the
-  // diagram claims nothing.
-  if (c.new_count < 1 || c.new_count > c.total / 2) {
-    failed.push(`new_count is ${c.new_count}; it has to be between 1 and half of ${c.total}`)
-  }
-
   for (const item of c.items) {
     if (item.label.trim() === '') failed.push('an item has no label')
-    else if (isProcessWord(item.label)) {
-      failed.push(`"${item.label}" names a phase of the designer's process, not a part of the product`)
-    }
   }
 
   return failed
@@ -526,33 +566,37 @@ export function gateOrderOverlay(c: OrderOverlayDiagram): string[] {
  * product — but the diagram is about the work's reach, so the work is the set.
  */
 function buildSetException(intake: Intake): SetExceptionDiagram | null {
-  const worked = intake.product_areas_worked ?? []
-  const fromScratch = intake.product_areas_new ?? []
-  if (worked.length === 0) return null
+  const parts = intake.product_parts ?? []
+  if (parts.length === 0) return null
 
   // Whole, never trimmed. What fits is the renderer's problem.
-  const items: SetExceptionItem[] = worked.map((label) => ({
-    label,
-    status: fromScratch.includes(label) ? 'new' : 'reused',
+  const items: SetExceptionItem[] = parts.map((p) => ({
+    label: p.label,
+    worked: p.worked === true,
   }))
 
-  const newOnes = items.filter((i) => i.status === 'new')
-  const reused = items.filter((i) => i.status === 'reused')
+  const worked = parts.filter((p) => p.worked === true)
+  const untouched = items.filter((i) => !i.worked)
+
+  // Condition 4 counts parts carrying a decision, not decisions. A designer who
+  // hangs three decisions on one part has still only told the diagram about one
+  // part, and the gate is about whether anything was said at all.
+  const attached = worked.filter((p) => (p.decisions ?? []).length > 0).length
 
   const contract: SetExceptionDiagram = {
     template: 'set-exception',
     items,
     total: items.length,
-    new_count: newOnes.length,
+    worked_count: worked.length,
     // No field supplies a reason and the PRD forbids inferring one.
     reason: null,
     text_equivalent:
-      `${items.length} parts of the product were worked on: ` +
-      `${reused.map((i) => i.label).join(', ')} followed what was already there, and ` +
-      `${newOnes.map((i) => i.label).join(', ')} had no precedent.`,
+      `The product has ${items.length} parts. ` +
+      `${worked.map((p) => p.label).join(', ')} ${worked.length === 1 ? 'was' : 'were'} worked on; ` +
+      `${untouched.map((i) => i.label).join(', ')} ${untouched.length === 1 ? 'was' : 'were'} left alone.`,
   }
 
-  return gateSetException(contract).length === 0 ? contract : null
+  return gateSetException(contract, attached).length === 0 ? contract : null
 }
 
 /** The page's order and its categories, in words, for a reader who cannot see it. */

@@ -166,17 +166,23 @@ export type Intake = {
   /**
    * The product's own parts, and where this work sat inside them.
    *
-   * Three answers rather than two, and the third is the one that matters. Which
-   * parts were worked on is a coverage map; which of those had nothing like them
-   * already is a different claim, and it is the claim the Approach diagram's
-   * caption makes. Deriving the second from the first would be fabrication.
+   * ONE ARRAY, NOT THREE PARALLEL LISTS. It was `product_areas_worked` and
+   * `product_areas_new` beside the raw text, matched back together by name — and
+   * a name is not an identity. Renaming a part dropped its taps silently, and
+   * two parts the designer spelled the same were one part as far as the match
+   * was concerned. Each part now carries its own flags, so there is nothing to
+   * match and nothing to fall out of step.
    *
-   * `product_areas` is raw, as typed. The two arrays hold names parsed out of it,
-   * and `product_areas_new` is always a subset of `product_areas_worked`.
+   * `product_areas` is still raw, as typed, and is now composed from the labels
+   * rather than being the source they are parsed out of.
+   *
+   * The third answer changed with it. "Which of these had no precedent" is gone;
+   * what marks a part now is the designer attaching one of their own decisions
+   * to it. Both are claims they made rather than claims derived from each other,
+   * which is the property that mattered.
    */
   product_areas?: string
-  product_areas_worked?: string[]
-  product_areas_new?: string[]
+  product_parts?: ProductPart[]
 
   /**
    * The page's own sections, in order, and what happened to each.
@@ -250,6 +256,23 @@ export type Intake = {
 }
 
 export type Collaborator = { name: string; role: string }
+
+/**
+ * One part of the product, in the order the designer named it.
+ *
+ * `worked` is ABSENT where they did not tap it, for the same reason `removed` is
+ * on FlowStep: a flag that is only ever true or missing cannot be half-read.
+ *
+ * `decisions` holds `Decision.id`s and never labels, never positions. It is only
+ * meaningful on a worked part — a decision attached to a part nobody worked on
+ * is a claim the form cannot produce, and the diagram ignores it rather than
+ * reading it as a tap.
+ *
+ * No id of its own. Inside the wizard each chip carries one, which is what keeps
+ * marks and attachments on the right part across a drag or a rename; here the
+ * array IS the structure, so there is no second thing to key against.
+ */
+export type ProductPart = { label: string; worked?: true; decisions?: string[] }
 
 /**
  * What happened to one section of a page: added, kept or cut.

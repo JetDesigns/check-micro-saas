@@ -23,18 +23,17 @@ import type {
 } from '@/lib/approach-diagram'
 
 /**
- * Reading order for the grid: every reused mark, then every exception.
+ * Reading order for the grid: every untouched mark, then every worked one.
  *
  * §5.1 — "Emit every `reused` item first, then every `new` item, so the
  * exceptions form one unbroken run. Scattered exceptions have to be counted; an
- * unbroken run is read as one mass." Each run keeps the designer's own order
- * inside it, so nothing is sorted beyond the one split the form argues from.
+ * unbroken run is read as one mass." The rule survives the change of axis; only
+ * which items are the exceptions moved, from "no precedent" to "worked on".
+ * Each run keeps the designer's own order inside it, so nothing is sorted
+ * beyond the one split the form argues from.
  */
 export function setExceptionOrder(items: readonly SetExceptionItem[]): SetExceptionItem[] {
-  return [
-    ...items.filter((i) => i.status === 'reused'),
-    ...items.filter((i) => i.status === 'new'),
-  ]
+  return [...items.filter((i) => !i.worked), ...items.filter((i) => i.worked)]
 }
 
 /**
@@ -52,17 +51,14 @@ export function setExceptionOrder(items: readonly SetExceptionItem[]): SetExcept
  * show."
  */
 export function setExceptionCaption(c: SetExceptionDiagram): string {
-  const reused = c.total - c.new_count
-  const followed =
-    reused === 1 ? '1 followed an existing pattern' : `${reused} followed existing patterns`
-  const fresh =
-    c.new_count === 1
-      ? '1 needed a new one from scratch'
-      : `${c.new_count} needed new ones from scratch`
+  const untouched = c.total - c.worked_count
+  const worked =
+    c.worked_count === 1 ? '1 was worked on' : `${c.worked_count} were worked on`
+  const rest = untouched === 1 ? '1 was left alone' : `${untouched} were left alone`
 
-  const head = `${c.total} ${c.total === 1 ? 'area' : 'areas'}, ${followed}, ${fresh}`
+  const head = `${c.total} ${c.total === 1 ? 'area' : 'areas'}, ${worked}, ${rest}`
   // `reason` is stated by the designer or it is null. Never inferred (PRD §8).
-  return c.reason ? `${head.slice(0, -'from scratch'.length)}from scratch — ${c.reason}.` : `${head}.`
+  return c.reason ? `${head} — ${c.reason}.` : `${head}.`
 }
 
 // ---------------------------------------------------------------------------

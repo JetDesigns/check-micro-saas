@@ -18,14 +18,14 @@ import type {
   SetExceptionItem,
 } from './approach-diagram'
 
-const items = (...spec: [string, 'reused' | 'new'][]): SetExceptionItem[] =>
-  spec.map(([label, status]) => ({ label, status }))
+const items = (...spec: [string, boolean][]): SetExceptionItem[] =>
+  spec.map(([label, worked]) => ({ label, worked }))
 
 const contract = (over: Partial<SetExceptionDiagram> = {}): SetExceptionDiagram => ({
   template: 'set-exception',
-  items: items(['Orders', 'reused'], ['Menu', 'reused'], ['Kitchen', 'reused'], ['Shifts', 'new']),
+  items: items(['Orders', false], ['Menu', false], ['Kitchen', false], ['Shifts', true]),
   total: 4,
-  new_count: 1,
+  worked_count: 1,
   reason: null,
   text_equivalent: '',
   ...over,
@@ -33,20 +33,14 @@ const contract = (over: Partial<SetExceptionDiagram> = {}): SetExceptionDiagram 
 
 describe('grid order', () => {
   // Scattered exceptions have to be counted; an unbroken run is read as one mass.
-  it('puts every exception after every reused mark', () => {
-    const mixed = items(
-      ['Orders', 'reused'], ['Shifts', 'new'], ['Menu', 'reused'], ['Tables', 'new']
-    )
-    expect(setExceptionOrder(mixed).map((i) => i.status)).toEqual([
-      'reused', 'reused', 'new', 'new',
-    ])
+  it('puts every worked mark after every untouched one', () => {
+    const mixed = items(['Orders', false], ['Shifts', true], ['Menu', false], ['Tables', true])
+    expect(setExceptionOrder(mixed).map((i) => i.worked)).toEqual([false, false, true, true])
   })
 
   // Only the one split the form argues from. Nothing else is sorted.
   it("keeps the designer's own order inside each run", () => {
-    const mixed = items(
-      ['Zebra', 'reused'], ['Shifts', 'new'], ['Apple', 'reused'], ['Tables', 'new']
-    )
+    const mixed = items(['Zebra', false], ['Shifts', true], ['Apple', false], ['Tables', true])
     expect(setExceptionOrder(mixed).map((i) => i.label)).toEqual([
       'Zebra', 'Apple', 'Shifts', 'Tables',
     ])
@@ -58,30 +52,29 @@ describe('grid order', () => {
 })
 
 describe('caption', () => {
-  // The gate's floor for new_count is 1, so this is the commonest page on the
-  // product and the formula as written reads "1 needed new ones" there.
-  it('agrees with its count when exactly one part had no precedent', () => {
-    expect(setExceptionCaption(contract())).toBe(
-      '4 areas, 3 followed existing patterns, 1 needed a new one from scratch.'
+  // Pluralised against the count rather than written once, because a four-part
+  // product with one area touched is an ordinary page and "1 were worked on"
+  // would be the commonest string this ever produces.
+  it('agrees with its count when exactly one part was worked on', () => {
+    expect(setExceptionCaption(contract())).toBe('4 areas, 1 was worked on, 3 were left alone.')
+  })
+
+  it('reads as a plural when more than one was', () => {
+    expect(setExceptionCaption(contract({ worked_count: 2 }))).toBe(
+      '4 areas, 2 were worked on, 2 were left alone.'
     )
   })
 
-  it('reads as a plural when more than one did', () => {
-    expect(setExceptionCaption(contract({ new_count: 2 }))).toBe(
-      '4 areas, 2 followed existing patterns, 2 needed new ones from scratch.'
-    )
-  })
-
-  it('agrees when exactly one part followed what was there', () => {
-    expect(setExceptionCaption(contract({ total: 2, new_count: 1 }))).toContain(
-      '1 followed an existing pattern'
+  it('agrees when exactly one part was left alone', () => {
+    expect(setExceptionCaption(contract({ total: 2, worked_count: 1 }))).toContain(
+      '1 was left alone'
     )
   })
 
   // Stated by the designer or absent. The caption never invents one.
   it("carries the designer's reason when there is one", () => {
     expect(setExceptionCaption(contract({ reason: 'the kitchen screen was another vendor' }))).toBe(
-      '4 areas, 3 followed existing patterns, 1 needed a new one from scratch — the kitchen screen was another vendor.'
+      '4 areas, 1 was worked on, 3 were left alone — the kitchen screen was another vendor.'
     )
   })
 

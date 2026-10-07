@@ -86,7 +86,7 @@ export function ApproachDiagram({ diagram }: { diagram: Contract | null }) {
             key={item.label}
             title={item.label}
             className={`${MARK} w-[120px] justify-center ${
-              item.status === 'new' ? EXCEPTION_MARK : DEFAULT_MARK
+              item.worked ? EXCEPTION_MARK : DEFAULT_MARK
             }`}
           >
             {item.label}

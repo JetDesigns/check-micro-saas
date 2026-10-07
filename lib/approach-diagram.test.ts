@@ -23,19 +23,19 @@ import type { FlowStep, Intake, PageSection } from '@/types/database'
 const contract = (over: Partial<SetExceptionDiagram> = {}): SetExceptionDiagram => ({
   template: 'set-exception',
   items: [
-    { label: 'Reports', status: 'reused' },
-    { label: 'Projects', status: 'reused' },
-    { label: 'Lists', status: 'reused' },
-    { label: 'Team', status: 'reused' },
-    { label: 'Settings', status: 'reused' },
-    { label: 'Canvassing', status: 'new' },
-    { label: 'Messages', status: 'new' },
-    { label: 'Data', status: 'new' },
+    { label: 'Reports', worked: false },
+    { label: 'Projects', worked: false },
+    { label: 'Lists', worked: false },
+    { label: 'Team', worked: false },
+    { label: 'Settings', worked: false },
+    { label: 'Canvassing', worked: true },
+    { label: 'Messages', worked: true },
+    { label: 'Data', worked: true },
   ],
   total: 8,
-  new_count: 3,
+  worked_count: 3,
   reason: null,
-  text_equivalent: 'Eight parts were worked on; three had no precedent.',
+  text_equivalent: 'The product has eight parts; three were worked on.',
   ...over,
 })
 
@@ -91,8 +91,7 @@ const FLOW: FlowStep[] = [
 const flowIntake = (over: Partial<Intake> = {}): Intake => ({
   ...fixtureIntake('handover'),
   product_areas: undefined,
-  product_areas_worked: undefined,
-  product_areas_new: undefined,
+  product_parts: undefined,
   flow_steps_ordered: FLOW,
   ...over,
 })
@@ -118,8 +117,7 @@ const PAGE: PageSection[] = [
 const pageIntake = (over: Partial<Intake> = {}): Intake => ({
   ...fixtureIntake('handover'),
   product_areas: undefined,
-  product_areas_worked: undefined,
-  product_areas_new: undefined,
+  product_parts: undefined,
   page_sections_ordered: PAGE,
   page_pattern: 'everything cut sat in the middle of the page',
   ...over,
@@ -140,7 +138,7 @@ describe("the PRD's worked examples", () => {
   // APPROACH-VISUAL-PRD.md §8.1, item for item. If this fails, either the gates
   // drifted from the document or the document moved without the code following.
   it('passes every set-exception gate exactly as written', () => {
-    expect(gateSetException(contract())).toEqual([])
+    expect(gateSetException(contract(), 1)).toEqual([])
   })
 
   // §8.3, the same way: seven sections, three categories, "Added" across three.
@@ -160,37 +158,57 @@ describe("the PRD's worked examples", () => {
 })
 
 describe('set-exception gates', () => {
+  // The four conditions, one test each, in the order they were specified. They
+  // are the whole gate: no window, no half rule, no process-word guard. The two
+  // that went are recorded above PART_MIN rather than quietly kept.
+  //
+  // `attached` is the second argument because it is a fact about the intake, not
+  // about the drawn contract — a part carries decisions, the grid does not draw
+  // them, and putting them on the contract would store something nothing reads.
+  const ATTACHED = 1
+
   it('refuses a set of three', () => {
-    const c = contract({ items: contract().items.slice(0, 3), total: 3, new_count: 1 })
-    c.items[2].status = 'new'
-    expect(gateSetException(c).join(' ')).toContain('4 to 8')
+    const c = contract({ items: contract().items.slice(0, 3), total: 3, worked_count: 1 })
+    c.items[2].worked = true
+    expect(gateSetException(c, ATTACHED).join(' ')).toContain('needs 4')
   })
 
-  it('refuses a set of nine', () => {
-    const items = [...contract().items, { label: 'Billing', status: 'reused' as const }]
-    expect(gateSetException(contract({ items, total: 9 })).join(' ')).toContain('4 to 8')
+  it('refuses a set where nothing is marked', () => {
+    const items = contract().items.map((i) => ({ ...i, worked: false }))
+    expect(gateSetException(contract({ items, worked_count: 0 }), ATTACHED).join(' ')).toContain(
+      'no part is marked'
+    )
   })
 
-  it('refuses a set with no exception, because uniform data is not a finding', () => {
-    const items = contract().items.map((i) => ({ ...i, status: 'reused' as const }))
-    expect(gateSetException(contract({ items, new_count: 0 })).join(' ')).toContain('between 1')
+  // The contrast IS the picture. Everything marked draws one block of colour,
+  // which claims nothing about reach.
+  it('refuses a set where everything is marked', () => {
+    const items = contract().items.map((i) => ({ ...i, worked: true }))
+    expect(gateSetException(contract({ items, worked_count: 8 }), ATTACHED).join(' ')).toContain(
+      'no contrast'
+    )
   })
 
-  // The upper bound is the argument of the form: when half the set is
-  // exceptional the set has no rule left to break.
-  it('refuses a set that is more than half exceptional', () => {
-    const items = contract().items.map((i, n) => ({ ...i, status: n < 5 ? ('new' as const) : ('reused' as const) }))
-    expect(gateSetException(contract({ items, new_count: 5 })).join(' ')).toContain('half of 8')
+  it('refuses a set with no decision attached to anything', () => {
+    expect(gateSetException(contract(), 0).join(' ')).toContain('no decision is attached')
   })
 
-  it('refuses a label that names the designer process', () => {
+  // Deliberately NOT refused any more. Both are a real loss and both are
+  // recorded above PART_MIN; pinning them here is what stops one being
+  // reinstated by accident under the impression it was always there.
+  it('accepts a set of nine, because the four conditions carry no upper bound', () => {
+    const items = [...contract().items, { label: 'Billing', worked: false }]
+    expect(gateSetException(contract({ items, total: 9 }), ATTACHED)).toEqual([])
+  })
+
+  it('accepts a label naming the designer process, because the guard went with the old gate', () => {
     const items = [...contract().items]
-    items[0] = { label: 'Discovery', status: 'reused' }
-    expect(gateSetException(contract({ items })).join(' ')).toContain('process')
+    items[0] = { label: 'Discovery', worked: false }
+    expect(gateSetException(contract({ items }), ATTACHED)).toEqual([])
   })
 
   it('catches a count that disagrees with the items', () => {
-    expect(gateSetException(contract({ new_count: 2 })).join(' ')).toContain('disagree')
+    expect(gateSetException(contract({ worked_count: 2 }), ATTACHED).join(' ')).toContain('disagree')
   })
 })
 
@@ -336,8 +354,16 @@ describe('labels', () => {
   // labels that had room to spare.
   it('carries labels whole into the contract, however long they are', () => {
     const long = intake({
-      product_areas_worked: ['Campaign performance', 'Billing & invoices', 'Orders', 'Menu'],
-      product_areas_new: ['Orders'],
+      product_parts: [
+        { label: 'Campaign performance', worked: true },
+        { label: 'Billing & invoices', worked: true },
+        { label: 'Orders', worked: true, decisions: ['d1'] },
+        { label: 'Menu', worked: true },
+        { label: 'Reports' },
+        { label: 'Settings' },
+        { label: 'Team' },
+        { label: 'Admin' },
+      ],
     })
     const built = asSetException(buildApproachDiagram(long))
     expect(built.items.map((i) => i.label)).toContain('Campaign performance')
@@ -348,26 +374,64 @@ describe('labels', () => {
   // layout's constraint.
   it('gives the text equivalent the full label, not the trimmed one', () => {
     const long = intake({
-      product_areas_worked: ['Campaign performance', 'Billing & invoices', 'Orders', 'Menu'],
-      product_areas_new: ['Orders'],
+      product_parts: [
+        { label: 'Campaign performance', worked: true },
+        { label: 'Billing & invoices', worked: true },
+        { label: 'Orders', worked: true, decisions: ['d1'] },
+        { label: 'Menu', worked: true },
+        { label: 'Reports' },
+        { label: 'Settings' },
+        { label: 'Team' },
+        { label: 'Admin' },
+      ],
     })
     expect(buildApproachDiagram(long)?.text_equivalent).toContain('Campaign performance')
   })
 })
 
 describe('building set-exception from the intake', () => {
-  it('builds from what the designer said they worked on', () => {
+  it('builds from every part the designer named, marking the ones they worked on', () => {
     const built = asSetException(buildApproachDiagram(intake()))
-    expect(built.total).toBe(4)
-    expect(built.new_count).toBe(1)
-    expect(built.items.find((i) => i.status === 'new')?.label).toBe('Escalations')
+    expect(built.total).toBe(8)
+    expect(built.worked_count).toBe(4)
+    expect(built.items.filter((i) => i.worked).map((i) => i.label)).toEqual([
+      'Ward Board',
+      'Patient Notes',
+      'Handover list',
+      'Escalations',
+    ])
   })
 
-  // The set is the work's reach, not the whole product: eight parts were named
-  // and four were worked on.
-  it('leaves out parts that were named but not worked on', () => {
+  // THE REVERSAL, pinned deliberately. The set used to be the worked parts
+  // alone, which left the reach claim with no denominator — the form has always
+  // asked for the whole product ("All of them, not only the ones you touched")
+  // and then threw the rest away. The untouched parts are what the worked ones
+  // are drawn against.
+  it('keeps parts that were named and not worked on, because they are the contrast', () => {
     const labels = asSetException(buildApproachDiagram(intake())).items.map((i) => i.label)
-    expect(labels).not.toContain('Medication chart')
+    expect(labels).toContain('Medication chart')
+  })
+
+  // A decision attached to a part is the fourth condition, and it is read off
+  // the intake rather than carried into the contract: the grid does not draw it.
+  it('drops out when no decision is attached to any marked part', () => {
+    const none = intake({
+      product_parts: (intake().product_parts ?? []).map((part) => ({ label: part.label, worked: part.worked })),
+    })
+    const built = buildApproachDiagram(none)
+    expect(built && isDecisionSet(built)).toBe(true)
+  })
+
+  it('drops out when every part is marked, because there is no contrast', () => {
+    const all = intake({
+      product_parts: (intake().product_parts ?? []).map((p, i) => ({
+        ...p,
+        worked: true as const,
+        ...(i === 0 ? { decisions: ['d1'] } : {}),
+      })),
+    })
+    const built = buildApproachDiagram(all)
+    expect(built && isDecisionSet(built)).toBe(true)
   })
 
   // Droppable, not retryable — which is still the point of these two. What
@@ -375,12 +439,17 @@ describe('building set-exception from the intake', () => {
   // instead of the page going without. Asserting the floor is what proves
   // set-exception itself dropped out.
   it('drops out when nothing was marked', () => {
-    const built = buildApproachDiagram(intake({ product_areas_worked: [] }))
+    const built = buildApproachDiagram(intake({ product_parts: [] }))
     expect(built && isDecisionSet(built)).toBe(true)
   })
 
   it('drops out when the set is too small, rather than raising anything', () => {
-    const thin = intake({ product_areas_worked: ['Orders', 'Menu'], product_areas_new: ['Menu'] })
+    const thin = intake({
+      product_parts: [
+        { label: 'Orders', worked: true, decisions: ['d1'] },
+        { label: 'Menu' },
+      ],
+    })
     const built = buildApproachDiagram(thin)
     expect(built && isDecisionSet(built)).toBe(true)
   })
@@ -391,7 +460,7 @@ describe('building set-exception from the intake', () => {
 
   it('ships a text equivalent that is not a list of the labels', () => {
     const text = buildApproachDiagram(intake())?.text_equivalent ?? ''
-    expect(text).toContain('no precedent')
+    expect(text).toContain('left alone')
     expect(text.length).toBeGreaterThan(40)
   })
 })
@@ -449,8 +518,16 @@ describe('choosing between the four', () => {
   // §6's fixed order is B, then A, then C.
   it('prefers sequence-collapse over everything else', () => {
     const all = flowIntake({
-      product_areas_worked: ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations'],
-      product_areas_new: ['Escalations'],
+      product_parts: [
+        { label: 'Ward Board', worked: true },
+        { label: 'Patient Notes', worked: true },
+        { label: 'Handover list', worked: true },
+        { label: 'Escalations', worked: true, decisions: ['d1'] },
+        { label: 'Medication chart' },
+        { label: 'Obs chart' },
+        { label: 'Admissions' },
+        { label: 'Discharge' },
+      ],
       page_sections_ordered: PAGE,
       page_pattern: 'everything cut sat in the middle of the page',
     })
@@ -459,8 +536,16 @@ describe('choosing between the four', () => {
 
   it('prefers set-exception when both contracts pass', () => {
     const both = pageIntake({
-      product_areas_worked: ['Ward Board', 'Patient Notes', 'Handover list', 'Escalations'],
-      product_areas_new: ['Escalations'],
+      product_parts: [
+        { label: 'Ward Board', worked: true },
+        { label: 'Patient Notes', worked: true },
+        { label: 'Handover list', worked: true },
+        { label: 'Escalations', worked: true, decisions: ['d1'] },
+        { label: 'Medication chart' },
+        { label: 'Obs chart' },
+        { label: 'Admissions' },
+        { label: 'Discharge' },
+      ],
     })
     expect(asSetException(buildApproachDiagram(both)).template).toBe('set-exception')
   })
@@ -472,8 +557,10 @@ describe('choosing between the four', () => {
   // instead of nothing.
   it('falls through to order-overlay when the set-exception gate fails', () => {
     const failing = pageIntake({
-      product_areas_worked: ['Orders', 'Menu'],
-      product_areas_new: ['Menu'],
+      product_parts: [
+        { label: 'Orders', worked: true, decisions: ['d1'] },
+        { label: 'Menu' },
+      ],
     })
     expect(asOrderOverlay(buildApproachDiagram(failing)).template).toBe('order-overlay')
   })
@@ -484,8 +571,10 @@ describe('choosing between the four', () => {
   // argument; what is tested here is only that the instruction was carried out.
   it('falls to the floor form when none of the three passes', () => {
     const neither = pageIntake({
-      product_areas_worked: ['Orders', 'Menu'],
-      product_areas_new: ['Menu'],
+      product_parts: [
+        { label: 'Orders', worked: true, decisions: ['d1'] },
+        { label: 'Menu' },
+      ],
       page_sections_ordered: PAGE.slice(0, 3),
     })
     const built = buildApproachDiagram(neither)
