@@ -80,6 +80,8 @@ export type WorkShape = 'separate_parts' | 'single_page' | 'one_flow'
 export const WORK_SHAPE_OPTIONS: ReadonlyArray<{
   value: WorkShape
   label: string
+  /** Visible, unselectable, and labelled. Same contract as ProjectTypeOption. */
+  locked?: boolean
   /**
    * The kinds of project the option covers, so nobody has to classify their own
    * work against an abstraction. Every one is its template's own "Typical
@@ -109,6 +111,11 @@ export const WORK_SHAPE_OPTIONS: ReadonlyArray<{
     value: 'one_flow',
     label: 'One flow, start to finish',
     example: 'Checkout, signup, onboarding, booking',
+    // Visible, unselectable and labelled, exactly as step 1 locks "Build from
+    // nothing". Its branch is built and its gates pass; what is not built is the
+    // chip list's third variant, and a fork that offers a branch whose next
+    // question is half-finished is worse than one that says so.
+    locked: true,
   },
 ] as const
 
@@ -679,6 +686,27 @@ export function fieldsForShape(shape: WorkShape | null): IntakeField[] {
 
 export function fieldsRevealedBy(toggle: ToggleKey): IntakeField[] {
   return INTAKE_FIELDS.filter((f) => f.revealedBy === toggle)
+}
+
+/**
+ * The three step-4 lists, which `ChipInput` draws instead of `FieldGroup`.
+ *
+ * They stay in the registry although nothing renders them as a textarea any
+ * more. Their label, helper and placeholder are user-facing copy, and copy that
+ * leaves the registry stops being swept by the discouraging-word test and by the
+ * "keeps user-facing copy out of the step components" test. `ChipInput` is
+ * handed the strings from here rather than carrying its own.
+ */
+export const CHIP_FIELD_KEYS: readonly TextKey[] = [
+  'product_areas',
+  'page_sections',
+  'flow_steps',
+]
+
+export const isChipField = (f: IntakeField): boolean => CHIP_FIELD_KEYS.includes(f.key)
+
+export function fieldByKey(key: TextKey): IntakeField | undefined {
+  return INTAKE_FIELDS.find((f) => f.key === key)
 }
 
 /**
