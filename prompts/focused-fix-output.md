@@ -779,7 +779,10 @@ can render.
 section's technical appendix:
 
 - **Peer set with exceptions**, as the product-area map. Its unit is a part of the product — an
-  area, a screen, a component — named by the designer, with the parts that had no precedent marked.
+  area, a screen, a component — named by the designer, with the parts they worked on marked. The
+  exception was the parts that had no precedent until the step-4 chips gained decision attachment;
+  what marks a part now is the designer having worked on it, and the untouched rest is what it is
+  drawn against. Both remain claims they made rather than claims derived from one another.
 - **Ordered list, categorised**, as the page overlay. Its unit is a section of one page, in the
   page's real order, with what happened to each.
 - **Sequence shortened**, as the flow collapse. Its unit is a step of one flow people walk, with
@@ -839,10 +842,10 @@ structural claim about someone's work that they never verified. Specify it as a 
 the diagram flow. If confirmation cannot be shown, no **inferred** form is generated.
 
 **Scope: confirmation applies to inference.** The available form infers nothing. Its parts are the
-names the designer typed, the set is the parts they marked as worked on, and the exceptions are the
-ones they marked as having no precedent — three answers, carried through. There is no structural
-claim in it they have not already made, so there is nothing to confirm, and it is produced without
-the preview.
+names the designer typed, the set is every one of them, and the exceptions are the ones they tapped
+as worked on — with the decisions they attached deciding whether the form fires at all. Three
+answers, carried through. There is no structural claim in it they have not already made, so there is
+nothing to confirm, and it is produced without the preview.
 
 A preview becomes required the moment a form is inferred rather than carried through. That is the
 next form, not this one.
@@ -895,16 +898,21 @@ failure will ship a feature that never fires; one that treats it as licence to g
 > | **Relative difficulty or weight** | **Captured by no field.** This is the only remaining gap |
 >
 > | **Where the work sat inside the product** | **Available.** Three answers in step 4: the product's
-> main parts, which were worked on, and which of those had no precedent. The available form is built
-> from the second and third |
+> main parts, which of them were worked on, and which decision landed on each one worked on. The
+> available form is built from all three |
 >
 > The weight gap blocks **parallel tracks** and nothing else: it is the one form whose visual
 > requirement is weight, and it is unavailable for a second reason anyway (§9.2).
 >
-> The product-location row is the one that matters here, and it is new. It is asked in three parts
-> rather than two deliberately: which parts were worked on is a coverage map, while which of those
-> had no precedent is a different claim — and it is the claim the diagram makes. Reading the second
-> off the first would be inventing it.
+> The product-location row is the one that matters here. It is asked in three parts rather than two
+> deliberately: which parts were worked on is a coverage map, while which decision landed on each is
+> a different claim — and it is the claim the diagram makes. Reading the second off the first would
+> be inventing it.
+>
+> The third answer was "which of those had no precedent" until the chips gained ids. It was replaced
+> rather than added to, because an attachment is something the designer states by pointing at their
+> own decision, where "no precedent" asked them to classify the part a second time. The property
+> that mattered — neither answer derived from the other — is unchanged.
 >
 > **Renderer dependency.** The block schema implements exactly one diagram primitive: a cycle of
 > three to five nodes. That form is a ring, which §9.2 excludes and §12 item 23 forbids — so the one

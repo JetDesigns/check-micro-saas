@@ -63,11 +63,15 @@ Jawaban ini menentukan **posisi section Results** (lihat Placement Logic di bawa
 
 Section Approach boleh membawa **satu** diagram, tidak pernah dua, dan tidak pernah di section
 lain. Isinya adalah **peta produk user sendiri**: bagian-bagian produk yang mereka sebut, mana
-yang mereka kerjakan, dan mana dari yang dikerjakan itu yang tidak punya preseden sama sekali.
+yang mereka kerjakan, dan keputusan mana yang mendarat di bagian yang dikerjakan itu.
 
-**Kapan muncul.** Hanya kalau tiga jawaban itu ada dan cukup: minimal empat bagian yang
-dikerjakan, maksimal delapan, dan minimal satu — tapi tidak lebih dari separuhnya — yang tanpa
-preseden. Di bawah itu, tidak ada diagram.
+**Kapan muncul.** Hanya kalau empat syarat terpenuhi: minimal empat bagian disebut, minimal satu
+ditandai dikerjakan, minimal satu dibiarkan tidak ditandai, dan minimal satu bagian yang ditandai
+membawa keputusan dari langkah 3. Di bawah itu, tidak ada diagram.
+
+Batas atas dan aturan "tidak lebih dari separuh" sudah dihapus bersama sumbu lama ("tanpa
+preseden"), begitu juga penjaga kata-proses. Keduanya perlindungan nyata dan kehilangannya dicatat
+di `lib/approach-diagram.ts` di atas `PART_MIN`, bukan dihilangkan diam-diam.
 
 **Kalau tidak muncul.** Approach tetap tampil penuh, sebagai prosa, tanpa placeholder, tanpa
 frame kosong, dan tanpa kalimat yang menjelaskan ketiadaannya. Pembaca tidak boleh tahu bahwa

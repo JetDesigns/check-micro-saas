@@ -248,13 +248,38 @@ for "Comparison table" is not a limit.
 
 ### 5.1 `set-exception`
 
+> **AMENDED — the exception axis moved, and two gates went with it.**
+>
+> As written below, the set is the parts the designer worked on and the
+> exception inside it is the parts that had **no precedent**. Neither is true
+> any more.
+>
+> - **The set is every part they named**, not the worked subset. The form has
+>   always asked for the whole product ("All of them, not only the ones you
+>   touched") and the contract then threw the rest away, which left the reach
+>   claim with no denominator.
+> - **The exception is the parts they worked on**, drawn against the untouched
+>   rest. "No precedent" is no longer collected; what marks a part now is the
+>   designer attaching one of their own step-3 decisions to it.
+> - **The gate is four conditions and nothing else**: fewer than four parts,
+>   nothing marked, everything marked, or no decision attached to anything.
+>   The `4 ≤ n ≤ 8` window, the `1 ≤ new ≤ n/2` half rule and the product-noun
+>   guard are all deleted. The half rule and the noun guard were real
+>   protection and their loss is recorded in `lib/approach-diagram.ts` above
+>   `PART_MIN` rather than quietly absorbed.
+>
+> The ordering rule below survives unchanged — untouched marks first, then
+> worked ones, so the exceptions form one unbroken run. Only which attribute
+> names the exception moved. §9.2 of `prompts/focused-fix-output.md` carries
+> the same amendment, and it wins where the two disagree.
+
 **Unit** area, screen, or component
 **Proves** how wide the work reached, and where the existing system
 failed to absorb it
 
-**Fires when** the user names several discrete parts of a product they
-worked across, and separates some of those parts from the rest — harder,
-rebuilt, unlike the others, no precedent existed.
+**Fires when** the user names several discrete parts of a product, marks
+which of them they worked across, leaves some unmarked, and attaches at
+least one of their own decisions to something they marked.
 
 **Typical projects** multi-area redesign · audit-then-fix · consistency
 pass · design-system alignment
@@ -330,10 +355,10 @@ exceptional, the set has no rule to break and the diagram claims nothing.
 
 **Caption**
 ```
-with reason:    {total} areas, {total-new} followed existing patterns,
-                {new} needed new ones — {reason}.
-without reason: {total} areas, {total-new} followed existing patterns,
-                {new} needed new ones from scratch.
+with reason:    {total} areas, {worked} worked on,
+                {total-worked} left alone — {reason}.
+without reason: {total} areas, {worked} worked on,
+                {total-worked} left alone.
 ```
 Never add framing clauses the diagram does not show.
 
@@ -701,13 +726,14 @@ able to predict the render exactly, with nothing left to judgement.
 }
 ```
 
-**Gates** `4 ≤ 8 ≤ 8` ✓ · `1 ≤ 3 ≤ 4` ✓ · all labels are product nouns ✓
+**Gates** `8 ≥ 4` ✓ · something marked ✓ · something unmarked ✓ · a
+decision attached ✓
 
-**Caption** (77 chars)
-> Eight areas, five followed existing patterns, three needed new ones from scratch.
+**Caption**
+> 8 areas, 3 were worked on, 5 were left alone.
 
 **Placement rule** — deterministic, no judgement. Emit every `reused`
-item in the user's order, then every `new` item in the user's order. This
+item in the user's order, then every `worked` item in the user's order. This
 guarantees the exceptions occupy one unbroken run without the renderer
 having to reason about it.
 
