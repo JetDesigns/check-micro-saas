@@ -18,7 +18,7 @@
 // does not parse to exactly the shape expected is treated as no draft at all.
 
 import type { TextKey, ToggleKey, WorkShape } from '@/lib/intake-fields'
-import type { Attachment, StepId } from '@/lib/wizard-steps'
+import type { Attachment, Chip, StepId } from '@/lib/wizard-steps'
 import type {
   Collaborator,
   Decision,
@@ -72,8 +72,9 @@ export type Draft = {
   collaborators: Collaborator[]
   provenance: Provenance | null
   outcome: OutcomeStatus | null
-  areasWorked: string[]
-  areasFromScratch: string[]
+  parts: Chip[]
+  pageSections: Chip[]
+  flowSteps: Chip[]
   shape: WorkShape | null
   sectionFates: Record<string, SectionFate>
   stepsRemoved: string[]
@@ -171,10 +172,29 @@ export function parseDraft(raw: string | null | undefined): Draft | null {
         ) as Record<string, SectionFate>)
       : {}
 
+  // A chip is only a chip with an id and a label. One malformed entry drops and
+  // the rest of the list survives, like the fates above — and a draft written
+  // before chips existed has no array here at all, which reads as empty. What
+  // that person typed is not lost: the form seeds chips from the text answer
+  // they still have (`chipsFromText`), and their taps are gone because taps were
+  // stored by name and there is no honest way to reattach them to new ids.
+  const chips = (v: unknown): Chip[] =>
+    Array.isArray(v)
+      ? v.flatMap((c) => {
+          if (!isObject(c) || typeof c.id !== 'string' || typeof c.label !== 'string') return []
+          const chip: Chip = { id: c.id, label: c.label }
+          if (c.worked === true) chip.worked = true
+          const decisions = strings(c.decisions)
+          if (chip.worked && decisions.length > 0) chip.decisions = decisions
+          return [chip]
+        })
+      : []
+
   return {
     ...(value as unknown as Draft),
-    areasWorked: strings(value.areasWorked),
-    areasFromScratch: strings(value.areasFromScratch),
+    parts: chips(value.parts),
+    pageSections: chips(value.pageSections),
+    flowSteps: chips(value.flowSteps),
     shape: SHAPES.includes(value.shape) ? (value.shape as WorkShape) : null,
     sectionFates: fates(value.sectionFates),
     stepsRemoved: strings(value.stepsRemoved),

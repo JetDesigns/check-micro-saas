@@ -22,7 +22,15 @@ import {
   buildIntake,
   approachHint,
   parseAreas,
-  reconcileAreas,
+  addChip,
+  chipsFromText,
+  createChip,
+  moveChip,
+  partsDiagramState,
+  removeChip,
+  toggleChipDecision,
+  toggleChipWorked,
+  unattachedDecisions,
   assignFate,
   buildFlowSteps,
   buildPageSections,
@@ -53,7 +61,7 @@ import {
   type TextKey,
   type WorkShape,
 } from './intake-fields'
-import { SECTION_MIN, SET_MIN, STEP_MIN } from './approach-diagram'
+import { SECTION_MIN, PART_MAX, PART_MIN, STEP_MIN } from './approach-diagram'
 import { SPINE_MAX, SPINE_MIN } from './case-study-blocks'
 import type { ImageSlot, SectionFate } from '@/types/database'
 
@@ -650,14 +658,17 @@ describe('reviewNotes', () => {
     it('names what the parts branch is short of', () => {
       const state = validState()
       state.shape = 'separate_parts'
-      state.text.product_areas = 'Homepage'
+      state.parts = [{ id: 'p0', label: 'Homepage' }]
       expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramParts)
     })
 
     it('names what the page branch is short of', () => {
       const state = validState()
       state.shape = 'single_page'
-      state.text.page_sections = 'Hero, Pricing'
+      state.pageSections = [
+        { id: 's0', label: 'Hero' },
+        { id: 's1', label: 'Pricing' },
+      ]
       expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramPage)
     })
 
@@ -676,7 +687,10 @@ describe('reviewNotes', () => {
     it('names what the flow branch is short of', () => {
       const state = validState()
       state.shape = 'one_flow'
-      state.text.flow_steps = 'Basket, Pay'
+      state.flowSteps = [
+        { id: 'f0', label: 'Basket' },
+        { id: 'f1', label: 'Pay' },
+      ]
       expect(diagramNote(buildIntake(state))).toBe(WIZARD_COPY.noteDiagramFlow)
     })
 
@@ -685,9 +699,12 @@ describe('reviewNotes', () => {
     it('says nothing once a real template draws', () => {
       const state = validState()
       state.shape = 'separate_parts'
-      state.text.product_areas = 'Orders, Menu, Payments, Reports'
-      state.areasWorked = ['Orders', 'Menu', 'Payments', 'Reports']
-      state.areasFromScratch = ['Reports']
+      // Attached to a decision that is actually on the state, because an
+      // attachment pointing at a deleted decision is pruned on the way in — and
+      // the fourth condition then fails, which is the behaviour it should.
+      state.parts = partChips().map((c, i) =>
+        i === 0 ? { ...c, decisions: [state.decisions[0].id] } : c
+      )
       expect(diagramNote(buildIntake(state))).toBeNull()
     })
 
@@ -715,6 +732,16 @@ describe('reviewNotes', () => {
   })
 })
 
+
+/** Four chips, the first two worked, the first carrying a decision. */
+const partChips = (labels: string[] = ['Orders', 'Menu', 'Payments', 'Reports']) =>
+  labels.map((label, i) => ({
+    id: `c${i}`,
+    label,
+    ...(i < 2 ? { worked: true as const } : {}),
+    ...(i === 0 ? { decisions: ['d1'] } : {}),
+  }))
+
 describe('the product\'s parts', () => {
   // One answer, two taps. The chips are generated from the text, so the text is
   // the only place a name exists and the two selections point into it.
@@ -740,34 +767,136 @@ describe('the product\'s parts', () => {
     expect(parseAreas('a,b,c,d,e,f,g,h,i,j,k,l')).toHaveLength(12)
   })
 
-  it('drops a selection whose name is no longer in the answer', () => {
-    const r = reconcileAreas(['Orders', 'Menu'], ['Orders', 'Payments'], [])
-    expect(r.worked).toEqual(['Orders'])
+  // THE BUG THE IDS EXIST TO PREVENT. A mark matched by name went missing on a
+  // rename; a mark matched by position went onto a neighbour on a drag. Neither
+  // can happen to a flag that lives on the chip itself.
+  it('keeps a mark on its chip across a reorder', () => {
+    const moved = moveChip(partChips(), 0, 3)
+    expect(moved.map((c) => c.label)).toEqual(['Menu', 'Payments', 'Reports', 'Orders'])
+    expect(moved.find((c) => c.label === 'Orders')?.decisions).toEqual(['d1'])
+    expect(moved.find((c) => c.label === 'Payments')?.worked).toBeUndefined()
   })
 
-  // The whole point of asking twice: from-scratch is a claim about parts that
-  // were worked on, never about the product at large.
-  it('keeps from-scratch inside what was worked on', () => {
-    const r = reconcileAreas(['Orders', 'Menu'], ['Orders'], ['Orders', 'Menu'])
-    expect(r.fromScratch).toEqual(['Orders'])
+  it('keeps a mark on its chip across a delete', () => {
+    const chips = partChips()
+    const left = removeChip(chips, chips[1].id)
+    expect(left.find((c) => c.label === 'Orders')?.decisions).toEqual(['d1'])
   })
 
-  it('carries both selections onto the intake', () => {
+  it('refuses a duplicate label case-insensitively, like the old parser did', () => {
+    const once = addChip([], 'Orders')
+    expect(addChip(once, 'ORDERS')).toHaveLength(1)
+  })
+
+  it('caps the list, because the form and the grid hold the same number', () => {
+    const full = Array.from({ length: 20 }, (_, i) => String(i)).reduce(addChip, [] as ReturnType<typeof createChip>[])
+    expect(full).toHaveLength(PART_MAX)
+  })
+
+  // Clearing the mark takes the attachments with it: an unworked part carrying
+  // decisions is a state the diagram would have to interpret.
+  it('drops the attachments when the mark comes off', () => {
+    const chips = partChips()
+    const off = toggleChipWorked(chips, chips[0].id)
+    expect(off[0].worked).toBeUndefined()
+    expect(off[0].decisions).toBeUndefined()
+  })
+
+  it('attaches and detaches a decision by id', () => {
+    const chips = partChips()
+    const on = toggleChipDecision(chips, chips[1].id, 'd2')
+    expect(on[1].decisions).toEqual(['d2'])
+    expect(toggleChipDecision(on, chips[1].id, 'd2')[1].decisions).toBeUndefined()
+  })
+
+  it('refuses to attach to a chip nobody marked', () => {
+    const chips = partChips()
+    expect(toggleChipDecision(chips, chips[3].id, 'd2')[3].decisions).toBeUndefined()
+  })
+
+  it('seeds chips from a draft that only ever had the typed answer', () => {
+    expect(chipsFromText('Orders, Menu').map((c) => c.label)).toEqual(['Orders', 'Menu'])
+    expect(chipsFromText('Orders, Menu').every((c) => c.worked === undefined)).toBe(true)
+  })
+
+  it('carries the parts onto the intake, marks and attachments included', () => {
     const state = emptyWizardState()
-    state.text.product_areas = 'Orders, Menu, Payments'
-    state.areasWorked = ['Orders', 'Payments']
-    state.areasFromScratch = ['Payments']
+    state.shape = 'separate_parts'
+    state.parts = partChips()
+    state.decisions = [{ id: 'd1', decided: 'Froze the board', why: 'because' }]
     const intake = buildIntake(state)
-    expect(intake.product_areas_worked).toEqual(['Orders', 'Payments'])
-    expect(intake.product_areas_new).toEqual(['Payments'])
+    expect(intake.product_parts).toEqual([
+      { label: 'Orders', worked: true, decisions: ['d1'] },
+      { label: 'Menu', worked: true },
+      { label: 'Payments' },
+      { label: 'Reports' },
+    ])
   })
 
-  it('writes neither when nothing was tapped', () => {
+  // The raw answer is composed from the chips now, not parsed into them, so the
+  // stored row still carries the list a reader of the row would expect.
+  it('writes the raw answer back from the chip labels', () => {
     const state = emptyWizardState()
-    state.text.product_areas = 'Orders, Menu'
-    const intake = buildIntake(state)
-    expect(intake.product_areas_worked).toBeUndefined()
-    expect(intake.product_areas_new).toBeUndefined()
+    state.shape = 'separate_parts'
+    state.parts = partChips()
+    expect(buildIntake(state).product_areas).toBe('Orders, Menu, Payments, Reports')
+  })
+
+  // A decision deleted in step 3 leaves its id on whatever chips held it.
+  it('drops an attachment pointing at a decision that no longer exists', () => {
+    const state = emptyWizardState()
+    state.shape = 'separate_parts'
+    state.parts = partChips()
+    state.decisions = []
+    expect(buildIntake(state).product_parts?.[0].decisions).toBeUndefined()
+  })
+
+  it('writes nothing when there are no chips', () => {
+    const state = emptyWizardState()
+    state.shape = 'separate_parts'
+    expect(buildIntake(state).product_parts).toBeUndefined()
+    expect(buildIntake(state).product_areas).toBeUndefined()
+  })
+})
+
+describe('the four skip conditions', () => {
+  // One test per condition, against the same helper the step reads. These and
+  // `gateSetException` have to agree: the form promising a picture the page then
+  // drops is the failure this pair exists to prevent.
+  it('draws when all four are satisfied', () => {
+    expect(partsDiagramState(partChips()).draws).toBe(true)
+  })
+
+  it('refuses fewer than four chips', () => {
+    const s = partsDiagramState(partChips(['Orders', 'Menu', 'Payments']))
+    expect(s.tooFew).toBe(true)
+    expect(s.draws).toBe(false)
+  })
+
+  it('refuses nothing marked', () => {
+    const bare = partChips().map((c) => ({ id: c.id, label: c.label }))
+    expect(partsDiagramState(bare).noneWorked).toBe(true)
+  })
+
+  it('refuses everything marked, because there is no contrast', () => {
+    const all = partChips().map((c) => ({ ...c, worked: true as const }))
+    expect(partsDiagramState(all).allWorked).toBe(true)
+  })
+
+  it('refuses nothing attached', () => {
+    const none = partChips().map((c) => ({ id: c.id, label: c.label, worked: c.worked }))
+    expect(partsDiagramState(none).noneAttached).toBe(true)
+  })
+
+  // Named and on no part. A note, never a blocker — nothing downstream may
+  // invent a part to hang it on, so the designer is told instead.
+  it('names the decisions no part claims', () => {
+    const decisions = [
+      { id: 'd1', decided: 'Froze the board', why: '' },
+      { id: 'd2', decided: 'Sorted by escalation', why: '' },
+      { id: 'd3', decided: '', why: '' },
+    ]
+    expect(unattachedDecisions(decisions, partChips())).toEqual(['Sorted by escalation'])
   })
 })
 
@@ -798,12 +927,15 @@ describe('the step 4 hint', () => {
   const base = {
     shape: null as WorkShape | null,
     text: {} as Partial<Record<TextKey, string>>,
-    areasWorked: [] as string[],
-    areasFromScratch: [] as string[],
+    parts: [] as ReturnType<typeof partChips>,
+    pageSections: [] as ReturnType<typeof partChips>,
+    flowSteps: [] as ReturnType<typeof partChips>,
     sectionFates: {} as Record<string, SectionFate>,
     stepsRemoved: [] as string[],
   }
   const hint = (over: Partial<typeof base>) => approachHint({ ...base, ...over })
+  /** Unmarked chips, for the branches whose marking lives elsewhere. */
+  const plain = (...labels: string[]) => labels.map((label, i) => ({ id: `h${i}`, label }))
 
   // The fork sits right there unanswered; saying so twice is noise.
   it('says nothing while the fork is unanswered', () => {
@@ -819,64 +951,49 @@ describe('the step 4 hint', () => {
   // Both real projects typed the list and tapped nothing, which is how they
   // ended up on the floor form.
   it('asks for a tap once a list is typed and nothing is marked', () => {
-    expect(hint({ shape: 'separate_parts', text: { product_areas: 'Orders, Menu' } })).toBe(
-      WIZARD_COPY.hintPartsTap
-    )
-    expect(hint({ shape: 'single_page', text: { page_sections: 'Hero, Pricing' } })).toBe(
+    expect(
+      hint({ shape: 'separate_parts', parts: plain('Orders', 'Menu', 'Payments', 'Reports') })
+    ).toBe(WIZARD_COPY.hintPartsTap)
+    expect(hint({ shape: 'single_page', pageSections: plain('Hero', 'Pricing') })).toBe(
       WIZARD_COPY.hintPageMark
     )
-    expect(hint({ shape: 'one_flow', text: { flow_steps: 'Basket, Pay' } })).toBe(
+    expect(hint({ shape: 'one_flow', flowSteps: plain('Basket', 'Pay') })).toBe(
       WIZARD_COPY.hintFlowTap
     )
   })
 
   it('names what each branch is short of once something is marked', () => {
-    expect(
-      hint({
-        shape: 'separate_parts',
-        text: { product_areas: 'Orders, Menu' },
-        areasWorked: ['Orders'],
-      })
-    ).toBe(WIZARD_COPY.hintPartsShort)
+    expect(hint({ shape: 'separate_parts', parts: partChips(['Orders', 'Menu']) })).toBe(
+      WIZARD_COPY.hintPartsShort
+    )
     expect(
       hint({
         shape: 'single_page',
-        text: { page_sections: 'Hero, Pricing' },
+        pageSections: plain('Hero', 'Pricing'),
         sectionFates: { Hero: 'added' },
       })
     ).toBe(WIZARD_COPY.hintPageShort)
     expect(
-      hint({
-        shape: 'one_flow',
-        text: { flow_steps: 'Basket, Pay' },
-        stepsRemoved: ['Pay'],
-      })
+      hint({ shape: 'one_flow', flowSteps: plain('Basket', 'Pay'), stepsRemoved: ['Pay'] })
     ).toBe(WIZARD_COPY.hintFlowShort)
   })
 
   it('confirms once a branch would draw the work', () => {
     expect(
-      hint({
-        shape: 'separate_parts',
-        text: { product_areas: 'Orders, Menu, Payments, Reports' },
-        areasWorked: ['Orders', 'Menu', 'Payments', 'Reports'],
-        areasFromScratch: ['Reports'],
-      })
+      hint({ shape: 'separate_parts', parts: partChips() })
     ).toBe(WIZARD_COPY.hintDraws)
     expect(
       hint({
         shape: 'single_page',
-        text: {
-          page_sections: 'Hero, Pricing, Features, FAQ, Footer',
-          page_pattern: 'the cut ones sat in the middle',
-        },
+        text: { page_pattern: 'the cut ones sat in the middle' },
+        pageSections: plain('Hero', 'Pricing', 'Features', 'FAQ', 'Footer'),
         sectionFates: { Hero: 'added', Pricing: 'kept', Features: 'cut', FAQ: 'cut' },
       })
     ).toBe(WIZARD_COPY.hintDraws)
     expect(
       hint({
         shape: 'one_flow',
-        text: { flow_steps: 'Basket, Sign up, Address, Billing, Pay, Confirm' },
+        flowSteps: plain('Basket', 'Sign up', 'Address', 'Billing', 'Pay', 'Confirm'),
         stepsRemoved: ['Sign up', 'Billing'],
       })
     ).toBe(WIZARD_COPY.hintDraws)
@@ -885,22 +1002,22 @@ describe('the step 4 hint', () => {
   // The numbers in the copy are the gates' own. Spelled in English they were
   // free to drift the moment a threshold moved.
   it('takes its numbers from the gates rather than from English', () => {
-    expect(WIZARD_COPY.hintPartsShort).toContain(String(SET_MIN))
+    expect(WIZARD_COPY.hintPartsShort).toContain(String(PART_MIN))
     expect(WIZARD_COPY.hintPageShort).toContain(String(SECTION_MIN))
     expect(WIZARD_COPY.noteDiagramFlow).toContain(String(STEP_MIN))
   })
 
-  // A set that is more than half exceptional has no rule left to break, so it
-  // is short of the gate even though every count looks generous.
-  it('still asks when more than half the areas were built from scratch', () => {
-    expect(
-      hint({
-        shape: 'separate_parts',
-        text: { product_areas: 'Orders, Menu, Payments, Reports' },
-        areasWorked: ['Orders', 'Menu', 'Payments', 'Reports'],
-        areasFromScratch: ['Orders', 'Menu', 'Payments'],
-      })
-    ).toBe(WIZARD_COPY.hintPartsShort)
+  // The two conditions the old "from scratch" question could not express. Both
+  // are the form saying what the picture needs in order to show anything, never
+  // anything about the answer.
+  it('asks for an untapped area once every one is tapped', () => {
+    const all = partChips().map((c) => ({ ...c, worked: true as const }))
+    expect(hint({ shape: 'separate_parts', parts: all })).toBe(WIZARD_COPY.hintPartsAllMarked)
+  })
+
+  it('asks for a decision once the marks are right and nothing is attached', () => {
+    const none = partChips().map((c) => ({ id: c.id, label: c.label, worked: c.worked }))
+    expect(hint({ shape: 'separate_parts', parts: none })).toBe(WIZARD_COPY.hintPartsAttach)
   })
 })
 
@@ -908,7 +1025,10 @@ describe("the flow's steps", () => {
   const flow = (): ReturnType<typeof emptyWizardState> => {
     const state = emptyWizardState()
     state.shape = 'one_flow'
-    state.text.flow_steps = 'Basket, Sign up, Address, Payment, Confirm'
+    state.flowSteps = ['Basket', 'Sign up', 'Address', 'Payment', 'Confirm'].map((label, i) => ({
+      id: `f${i}`,
+      label,
+    }))
     state.stepsRemoved = ['Sign up']
     return state
   }
@@ -930,7 +1050,7 @@ describe("the flow's steps", () => {
       'Basket', 'Sign up', 'Address', 'Payment', 'Confirm',
     ])
     expect(intake.flow_steps_ordered?.filter((x) => x.removed)).toHaveLength(1)
-    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_parts).toBeUndefined()
     expect(intake.page_sections_ordered).toBeUndefined()
   })
 
@@ -949,7 +1069,13 @@ describe("the page's sections", () => {
   const page = (): ReturnType<typeof emptyWizardState> => {
     const state = emptyWizardState()
     state.shape = 'single_page'
-    state.text.page_sections = 'Headline, Plan prices, Feature grid, FAQ, Book a demo'
+    state.pageSections = [
+      'Headline',
+      'Plan prices',
+      'Feature grid',
+      'FAQ',
+      'Book a demo',
+    ].map((label, i) => ({ id: `s${i}`, label }))
     state.text.page_pattern = 'the two nobody asked for sat in the middle'
     state.sectionFates = { 'Plan prices': 'kept', 'Feature grid': 'cut', FAQ: 'cut' }
     return state
@@ -991,7 +1117,7 @@ describe("the page's sections", () => {
       'FAQ',
       'Book a demo',
     ])
-    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_parts).toBeUndefined()
     expect(intake.product_areas).toBeUndefined()
   })
 
@@ -1014,9 +1140,9 @@ describe("the page's sections", () => {
     expect(shownShape(null, {})).toBeNull()
     const state = page()
     state.shape = null
-    state.text.page_sections = ''
+    state.pageSections = []
     const intake = buildIntake(state)
-    expect(intake.product_areas_worked).toBeUndefined()
+    expect(intake.product_parts).toBeUndefined()
     expect(intake.page_sections_ordered).toBeUndefined()
   })
 
@@ -1028,8 +1154,10 @@ describe("the page's sections", () => {
     const state = emptyWizardState()
     state.shape = null
     state.text.product_areas = 'Orders, Menu'
-    state.areasWorked = ['Orders']
-    expect(buildIntake(state).product_areas_worked).toEqual(['Orders'])
+    // Seeded the way the form seeds it on restore: the typed list comes back as
+    // chips, unmarked, because the taps were stored by name.
+    state.parts = chipsFromText(state.text.product_areas)
+    expect(buildIntake(state).product_parts?.map((x) => x.label)).toEqual(['Orders', 'Menu'])
   })
 
   it('reads the branch back off the row, so nothing has to store it', () => {

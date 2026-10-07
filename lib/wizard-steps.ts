@@ -11,10 +11,10 @@
 import {
   CATEGORY_MIN,
   MIN_REDUCTION,
+  PART_MAX,
+  PART_MIN,
   SECTION_MAX,
   SECTION_MIN,
-  SET_MAX,
-  SET_MIN,
   STEP_MAX,
   STEP_MIN,
   SURVIVOR_MIN,
@@ -44,6 +44,7 @@ import type {
   Intake,
   OutcomeStatus,
   PageSection,
+  ProductPart,
   Provenance,
   SectionFate,
   StoredIntake,
@@ -112,7 +113,7 @@ export const WIZARD_COPY = {
   noteDiagramUnforked:
     'Approach will carry a picture of your decisions. Step 4 asks what shape the work had — several areas of a product, one page, or one flow — and answering it draws the work itself instead.',
   noteDiagramParts:
-    `Approach will carry a picture of your decisions. To draw how far the work reached, step 4 wants ${SET_MIN} or more areas tapped as worked on, with at least one of those built from scratch.`,
+    `Approach will carry a picture of your decisions. To draw how far the work reached, step 4 wants ${PART_MIN} or more areas, some of them tapped as worked on, and a decision sitting on at least one of those.`,
   noteDiagramPage:
     `Approach will carry a picture of your decisions. To draw the page's own shape, step 4 wants ${SECTION_MIN} or more sections in scroll order, each marked added, cut or kept, and one line on what the order showed.`,
   noteDiagramFlow:
@@ -123,8 +124,24 @@ export const WIZARD_COPY = {
   // is how both real projects ended up on the floor form, and a branch short of
   // its gate — then one shared line when it is satisfied, so the step reads as
   // progress rather than as a standing complaint.
-  hintPartsTap: 'Tap the areas you worked on. The picture is of those, not of the whole list.',
-  hintPartsShort: `${SET_MIN} or more tapped, with at least one built from scratch, draws how far the work reached.`,
+  hintPartsTap: 'Tap the areas you worked on. The picture is those against the rest.',
+  hintPartsShort: `${PART_MIN} or more areas draws how far the work reached.`,
+  // The two new conditions. Both are said as what the picture needs to have
+  // something to show, never as anything about the answer — the same rule the
+  // four notes above follow, and the discouraging-word test covers these too.
+  hintPartsAllMarked:
+    'Every area is tapped, so there is nothing for the work to stand against. Leave the ones you did not touch alone.',
+  hintPartsAttach: 'Put a decision on an area you worked on. That is what the picture points at.',
+
+  // The chip list itself.
+  chipAdd: 'Add',
+  chipRemove: 'Remove',
+  chipCap: `${PART_MAX} is as many as the picture holds.`,
+  chipAttachLabel: 'Which decisions landed here?',
+  chipNoDecisions: 'Name a decision in step 3 and it will be offered here.',
+  chipDragHint: 'Drag to reorder.',
+  noteUnattached:
+    'These are not on any area yet, so the picture will leave them out. You can carry on either way.',
   hintPageMark: 'Mark each section Added, Cut or Kept. The picture is where those land in the order.',
   hintPageShort: `${SECTION_MIN} or more sections, ${CATEGORY_MIN} kinds or more between them, and a line on what the order showed.`,
   hintFlowTap: 'Tap the steps that are gone. The picture is the difference between the two columns.',
@@ -290,16 +307,20 @@ export const SLOT_ENTRY_LABELS: Record<ImageSlot, string> = {
 }
 
 /**
- * The two taps under "What are the main parts of the product?".
+ * The tap under "What are the product's main areas?".
  *
- * The third question is the one that earns its place. Which parts were worked on
- * is a coverage map; which of those were built from scratch is what the Approach
- * diagram's caption claims, and reading the second off the first would be making
- * it up.
+ * One question where there were two. The second used to be "which of those did
+ * you build from scratch", and what it marked is now marked by the designer
+ * attaching one of their own decisions to the part instead — a thing they said
+ * rather than a second thing to classify. Both stay claims they made; neither is
+ * read off the other, which is the property that mattered.
+ *
+ * The whole list still has to be asked for, and the field's helper still says
+ * so. The picture is the worked parts against the rest, and without the rest
+ * there is no reach to show.
  */
 export const AREA_CHIPS = {
   worked: 'Which of these did you work on?',
-  fromScratch: 'Which of those did you build from scratch?',
 } as const
 
 /**
@@ -482,23 +503,142 @@ export function parseAreas(raw: string | undefined): string[] {
 }
 
 /**
- * Keeps the two selections honest against the text they were chosen from.
+ * One entry in a step-4 list: a part, a section, or a step of a flow.
  *
- * Someone types eight parts, taps four, then edits the answer. Without this the
- * selections keep names that are no longer on screen, and "from scratch" could
- * hold a part no longer marked as worked on at all — which is the one thing the
- * third question exists to prevent.
+ * THE ID IS THE WHOLE POINT. Marks and attachments used to be separate arrays of
+ * names, reconciled back against the typed answer on every render, which meant a
+ * rename silently dropped a tap and two parts spelled alike were one part. Chips
+ * are now dragged and deleted as well, so matching by position would be worse
+ * still: the first drag would slide a decision onto a neighbour with nothing
+ * saying so. Everything about a chip hangs off `id`, and nothing is ever matched
+ * by label or by index.
+ *
+ * `worked` and `decisions` are `separate_parts` only. The page and flow branches
+ * use a chip for entry and ordering and keep their own marking — three fates for
+ * a section, gone-or-not for a step — because those are not the same question.
  */
-export function reconcileAreas(
-  areas: string[],
-  worked: readonly string[],
-  fromScratch: readonly string[]
-): { worked: string[]; fromScratch: string[] } {
-  const inAreas = worked.filter((w) => areas.includes(w))
-  return {
-    worked: inAreas,
-    fromScratch: fromScratch.filter((n) => inAreas.includes(n)),
+export type Chip = {
+  id: string
+  label: string
+  /** separate_parts only. Absent, never false, where it was not tapped. */
+  worked?: true
+  /** separate_parts only. `Decision.id`s, never labels and never positions. */
+  decisions?: string[]
+}
+
+/**
+ * How many chips one list holds.
+ *
+ * The brief asked for 10. It is `PART_MAX` so that the form's cap and the
+ * diagram's reach are the same number — a cap above the grid's limit lets
+ * someone fill nine chips against no resistance and then get no picture, with
+ * the form having encouraged every one of them.
+ */
+export const CHIP_MAX = PART_MAX
+
+export function createChip(label: string): Chip {
+  return { id: crypto.randomUUID(), label }
+}
+
+/**
+ * A chip per name, for a list that only ever existed as text.
+ *
+ * Used on restore: a draft written before chips carries the person's typed
+ * answer and no chips, and their list is still their work. The taps are gone —
+ * they were stored by name and there is no honest way to reattach them to ids
+ * that did not exist — so the list comes back unmarked rather than guessed at.
+ */
+export function chipsFromText(raw: string | undefined): Chip[] {
+  return parseAreas(raw).slice(0, CHIP_MAX).map(createChip)
+}
+
+/** The labels, in chip order. What `buildIntake` writes back as the raw answer. */
+export function chipText(chips: readonly Chip[]): string {
+  return chips.map((c) => c.label).join(', ')
+}
+
+/**
+ * Add, unless the label is blank, already taken, or the list is full.
+ *
+ * Case-insensitive on the duplicate check, matching `parseAreas`: two chips
+ * reading "Orders" and "orders" cannot be told apart once they are drawn.
+ */
+export function addChip(chips: readonly Chip[], label: string): Chip[] {
+  const name = label.trim()
+  if (name === '' || chips.length >= CHIP_MAX) return [...chips]
+  if (chips.some((c) => c.label.toLowerCase() === name.toLowerCase())) return [...chips]
+  return [...chips, createChip(name)]
+}
+
+export function removeChip(chips: readonly Chip[], id: string): Chip[] {
+  return chips.filter((c) => c.id !== id)
+}
+
+/** Move the chip at `from` to `to`, keeping every other chip's relative order. */
+export function moveChip(chips: readonly Chip[], from: number, to: number): Chip[] {
+  if (from === to || from < 0 || to < 0 || from >= chips.length || to >= chips.length) {
+    return [...chips]
   }
+  const next = [...chips]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
+}
+
+/**
+ * Tap to mark, tap again to clear — and clearing takes the attachments with it.
+ *
+ * An unworked part carrying decisions is a state the diagram would have to
+ * decide what to do with, so the form never produces one.
+ */
+export function toggleChipWorked(chips: readonly Chip[], id: string): Chip[] {
+  return chips.map((c) => {
+    if (c.id !== id) return c
+    // Rebuilt rather than spread-minus-keys: a chip is exactly these four
+    // fields, and naming the two that survive is clearer than naming the two
+    // that go.
+    if (c.worked) return { id: c.id, label: c.label }
+    return { ...c, worked: true as const }
+  })
+}
+
+/** Attach a decision to a chip, or detach it. Only a worked chip can carry one. */
+export function toggleChipDecision(
+  chips: readonly Chip[],
+  id: string,
+  decisionId: string
+): Chip[] {
+  return chips.map((c) => {
+    if (c.id !== id || !c.worked) return c
+    const held = c.decisions ?? []
+    const next = held.includes(decisionId)
+      ? held.filter((d) => d !== decisionId)
+      : [...held, decisionId]
+    // Guarded above: this chip is worked, so the mark survives and only the
+    // now-empty attachment list goes.
+    if (next.length === 0) return { id: c.id, label: c.label, worked: true }
+    return { ...c, decisions: next }
+  })
+}
+
+/**
+ * Drops attachments pointing at decisions that no longer exist.
+ *
+ * A decision deleted in step 3 leaves its id behind on whatever chips held it.
+ * Run on the way into the intake rather than on every keystroke in step 3, for
+ * the same reason the image notes are: a decision being retyped is not a
+ * decision being removed.
+ */
+export function pruneChipDecisions(chips: readonly Chip[], liveIds: ReadonlySet<string>): Chip[] {
+  return chips.map((c) => {
+    if (!c.decisions) return c
+    const kept = c.decisions.filter((d) => liveIds.has(d))
+    if (kept.length === c.decisions.length) return c
+    if (kept.length === 0) {
+      return c.worked ? { id: c.id, label: c.label, worked: true } : { id: c.id, label: c.label }
+    }
+    return { ...c, decisions: kept }
+  })
 }
 
 /**
@@ -617,10 +757,16 @@ export type WizardState = {
   collaborators: Collaborator[]
   provenance: Provenance | null
   outcome: OutcomeStatus | null
-  /** Names tapped under the product-parts answer. Always a subset of what it holds. */
-  areasWorked: string[]
-  /** A subset of `areasWorked`, never of the parts list directly. */
-  areasFromScratch: string[]
+  /**
+   * The product's parts, in the designer's order, each carrying its own mark and
+   * attachments. The source of truth for the list — `text.product_areas` is
+   * composed from it, not parsed into it.
+   */
+  parts: Chip[]
+  /** The page's sections, in scroll order. Marking stays in `sectionFates`. */
+  pageSections: Chip[]
+  /** The flow's steps, in walking order. Marking stays in `stepsRemoved`. */
+  flowSteps: Chip[]
   /**
    * Which side of step 4's fork is being asked. Null is the screen as it was
    * before the fork existed, which is what a restored older draft reads as.
@@ -665,8 +811,9 @@ export function emptyWizardState(): WizardState {
     collaborators: [],
     provenance: null,
     outcome: null,
-    areasWorked: [],
-    areasFromScratch: [],
+    parts: [],
+    pageSections: [],
+    flowSteps: [],
     shape: null,
     sectionFates: {},
     stepsRemoved: [],
@@ -750,33 +897,70 @@ export function buildIntake(state: WizardState): Intake {
   //
   // Only one side is ever written, which is what makes the fork's answer
   // recoverable from the row without storing it — see `intakeShape`.
+  //
+  // The raw text answer is COMPOSED from the chips rather than parsed into them.
+  // The registry loop above may have written an older draft's typed string under
+  // the same key, so each branch overwrites it from what is actually on screen.
   if (shape === null) {
     // The fork was never answered, so neither branch was ever on screen and
     // nothing from either belongs on the row.
+    delete intake.product_areas
+    delete intake.page_sections
+    delete intake.flow_steps
   } else if (shape === 'separate_parts') {
-    const areas = parseAreas(state.text.product_areas)
-    if (areas.length > 0) {
-      const { worked, fromScratch } = reconcileAreas(areas, state.areasWorked, state.areasFromScratch)
-      if (worked.length > 0) intake.product_areas_worked = worked
-      if (fromScratch.length > 0) intake.product_areas_new = fromScratch
+    delete intake.page_sections
+    delete intake.flow_steps
+    // `shownShape` resolves a pre-chip draft to this branch off the typed answer
+    // alone, so the same answer has to produce chips here. The form seeds them
+    // on restore; this makes the fallback true of the data rather than true only
+    // of the one caller that remembers to do it.
+    const parts = pruneChipDecisions(
+      state.parts.length > 0 ? state.parts : chipsFromText(state.text.product_areas),
+      liveDecisionIds
+    )
+    if (parts.length > 0) {
+      intake.product_areas = chipText(parts)
+      intake.product_parts = parts.map((c): ProductPart => {
+        const part: ProductPart = { label: c.label }
+        if (c.worked) part.worked = true
+        // Only a worked part carries decisions. The form cannot produce an
+        // unworked one holding any, and the row must not either.
+        if (c.worked && c.decisions && c.decisions.length > 0) part.decisions = c.decisions
+        return part
+      })
+    } else {
+      delete intake.product_areas
     }
   } else if (shape === 'single_page') {
-    const sections = parseAreas(state.text.page_sections)
+    delete intake.product_areas
+    delete intake.flow_steps
+    const chips =
+      state.pageSections.length > 0 ? state.pageSections : chipsFromText(state.text.page_sections)
+    const sections = chips.map((c) => c.label)
     if (sections.length > 0) {
+      intake.page_sections = chipText(chips)
       intake.page_sections_ordered = buildPageSections(
         sections,
         reconcileFates(sections, state.sectionFates)
       )
+    } else {
+      delete intake.page_sections
     }
   } else {
-    const steps = parseAreas(state.text.flow_steps)
+    delete intake.product_areas
+    delete intake.page_sections
+    const chips = state.flowSteps.length > 0 ? state.flowSteps : chipsFromText(state.text.flow_steps)
+    const steps = chips.map((c) => c.label)
     if (steps.length > 0) {
-      // Reconciled against the answer the taps were made from, like the two
+      intake.flow_steps = chipText(chips)
+      // Reconciled against the chips the taps were made from, like the two
       // branches above: a step renamed after it was tapped is a claim nobody made.
       intake.flow_steps_ordered = buildFlowSteps(
         steps,
         state.stepsRemoved.filter((n) => steps.includes(n))
       )
+    } else {
+      delete intake.flow_steps
     }
   }
 
@@ -888,6 +1072,62 @@ export function compileBlockers(intake: { decisions: Decision[] }): string[] {
  * only found out by reading a finished case study with no pictures in it.
  */
 /**
+ * The four skip conditions, each named, against the chips as they stand.
+ *
+ * Returned as a shape rather than a boolean so the step can decide what to do
+ * with it. **It warns today and blocks nothing** — that is the current call, not
+ * a property of this function, and flipping it later means reading `draws` at
+ * the Next button instead of adding anything here.
+ *
+ * It is the one place the conditions are evaluated against wizard state, and it
+ * mirrors `gateSetException` deliberately: the gate runs over a built contract
+ * at generation time, this runs over chips while someone is still typing, and
+ * the two disagreeing would be the form promising a picture the page then drops.
+ */
+export function partsDiagramState(parts: readonly Chip[]): {
+  tooFew: boolean
+  noneWorked: boolean
+  allWorked: boolean
+  noneAttached: boolean
+  draws: boolean
+} {
+  const worked = parts.filter((c) => c.worked)
+  const attached = worked.filter((c) => (c.decisions ?? []).length > 0)
+
+  const tooFew = parts.length < PART_MIN
+  const noneWorked = worked.length === 0
+  const allWorked = parts.length > 0 && worked.length === parts.length
+  const noneAttached = attached.length === 0
+
+  return {
+    tooFew,
+    noneWorked,
+    allWorked,
+    noneAttached,
+    draws: !tooFew && !noneWorked && !allWorked && !noneAttached,
+  }
+}
+
+/**
+ * Named decisions that no chip claims, in the designer's own words.
+ *
+ * Surfaced on the step as a note and never as a blocker. An unattached decision
+ * is not an error — plenty of work does not land on one named part — and the
+ * reason it is said out loud is the opposite: nothing downstream may invent a
+ * part to hang it on, so the only honest move is to show the designer which
+ * decisions the picture will not mention and let them decide.
+ */
+export function unattachedDecisions(
+  decisions: readonly Decision[],
+  parts: readonly Chip[]
+): string[] {
+  const claimed = new Set(parts.filter((c) => c.worked).flatMap((c) => c.decisions ?? []))
+  return decisions
+    .filter((d) => d.decided.trim() !== '' && !claimed.has(d.id))
+    .map((d) => d.decided.trim())
+}
+
+/**
  * What step 4 is still short of, said while there is something to do about it.
  *
  * The review screen's note arrives after the step is behind you; this is the
@@ -895,15 +1135,15 @@ export function compileBlockers(intake: { decisions: Decision[] }): string[] {
  * fork is unanswered, and visibly so, or the list is empty and the placeholder
  * is already doing the work, or the branch is satisfied and says so instead.
  *
- * Takes what `Step4Structure` holds rather than a whole `WizardState`, and
- * re-derives the lists through the same `parseAreas` / `reconcile*` the form
- * uses, so the hint cannot disagree with the chips beside it.
+ * Takes what `Step4Structure` holds rather than a whole `WizardState`, and reads
+ * the chips themselves, so the hint cannot disagree with what is beside it.
  */
 export function approachHint(a: {
   shape: WorkShape | null
   text: Partial<Record<TextKey, string>>
-  areasWorked: readonly string[]
-  areasFromScratch: readonly string[]
+  parts: readonly Chip[]
+  pageSections: readonly Chip[]
+  flowSteps: readonly Chip[]
   sectionFates: Record<string, SectionFate>
   stepsRemoved: readonly string[]
 }): string | null {
@@ -911,22 +1151,22 @@ export function approachHint(a: {
   if (shape === null) return null
 
   if (shape === 'separate_parts') {
-    const areas = parseAreas(a.text.product_areas)
-    if (areas.length === 0) return null
-    const { worked, fromScratch } = reconcileAreas(areas, a.areasWorked, a.areasFromScratch)
-    if (worked.length === 0) return WIZARD_COPY.hintPartsTap
-    // The upper bound is the form's own argument: when half the set is
-    // exceptional there is no rule left for the exceptions to break.
-    const ok =
-      worked.length >= SET_MIN &&
-      worked.length <= SET_MAX &&
-      fromScratch.length >= 1 &&
-      fromScratch.length <= worked.length / 2
-    return ok ? WIZARD_COPY.hintDraws : WIZARD_COPY.hintPartsShort
+    if (a.parts.length === 0) return null
+    const state = partsDiagramState(a.parts)
+    if (!state.draws) {
+      // One line per failed condition, in the order that leaves the most
+      // actionable thing on screen: add parts, tap some, leave some untapped,
+      // then attach a decision.
+      if (state.tooFew) return WIZARD_COPY.hintPartsShort
+      if (state.noneWorked) return WIZARD_COPY.hintPartsTap
+      if (state.allWorked) return WIZARD_COPY.hintPartsAllMarked
+      return WIZARD_COPY.hintPartsAttach
+    }
+    return WIZARD_COPY.hintDraws
   }
 
   if (shape === 'single_page') {
-    const sections = parseAreas(a.text.page_sections)
+    const sections = a.pageSections.map((c) => c.label)
     if (sections.length === 0) return null
     const fates = reconcileFates(sections, a.sectionFates)
     const marked = Object.values(fates)
@@ -940,7 +1180,7 @@ export function approachHint(a: {
     return ok ? WIZARD_COPY.hintDraws : WIZARD_COPY.hintPageShort
   }
 
-  const steps = parseAreas(a.text.flow_steps)
+  const steps = a.flowSteps.map((c) => c.label)
   if (steps.length === 0) return null
   const removed = a.stepsRemoved.filter((n) => steps.includes(n))
   if (removed.length === 0) return WIZARD_COPY.hintFlowTap
